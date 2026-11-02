@@ -15,7 +15,6 @@ module.exports = [
 			"**/.*",
 			"console/**",
 			"agent/**",
-			"orb/**",
 			"vision-dev/**",
 		],
 	},
