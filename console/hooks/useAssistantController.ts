@@ -237,7 +237,10 @@ export function useAssistantController({
         timer = setTimeout(() => reject(new Error('start timed out')), START_TIMEOUT_MS);
       });
       Promise.race([Promise.resolve(start()), timeout])
-        .catch(() => reportOffline())
+        .catch((error) => {
+          console.error('[VISION] Voice session failed to start:', error);
+          reportOffline();
+        })
         .finally(() => clearTimeout(timer));
     }
   }, [isConnected, isStarting, start, touch, reportOffline]);

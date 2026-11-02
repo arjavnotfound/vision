@@ -8,7 +8,7 @@ import { AgentSessionProvider } from '@/components/agents-ui/agent-session-provi
 import { LiveVision } from '@/components/vision/live-vision';
 import { Grain } from '@/components/vision/primitives';
 import { useDebugMode } from '@/hooks/useDebug';
-import { useIsElectron } from '@/lib/electron';
+import { getElectron, useIsElectron } from '@/lib/electron';
 import { getSandboxTokenSource } from '@/lib/utils';
 
 const IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
@@ -25,9 +25,15 @@ interface AppProps {
 
 export function App({ appConfig, searchProvider }: AppProps) {
   const tokenSource = useMemo(() => {
-    return typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string'
-      ? getSandboxTokenSource(appConfig)
-      : TokenSource.endpoint('/api/token');
+    if (typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string') {
+      return getSandboxTokenSource(appConfig);
+    }
+    // The VISION app mints the LiveKit token in its main process (no web server).
+    return TokenSource.custom(async (options) => {
+      const getConnectionDetails = getElectron()?.getConnectionDetails;
+      if (!getConnectionDetails) throw new Error('Voice needs the VISION app.');
+      return getConnectionDetails({ agentName: options.agentName });
+    });
   }, [appConfig]);
 
   const session = useSession(

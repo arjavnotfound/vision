@@ -144,7 +144,10 @@ class Assistant(Agent):
 # a wake is not slow (dev mode had 0: 'no warmed process available'), and never
 # report the worker as full - Face Control's tracking can push CPU past the default
 # 70 % threshold, which would stop voice jobs being dispatched.
-server = AgentServer(num_idle_processes=1, load_threshold=10.0)
+# Health server on loopback only, any free port: no Windows Firewall prompt.
+server = AgentServer(
+    num_idle_processes=1, load_threshold=10.0, host="127.0.0.1", port=0
+)
 
 
 @server.rtc_session(agent_name="my-agent")

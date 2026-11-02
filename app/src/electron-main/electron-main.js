@@ -199,6 +199,18 @@ if (secondInstanceOnlyArgs.some(arg => args[arg])) {
 
 // Normal app behavior continues here.
 
+// One app: the voice assistant (orb window + agent sidecar) runs inside this process.
+// VISION_NO_ASSISTANT=1 (synthetic QA) runs Face Control alone, as before.
+const assistantEnabled = process.env.VISION_NO_ASSISTANT !== '1' && !args.preview;
+const { agentLogFile } = require('./logs.js').installFileLogging(path.join(app.getPath('appData'), 'VISION', 'logs'));
+const { createOrbWindow, registerConsoleScheme } = require('./orb-window.js');
+if (assistantEnabled) {
+	process.env.VISION_ONE_APP ??= '1';
+	// A fresh secret per run for the localhost bus (a pre-set one is kept for scripted checks).
+	process.env.VISION_BUS_TOKEN ||= require('crypto').randomBytes(16).toString('hex');
+	registerConsoleScheme();
+}
+
 const windowStateKeeper = require('electron-window-state');
 const inputDriver = require('./input-driver.js');
 const { setMouseLocation: setMouseLocationWithoutTracking, getMouseLocation, click, mouseDown, mouseUp, mouseUpSync, pressKey } = inputDriver;
@@ -934,7 +946,8 @@ app.on('ready', async () => {
 		return;
 	}
 	createWindow();
-	startVisionBus();
+	// Face control first: it never waits for the network, the keys or the agent.
+	startAssistant(startVisionBus());
 	// Ensure the menus exist when language is not set (i.e. first run)
 	// This is computationally redundant when language is already set (handled in deserializeSettings)
 	updateMenu();
@@ -947,6 +960,7 @@ app.on('ready', async () => {
 				appWindow?.show();
 				appWindow?.webContents.send('uiCommand', command);
 			},
+			talk: orb && { label: orb.getHotkeyLabel(), activate: orb.activate },
 		});
 	}
 
@@ -1425,17 +1439,25 @@ async function checkInternet() {
 	sendBusState();
 }
 
+/** Resolves with the bus port once it listens (null when the bus is off or failed). */
 function startVisionBus() {
 	const token = process.env.VISION_BUS_TOKEN;
-	if (!token) return;
+	if (!token) return Promise.resolve(null);
 	const bus = createVisionBus({
-		port: Number(process.env.VISION_BUS_PORT || 47811),
+		// Any free port unless one is pre-set; the agent is told which one.
+		port: Number(process.env.VISION_BUS_PORT || 0),
 		token,
 		onAssistant: setAssistantState,
 		onCommand: handleBusCommand,
 		getState: busStatus,
 	});
-	bus.start().catch((error) => console.error('[VISION] Bus failed to start:', error));
+	const ready = bus.start().then((port) => {
+		process.env.VISION_BUS_PORT = String(port);
+		return port;
+	}, (error) => {
+		console.error('[VISION] Bus failed to start:', error);
+		return null;
+	});
 	// The overlay sends a heartbeat every few seconds; if it stops, voice is off.
 	setInterval(() => {
 		if (assistantState.at && Date.now() - assistantState.at > ASSISTANT_STALE_MS && (assistantState.connected || assistantState.live)) {
@@ -1445,4 +1467,51 @@ function startVisionBus() {
 	}, 3000).unref();
 	checkInternet();
 	setInterval(checkInternet, 10000).unref();
+	return ready;
 }
+
+// ---- Voice assistant: the orb window and the agent sidecar.
+let orb = null;
+let agentSupervisor = null;
+
+function startAssistant(busReady) {
+	if (!assistantEnabled) return;
+	const { readDevKeys, hasVoiceKeys } = require('./voice-keys.js');
+	const { createConnectionDetails } = require('./livekit-token.js');
+	const { createAgentSupervisor, resolveAgentCommand } = require('./agent-supervisor.js');
+	const appPath = app.getAppPath();
+	// shortcut: installed builds get no keys until the first-run keys sheet (safeStorage) lands.
+	const voiceKeys = app.isPackaged ? {} : readDevKeys(path.join(appPath, '..', 'agent'));
+	const keysOk = hasVoiceKeys(voiceKeys);
+	preflight = { ...(preflight ?? {}), keys: keysOk, build: 'ok' };
+	sendBusState();
+
+	orb = createOrbWindow({
+		preloadPath: path.join(appPath, 'src/preload-orb.js'),
+		iconPath: path.join(__dirname, '../../images/vision/vision.ico'),
+		consoleDir: app.isPackaged ? path.join(process.resourcesPath, 'console') : path.join(appPath, '..', 'console', 'out'),
+		// Dev with hot reload: VISION_CONSOLE_URL=http://127.0.0.1:3000 and `pnpm dev` in console/.
+		consoleUrl: process.env.VISION_CONSOLE_URL,
+		getConnectionDetails: (options) => createConnectionDetails(voiceKeys, options),
+		onVoiceState: setAssistantState,
+		wakeMode: process.env.VISION_STAGE === '1' || voiceKeys.VISION_WAKE_GATE === '1' || voiceKeys.VISION_STAGE === '1',
+		hidden: process.env.VISION_QUIET === '1',
+	});
+
+	if (!keysOk) {
+		console.log('[VISION] Voice keys missing: voice is off, face control works');
+		return;
+	}
+	agentSupervisor = createAgentSupervisor({
+		command: resolveAgentCommand({ isPackaged: app.isPackaged, appPath, resourcesPath: process.resourcesPath }),
+		getEnv: () => ({ ...voiceKeys, VISION_BUS_PORT: process.env.VISION_BUS_PORT, VISION_BUS_TOKEN: process.env.VISION_BUS_TOKEN }),
+		logFile: agentLogFile,
+		onGiveUp: () => console.error('[VISION] The voice assistant stopped working. Face control still works.'),
+	});
+	busReady.then(() => agentSupervisor.start());
+}
+
+app.on('will-quit', () => {
+	agentSupervisor?.stop();
+	orb?.destroy();
+});

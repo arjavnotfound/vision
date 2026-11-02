@@ -1,6 +1,5 @@
-import { headers } from 'next/headers';
+import { APP_CONFIG_DEFAULTS } from '@/app-config';
 import { App } from '@/components/app/app';
-import { getAppConfig } from '@/lib/utils';
 
 const PROVIDERS: Record<string, string> = {
   bing: 'Bing',
@@ -8,10 +7,8 @@ const PROVIDERS: Record<string, string> = {
   duckduckgo: 'DuckDuckGo',
 };
 
-export default async function Page() {
-  const hdrs = await headers();
-  const appConfig = await getAppConfig(hdrs);
+export default function Page() {
   const provider = (process.env.VISION_SEARCH_PROVIDER ?? 'bing').toLowerCase().trim();
 
-  return <App appConfig={appConfig} searchProvider={PROVIDERS[provider] ?? 'Bing'} />;
+  return <App appConfig={APP_CONFIG_DEFAULTS} searchProvider={PROVIDERS[provider] ?? 'Bing'} />;
 }

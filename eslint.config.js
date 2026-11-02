@@ -66,6 +66,7 @@ module.exports = [
 			"app/src/electron-main/*",
 			"app/src/preload-app-window.js",
 			"app/src/preload-screen-overlay.js",
+			"app/src/preload-orb.js",
 			"app/forge.config.js",
 			"scripts/list-ipc-events.js",
 			"scripts/flatten-folders.js",

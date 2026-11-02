@@ -1,12 +1,12 @@
 {
-  "date": "2026-11-02T11:59:13.545Z",
+  "date": "2026-11-02T12:12:33.279Z",
   "passed": 13,
   "total": 13,
   "results": [
     {
       "name": "engine tracking with synthetic face",
       "pass": true,
-      "evidence": "status tracking, camera error null, loop 66.7 FPS"
+      "evidence": "status tracking, camera error null, loop 66.9 FPS"
     },
     {
       "name": "left wink fires LEFT CLICK",
@@ -41,7 +41,7 @@
     {
       "name": "F9 pauses and releases a held gesture click",
       "pass": true,
-      "evidence": "held true, released in 17 ms, paused true"
+      "evidence": "held true, released in 27 ms, paused true"
     },
     {
       "name": "F9 resumes",
@@ -51,12 +51,12 @@
     {
       "name": "physical mouse takeover releases a held button",
       "pass": true,
-      "evidence": "released in 10 ms; main log: manual-takeover release"
+      "evidence": "released in 15 ms; main log: manual-takeover release"
     },
     {
       "name": "dwell click on the desktop",
       "pass": true,
-      "evidence": "clicked after 1809 ms"
+      "evidence": "clicked after 1810 ms"
     },
     {
       "name": "dwell drag: grab then drop",
@@ -69,5 +69,5 @@
       "evidence": "held true, exited true, releases logged: 1"
     }
   ],
-  "runDir": "C:\\Users\\arjav\\AppData\\Local\\Temp\\vision-qa-l1kvNV"
+  "runDir": "C:\\Users\\arjav\\AppData\\Local\\Temp\\vision-qa-8Ni4zZ"
 }

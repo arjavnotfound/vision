@@ -127,7 +127,7 @@ const PROBE = `(() => {
 	const logFd = logPath ? fs.openSync(logPath, "w") : "ignore";
 	const child = spawn(electronExe, [".", ...extraElectronArgs], {
 		cwd: desktopDir,
-		env: { ...process.env, VISION_REMOTE_DEBUG_PORT: String(port) },
+		env: { ...process.env, VISION_REMOTE_DEBUG_PORT: String(port), VISION_NO_ASSISTANT: "1" },
 		stdio: ["ignore", logFd, logFd],
 	});
 	let exited = false;

@@ -16,6 +16,13 @@ export interface ElectronAPI {
   isOneApp?: () => Promise<boolean>;
   /** Stage / wake-word mode: always listening, acts only on "Hey Vision". */
   isWakeMode?: () => Promise<boolean>;
+  /** LiveKit server URL + token, minted by the VISION main process. */
+  getConnectionDetails?: (options: { agentName?: string }) => Promise<{
+    serverUrl: string;
+    roomName: string;
+    participantName: string;
+    participantToken: string;
+  }>;
 }
 
 export function getElectron(): ElectronAPI | null {

@@ -7,7 +7,7 @@ const { Tray, Menu, nativeImage } = require('electron');
 const TRAY_ICON = path.join(__dirname, '../../images/vision', process.platform === 'win32' ? 'vision.ico' : 'vision-app-icon-32.png');
 
 // `iconPath` is accepted for compatibility but the VISION mark is always used.
-function createTray({ iconPath: _iconPath, getWindow, toggleTracking, sendCommand }) {
+function createTray({ iconPath: _iconPath, getWindow, toggleTracking, sendCommand, talk }) {
 	let tray;
 	try {
 		tray = new Tray(nativeImage.createFromPath(TRAY_ICON));
@@ -25,11 +25,12 @@ function createTray({ iconPath: _iconPath, getWindow, toggleTracking, sendComman
 	tray.setToolTip('VISION');
 	tray.setContextMenu(Menu.buildFromTemplate([
 		{ label: 'Show VISION', click: show },
+		...(talk ? [{ label: `Talk to VISION (${talk.label})`, click: talk.activate }] : []),
 		{ label: 'Pause / resume tracking (F9)', click: toggleTracking },
 		{ label: 'Calibrate…', click: () => sendCommand('calibrate') },
 		{ label: 'Back to Start (next person)', click: () => sendCommand('reset') },
 		{ type: 'separator' },
-		// When started from VISION.bat, quitting here also stops the voice assistant.
+		// Quitting also stops the voice assistant (will-quit stops the agent).
 		{ label: 'Quit VISION', role: 'quit' },
 	]));
 	tray.on('click', show);
