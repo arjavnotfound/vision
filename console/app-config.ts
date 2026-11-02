@@ -64,7 +64,8 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   audioVisualizerType: 'aura',
 
   // agent dispatch configuration
-  agentName: process.env.AGENT_NAME ?? undefined,
+  // Must match @server.rtc_session(agent_name=...) in agent/src/agent.py.
+  agentName: process.env.AGENT_NAME ?? 'my-agent',
 
   // LiveKit Cloud Sandbox configuration
   sandboxId: undefined,
