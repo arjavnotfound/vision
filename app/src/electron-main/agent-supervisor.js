@@ -12,7 +12,8 @@ function resolveAgentCommand({ isPackaged, appPath, resourcesPath }) {
 	if (isPackaged) {
 		const cwd = path.join(resourcesPath, 'agent');
 		// -E -s: ignore any PYTHON* variables and user site-packages on this machine.
-		return { cwd, exe: path.join(resourcesPath, 'agent-runtime', 'python.exe'), args: ['-E', '-s', 'src/agent.py', 'start'] };
+		// -u: unbuffered output for agent.log (-E also ignores PYTHONUNBUFFERED).
+		return { cwd, exe: path.join(resourcesPath, 'agent-runtime', 'python.exe'), args: ['-E', '-s', '-u', 'src/agent.py', 'start'] };
 	}
 	const cwd = path.join(appPath, '..', 'agent');
 	return { cwd, exe: path.join(cwd, '.venv', 'Scripts', 'python.exe'), args: ['src/agent.py', 'start'] };
