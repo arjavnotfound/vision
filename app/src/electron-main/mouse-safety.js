@@ -1,5 +1,5 @@
 /**
- * Centralized Mouse Safety Coordinator for V.I.S.I.O.N.
+ * Centralized Mouse Safety Coordinator for VISION
  * 
  * Guarantees that simulated mouse buttons are never left pressed when:
  * - Tracking stops or is paused

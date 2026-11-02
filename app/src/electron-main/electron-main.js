@@ -48,7 +48,9 @@ const settingsFile = path.join(app.getPath('userData'), 'vision-settings.json');
 try {
 	const oldSettings = path.join(app.getPath('appData'), 'VISION Face Control', 'vision-settings.json');
 	const syncFs = require('fs');
-	if (!syncFs.existsSync(settingsFile) && syncFs.existsSync(oldSettings)) {
+	// Only the real profile: never into a QA/test (VISION_USER_DATA_DIR) or --preview profile.
+	const realProfile = !process.env.VISION_USER_DATA_DIR && !process.argv.includes('--preview');
+	if (realProfile && !syncFs.existsSync(settingsFile) && syncFs.existsSync(oldSettings)) {
 		syncFs.mkdirSync(path.dirname(settingsFile), { recursive: true });
 		syncFs.copyFileSync(oldSettings, settingsFile);
 	}

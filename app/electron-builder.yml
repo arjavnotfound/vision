@@ -35,7 +35,8 @@ win:
   target: [nsis]
   # Signing: set CSC_LINK / CSC_KEY_PASSWORD (GitHub secrets). Without them the build is
   # unsigned and does not fail.
-  publisherName: arjavnotfound
+  signtoolOptions:
+    publisherName: arjavnotfound
 
 nsis:
   # Per-user install: no admin rights, no UAC prompt.

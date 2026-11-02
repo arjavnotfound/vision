@@ -243,7 +243,7 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 			)),
 			KIOSK ? null : section("CLASSIC INTERFACE", h("p", { class: "prose" }, "The original research interface is still available for comparison."),
 				h("div", { class: "row-grid" }, h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("open-legacy-ui") }, "Restart in classic UI"))),
-			section("PRIVACY", h("p", { class: "prose" }, "VISION runs entirely on this computer. No video, telemetry or crash reports leave the device.")),
+			section("PRIVACY", h("p", { class: "prose" }, "Face control runs entirely on this computer: camera video never leaves it and is never saved. The voice assistant sends audio online only while it listens. No telemetry or crash reports.")),
 		],
 	};
 
@@ -292,7 +292,7 @@ export function openAbout(layer, { version }) {
 		h("p", { class: "prose" }, "Control your computer with your head. VISION reads your face through the webcam: head movement moves the cursor, and winks, an open mouth, raised brows or a steady dwell click for you. It is built for people who cannot use their hands."),
 		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "F9 pauses at any time. Moving the physical mouse takes over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
 		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "everything runs on this computer. Nothing is uploaded."),
-		h("div", { class: "credits" }, "Open-source credits: based on Tracky Mouse by Isaiah Odhner (MIT); MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
+		h("div", { class: "credits" }, "Open-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
 	);
 	return { close };
 }

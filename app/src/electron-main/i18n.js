@@ -48,10 +48,10 @@ function t(key, options = {}) {
 function getScreenOverlayMessageText({ isManualTakeback, enabled }) {
 	return isManualTakeback ?
 		t("hud.willResumeAfterMouseStops", { defaultValue: "Will resume after mouse stops moving." }) :
-		typeof enabled !== "boolean" ? t("hud.pressToToggle", { defaultValue: "Press %0 to toggle V.I.S.I.O.N." }).replace("%0", "F9") :
+		typeof enabled !== "boolean" ? t("hud.pressToToggle", { defaultValue: "Press %0 to toggle VISION" }).replace("%0", "F9") :
 			enabled ?
-				t("hud.pressToDisable", { defaultValue: "Press %0 to disable V.I.S.I.O.N." }).replace("%0", "F9") :
-				t("hud.pressToEnable", { defaultValue: "Press %0 to enable V.I.S.I.O.N." }).replace("%0", "F9");
+				t("hud.pressToDisable", { defaultValue: "Press %0 to disable VISION" }).replace("%0", "F9") :
+				t("hud.pressToEnable", { defaultValue: "Press %0 to enable VISION" }).replace("%0", "F9");
 }
 
 module.exports = { setLocale, t, getLocale: () => currentLocale, getScreenOverlayMessageText };

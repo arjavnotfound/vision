@@ -16,6 +16,8 @@ module.exports = [
 			"console/**",
 			"agent/**",
 			"vision-dev/**",
+			"release/**",
+			"build/**",
 		],
 	},
 	js.configs.recommended,

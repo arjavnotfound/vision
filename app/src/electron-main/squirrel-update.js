@@ -50,7 +50,7 @@ const spawnUpdate = (args, callback) =>
 
 // Add `vision` to the `PATH`
 //
-// This is done by adding .cmd shims to the root bin folder in the V.I.S.I.O.N.
+// This is done by adding .cmd shims to the root bin folder in the VISION
 // install directory that point to the newly installed versions inside
 // the versioned app directories.
 const addCommandsToPath = callback => {
@@ -172,10 +172,10 @@ const removeShortcuts = callback =>
 
 exports.spawn = spawnUpdate;
 
-// Is the Update.exe installed with V.I.S.I.O.N.?
+// Is the Update.exe installed with VISION?
 exports.existsSync = () => fs.existsSync(updateDotExe);
 
-// Restart V.I.S.I.O.N. using the version pointed to by the vision.cmd shim
+// Restart VISION using the version pointed to by the vision.cmd shim
 exports.restartVision = () => {
 	let args;
 	const cmdName = execName.replace('.exe', '.cmd');

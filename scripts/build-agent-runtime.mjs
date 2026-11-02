@@ -18,8 +18,24 @@ const PYTHON = '3.13';
 
 const uv = (...args) => execFileSync('uv', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
 
-uv('python', 'install', PYTHON);
-const pythonDir = path.dirname(uv('python', 'find', '--no-project', PYTHON));
+const findPython = () => {
+	try {
+		return uv('python', 'find', '--no-project', PYTHON);
+	} catch (_error) {
+		return null;
+	}
+};
+if (!findPython()) {
+	// uv can exit non-zero over a cosmetic minor-version link after a good install.
+	try {
+		uv('python', 'install', PYTHON);
+	} catch (error) {
+		console.warn(`uv python install reported: ${error.message}`);
+	}
+}
+const found = findPython();
+if (!found) throw new Error(`Python ${PYTHON} is not available from uv`);
+const pythonDir = path.dirname(found);
 console.log(`Python ${PYTHON} from ${pythonDir}`);
 
 fs.rmSync(out, { recursive: true, force: true });
