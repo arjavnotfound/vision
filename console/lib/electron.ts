@@ -4,6 +4,15 @@ import { useSyncExternalStore } from 'react';
 
 export type OverlayMode = 'orb' | 'orb-hint' | 'strip' | 'console';
 
+export type VoiceLanguage = 'auto' | 'en' | 'hi';
+export interface VoiceConfig {
+  voice: string;
+  language: VoiceLanguage;
+  hasKeys: boolean;
+  voices: { name: string; style: string }[];
+  keyFields: { name: string; label: string; secret: boolean }[];
+}
+
 export interface ElectronAPI {
   isElectron: true;
   setMode?: (mode: OverlayMode) => void;
@@ -23,6 +32,14 @@ export interface ElectronAPI {
     participantName: string;
     participantToken: string;
   }>;
+  getVoiceConfig?: () => Promise<VoiceConfig>;
+  setVoiceConfig?: (
+    change: Partial<Pick<VoiceConfig, 'voice' | 'language'>>
+  ) => Promise<Pick<VoiceConfig, 'voice' | 'language'>>;
+  saveVoiceKeys?: (keys: Record<string, string>) => Promise<VoiceConfig>;
+  onVoiceConfigChanged?: (
+    callback: (config: Pick<VoiceConfig, 'voice' | 'language'>) => void
+  ) => () => void;
 }
 
 export function getElectron(): ElectronAPI | null {

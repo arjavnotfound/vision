@@ -82,9 +82,24 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     return () => clearTimeout(timer);
   }, [isConnected, agentReady, reportOffline]);
 
-  const hotkeyLabel = useActivationHotkey(controller.activate);
+  // No voice keys yet (first run of an installed build): open Settings to add them.
+  const { activate: startVoice, openConsole: showConsole } = controller;
+  const activate = useCallback(() => {
+    const getVoiceConfig = getElectron()?.getVoiceConfig;
+    if (!getVoiceConfig) return startVoice();
+    void getVoiceConfig().then((config) => {
+      if (config && !config.hasKeys) {
+        setConsoleTab('settings');
+        showConsole();
+      } else {
+        startVoice();
+      }
+    }, startVoice);
+  }, [startVoice, showConsole]);
+
+  const hotkeyLabel = useActivationHotkey(activate);
   useWakeWord({
-    onWakeWord: controller.activate,
+    onWakeWord: activate,
     enabled: settings.wakeWord && controller.surface === 'orb',
   });
 
@@ -135,10 +150,10 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
         void sendText(text).catch(() => undefined);
       } else {
         pending.current = text;
-        controller.activate();
+        activate();
       }
     },
-    [agentReady, controller, sendText]
+    [activate, agentReady, controller, sendText]
   );
 
   // Audio levels for the Aperture.
@@ -212,7 +227,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     showOnboarding,
     consoleTab,
     actions: {
-      activate: controller.activate,
+      activate,
       collapse: controller.collapse,
       openConsole: controller.openConsole,
       closeConsole: controller.closeConsole,
