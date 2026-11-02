@@ -7,9 +7,13 @@
 		"test": "node --test \"tests/**/*.test.js\" \"tests/**/*.test.mjs\"",
 		"test:agent": "cd agent && uv run pytest -q",
 		"install-all": "npm install && cd core && npm install && cd .. && cd app && npm install && cd .. && cd console && pnpm install && cd .. && cd agent && uv sync",
-		"start": "cd app && npm run start",
+		"start": "cd app && npm start",
 		"lint-eslint": "eslint .",
-		"lint": "npm-run-all --continue-on-error --serial lint-*"
+		"lint": "npm-run-all --continue-on-error --serial lint-*",
+		"build:agent": "node scripts/build-agent-runtime.mjs",
+		"build:console": "cd console && pnpm build",
+		"dist": "npm run build:agent && npm run build:console && cd app && npm run dist",
+		"dist:msix": "npm run build:agent && npm run build:console && cd app && npm run dist:msix"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.0.0",

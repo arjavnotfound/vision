@@ -1,7 +1,8 @@
 
 // Note: Don't require any third-party (or own) modules until after squirrel events are handled.
 // If anything goes wrong, it's very bad for it to go wrong during installation and uninstallation!
-// Privacy: VISION sends no telemetry, crash reports, or update checks anywhere.
+// Privacy: VISION sends no telemetry or crash reports. The installed app checks GitHub
+// Releases for updates (see startAutoUpdates); the Store build and dev runs never do.
 const path = require('path');
 const { app, globalShortcut, BrowserWindow, ipcMain } = require('electron');
 
@@ -13,7 +14,7 @@ const { handleStartupEvent } = require('./squirrel-update.js');
 
 // Needed for run-at-login on Windows. This is used as the registry key name.
 // Needs to be set early since `setLoginItemSettings` is used in the `--squirrel-uninstall` handler.
-app.setAppUserModelId("io.github.arjavnotfound.vision-face-control");
+app.setAppUserModelId("io.github.arjavnotfound.vision");
 
 // Handle installing/uninstalling shortcuts and the CLI's PATH modification on Windows.
 if (process.platform === 'win32') {
@@ -43,6 +44,17 @@ const { isPackaged } = app;
 const argsArray = process.argv.slice(isPackaged ? 1 : 2);
 
 const settingsFile = path.join(app.getPath('userData'), 'vision-settings.json');
+// One-time move from the old app name, so calibration and settings carry over.
+try {
+	const oldSettings = path.join(app.getPath('appData'), 'VISION Face Control', 'vision-settings.json');
+	const syncFs = require('fs');
+	if (!syncFs.existsSync(settingsFile) && syncFs.existsSync(oldSettings)) {
+		syncFs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+		syncFs.copyFileSync(oldSettings, settingsFile);
+	}
+} catch (error) {
+	console.error("Could not copy settings from the old VISION Face Control folder:", error);
+}
 const formatName = "vision-settings";
 const formatVersion = 1;
 
@@ -971,6 +983,8 @@ app.on('ready', async () => {
 	screen.on('display-added', updateScreenScaleFactor);
 	screen.on('display-removed', updateScreenScaleFactor);
 
+	startAutoUpdates();
+
 	const success = globalShortcut.register('F9', () => {
 		// console.log('Toggle tracking');
 		appWindow?.webContents.send("shortcut", "toggle-tracking");
@@ -1562,3 +1576,17 @@ app.on('will-quit', () => {
 	agentSupervisor?.stop();
 	orb?.destroy();
 });
+
+// Installed (NSIS) builds: download updates from GitHub Releases in the background and
+// install them on the next quit. Never in dev, the Microsoft Store build or QA runs.
+function startAutoUpdates() {
+	if (!app.isPackaged || process.windowsStore || process.env.VISION_NO_UPDATES === '1') return;
+	try {
+		const { autoUpdater } = require('electron-updater');
+		autoUpdater.logger = console;
+		autoUpdater.on('update-downloaded', (info) => console.log(`[VISION] Update ${info.version} downloaded; installs on quit`));
+		autoUpdater.checkForUpdates().catch((error) => console.log('[VISION] Update check failed:', error?.message ?? error));
+	} catch (error) {
+		console.error('[VISION] Updater unavailable:', error);
+	}
+}

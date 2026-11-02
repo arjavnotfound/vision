@@ -274,16 +274,24 @@ class BrowserManager:
 
     async def _launch(self) -> None:
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
-            headless=self._headless,
-            args=[
+        options = {
+            "headless": self._headless,
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-infobars",
             ],
-            ignore_default_args=["--enable-automation"],
-        )
+            "ignore_default_args": ["--enable-automation"],
+        }
+        try:
+            # The Edge that ships with Windows: the installer bundles no browser.
+            self._browser = await self._playwright.chromium.launch(
+                channel="msedge", **options
+            )
+        except Exception:
+            # Dev machines without Edge: Playwright's own Chromium, if installed.
+            self._browser = await self._playwright.chromium.launch(**options)
         self._context = await self._browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 800},
