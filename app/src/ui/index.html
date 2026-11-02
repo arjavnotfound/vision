@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="ember">
+
+<head>
+	<meta charset="UTF-8">
+	<!-- 'unsafe-eval' is needed by the WASM face mesh (same policy as the legacy window). -->
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: mediastream:">
+	<title>VISION · Face Control</title>
+	<link rel="stylesheet" href="css/tokens.css">
+	<link rel="stylesheet" href="css/app.css">
+	<link rel="icon" type="image/png" href="../../images/vision/vision-app-icon-32.png">
+</head>
+
+<body>
+	<div class="grain" aria-hidden="true"></div>
+
+	<!-- ============ TITLE BAR ============ -->
+	<header class="titlebar">
+		<div class="titlebar__drag" aria-hidden="true"></div>
+		<div class="brand">
+			<span class="vision-mark" aria-hidden="true">
+				<svg viewBox="0 0 100 100" width="24" height="24">
+					<defs><mask id="brand-mark-mask"><rect width="100" height="100" fill="#fff" /><circle cx="50" cy="50" r="24" fill="#000" /><rect x="50" y="42" width="60" height="16" fill="#000" transform="rotate(-45 50 50)" /></mask></defs>
+					<circle class="vision-mark__ring" cx="50" cy="50" r="40" mask="url(#brand-mark-mask)" />
+					<circle class="vision-mark__dot" cx="50" cy="50" r="11" />
+				</svg>
+			</span>
+			<span class="brand__word">VISION</span>
+			<span class="brand__rule"></span>
+			<span class="brand__sub">Face control</span>
+		</div>
+		<canvas class="live-mark" id="live-mark" width="40" height="40" role="img" aria-label="VISION status"></canvas>
+		<div class="status-pill" data-status="starting" role="status" aria-live="polite">
+			<span class="status-pill__dot"></span>
+			<span class="status-pill__word" id="status-word">STARTING</span>
+		</div>
+		<div class="titlebar__spacer"></div>
+		<div class="header-tools">
+			<button class="win-btn" data-dwell id="settings-btn" aria-label="Settings" title="Settings">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></svg>
+			</button>
+			<button class="win-btn" data-dwell id="about-btn" aria-label="About VISION" title="About">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5h.01" /></svg>
+			</button>
+		</div>
+		<div class="window-controls">
+			<button class="win-btn" data-dwell data-window="minimize" aria-label="Minimise">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12" /></svg>
+			</button>
+			<button class="win-btn" data-dwell data-window="hide" aria-label="Hide to tray">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9l5 5 5-5" /><path d="M6 18h12" /></svg>
+			</button>
+			<button class="win-btn win-btn--close" data-dwell data-window="close" aria-label="Quit VISION">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" /></svg>
+			</button>
+		</div>
+	</header>
+
+	<!-- ============ MAIN ============ -->
+	<main class="instrument">
+		<section class="viewfinder-panel panel" aria-label="Camera viewfinder">
+			<div class="viewfinder" id="main-viewfinder"></div>
+		</section>
+
+		<section class="stack" aria-label="Instruments">
+			<div class="stack__row">
+				<div class="card attitude-card">
+					<div class="card__head">
+						<span class="label">ATTITUDE</span>
+						<span class="label label--dim">HEAD POSE</span>
+					</div>
+					<div class="attitude" id="attitude"></div>
+				</div>
+				<div class="card meters-card">
+					<div class="card__head">
+						<span class="label">GESTURES</span>
+						<span class="label label--dim" id="mode-label">WINK TO CLICK</span>
+					</div>
+					<div class="meters" id="meters"></div>
+				</div>
+			</div>
+
+			<div class="card controls-card">
+				<div class="card__head">
+					<span class="label">CURSOR &amp; CLICK</span>
+					<span class="label label--dim" id="profile-label">PROFILE · DEFAULT</span>
+				</div>
+				<div class="steppers" id="steppers"></div>
+				<div class="toggles" id="toggles"></div>
+			</div>
+		</section>
+	</main>
+
+	<!-- ============ SESSION STRIP ============ -->
+	<footer class="session">
+		<button class="btn btn--ember btn--wide" data-dwell id="calibrate-btn">
+			<span class="btn__icon btn__icon--aperture" aria-hidden="true"></span>
+			<span>Calibrate</span>
+		</button>
+		<button class="btn btn--wide" data-dwell id="profile-btn">
+			<span class="btn__stack"><span class="label label--dim">PROFILE</span><span id="profile-name">Default</span></span>
+		</button>
+		<button class="btn" data-dwell id="keyboard-btn">
+			<svg class="btn__svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" /></svg>
+			<span>Keyboard</span>
+		</button>
+		<div class="session__spacer"></div>
+		<div class="session__hint" id="session-hint"></div>
+		<div class="fps-readout" aria-label="Frames per second">
+			<span class="dot-num" id="fps-value">--</span><span class="fps-readout__unit">FPS</span>
+		</div>
+		<button class="pause-toggle" id="pause-toggle" data-dwell aria-pressed="false" aria-keyshortcuts="F9">
+			<span class="pause-toggle__icon" aria-hidden="true"></span>
+			<span class="pause-toggle__text">
+				<span class="pause-toggle__label" id="pause-label">PAUSE</span>
+				<span class="pause-toggle__key">F9</span>
+			</span>
+		</button>
+	</footer>
+
+	<!-- Sheets, calibration, onboarding and confirms are rendered into this layer. -->
+	<div class="layer" id="layer"></div>
+	<div class="toast-rail" id="toasts" aria-live="polite"></div>
+	<div class="dwell-ring" id="dwell-ring" aria-hidden="true"></div>
+
+	<script type="module" src="js/main.js"></script>
+</body>
+
+</html>

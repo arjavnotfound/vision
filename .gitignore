@@ -1,0 +1,54 @@
+# Dev notes, plans, audits, prompts: kept locally, never published
+vision-dev/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.codex/
+.cursor/
+.gemini/
+.vscode/
+.idea/
+*.code-workspace
+
+# Secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Node / Electron / Next.js
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+.npm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.run/
+
+# Build output
+/build/
+/release/
+agent-runtime/
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+playwright-report/
+test-results/
+
+# OS
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini

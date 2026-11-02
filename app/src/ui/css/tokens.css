@@ -1,0 +1,118 @@
+/* ==========================================================================
+   APERTURE — design tokens (shared with the VISION voice assistant)
+   Ember Dark is the default; Paper Light via [data-theme="paper"].
+   ========================================================================== */
+
+@font-face {
+	font-family: "Geist";
+	src: url("../fonts/Geist-Variable.woff2") format("woff2");
+	font-weight: 100 900;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Geist Mono";
+	src: url("../fonts/GeistMono-Variable.woff2") format("woff2");
+	font-weight: 100 900;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Doto";
+	src: url("../fonts/doto-latin-700-normal.woff2") format("woff2");
+	font-weight: 700;
+	font-display: block;
+}
+
+@font-face {
+	font-family: "Doto";
+	src: url("../fonts/doto-latin-900-normal.woff2") format("woff2");
+	font-weight: 900;
+	font-display: block;
+}
+
+:root,
+[data-theme="ember"] {
+	--ink-0: #0B0A09;
+	--ink-1: #131210;
+	--ink-2: #1B1916;
+	--ink-3: #24211D;
+	--rule: rgba(242, 237, 228, .09);
+	--rule-strong: rgba(242, 237, 228, .18);
+	--bone: #F2EDE4;
+	--bone-2: #B4AEA4;
+	--bone-3: #6E6961;
+	--ember: #FF5A1F;
+	--ember-soft: rgba(255, 90, 31, .14);
+	--ember-ink: #0B0A09; /* text on ember */
+	--ember-text: #FF6A33; /* ember used as small text (AA on ink) */
+	--mark-ring: #EDE6DC; /* vision-mark-dark.svg */
+	--mark-dot: #FF5A1F;
+	--ok: #9BE564;
+	--warn: #FFC24B;
+	--err: #FF4D4D;
+
+	--video-filter: brightness(.58) saturate(.55) contrast(1.06);
+	--grain-opacity: .035;
+	--glow: 0 0 0 1px rgba(255, 90, 31, .35), 0 0 24px rgba(255, 90, 31, .22);
+	--shadow-panel: 0 1px 0 rgba(242, 237, 228, .04) inset, 0 24px 60px rgba(0, 0, 0, .35);
+
+	--font-ui: "Geist", "Segoe UI", system-ui, sans-serif;
+	--font-mono: "Geist Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+	--font-dot: "Doto", "Geist Mono", monospace;
+
+	--radius-panel: 28px;
+	--radius-card: 18px;
+	--radius-control: 14px;
+
+	--hit: 64px;
+	--gap: 12px;
+
+	/* Springs (stiffness ~400, damping ~32) approximated as a cubic-bezier for CSS */
+	--spring: cubic-bezier(.22, 1.18, .36, 1);
+	--ease-out: cubic-bezier(.16, 1, .3, 1);
+	--dur: 240ms;
+
+	color-scheme: dark;
+}
+
+[data-theme="paper"] {
+	--ink-0: #F1ECE2;
+	--ink-1: #E8E2D6;
+	--ink-2: #DED7C9;
+	--ink-3: #D2CABA;
+	--rule: rgba(20, 18, 15, .12);
+	--rule-strong: rgba(20, 18, 15, .24);
+	--bone: #14120F;
+	--bone-2: #4A453E;
+	--bone-3: #6E675D;
+	--ember: #FF5A1F;
+	--ember-soft: rgba(255, 90, 31, .14);
+	--ember-ink: #14120F;
+	--ember-text: #B33A0C; /* AA on paper */
+	--mark-ring: #0D0C0B; /* vision-mark-light.svg */
+	--mark-dot: #E2460C;
+	--ok: #2B640B;
+	--warn: #A36A00;
+	--err: #C62828;
+
+	--video-filter: brightness(.9) saturate(.55) contrast(1.02);
+	--grain-opacity: .045;
+	--glow: 0 0 0 1px rgba(255, 90, 31, .45), 0 0 18px rgba(255, 90, 31, .18);
+	--shadow-panel: 0 1px 0 rgba(255, 255, 255, .5) inset, 0 18px 40px rgba(60, 45, 20, .12);
+
+	color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur: 0ms;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+	}
+}

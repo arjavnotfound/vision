@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'">
+	<title>VISION Overlay Preview</title>
+	<link rel="stylesheet" href="overlay.css">
+	<style>
+		/* A pretend desktop behind the overlay, only for screenshots. */
+		html,
+		body {
+			background: radial-gradient(120% 120% at 20% 10%, #31465a, #121a24 60%, #0b0f15);
+		}
+
+		.desk-window {
+			position: fixed;
+			border-radius: 10px;
+			background: #f4f5f7;
+			box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
+			overflow: hidden;
+			font-family: "Segoe UI", system-ui, sans-serif;
+		}
+
+		.desk-window header {
+			height: 34px;
+			background: #e7e9ee;
+			border-bottom: 1px solid #d5d8de;
+		}
+
+		.desk-window .line {
+			height: 10px;
+			margin: 14px 18px 0;
+			border-radius: 5px;
+			background: #dde0e6;
+		}
+
+		.desk-window .line.short {
+			width: 45%;
+		}
+
+		.desk-file {
+			position: fixed;
+			width: 64px;
+			text-align: center;
+			color: #fff;
+			font: 12px "Segoe UI", system-ui, sans-serif;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+		}
+
+		.desk-file i {
+			display: block;
+			width: 44px;
+			height: 52px;
+			margin: 0 auto 6px;
+			border-radius: 4px;
+			background: linear-gradient(#ffd56b, #f5b83d);
+		}
+
+		.taskbar {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			height: 48px;
+			background: rgba(20, 24, 30, .85);
+			backdrop-filter: blur(12px);
+		}
+
+		.os-cursor {
+			position: fixed;
+			width: 0;
+			height: 0;
+			z-index: 20;
+			border-left: 0 solid transparent;
+		}
+
+		.os-cursor::before {
+			content: "";
+			position: absolute;
+			left: -1px;
+			top: -1px;
+			width: 18px;
+			height: 26px;
+			background: #fff;
+			clip-path: polygon(0 0, 0 22px, 6px 17px, 10px 26px, 14px 24px, 10px 15px, 18px 15px);
+			filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7));
+		}
+	</style>
+</head>
+
+<body>
+	<div class="desk-window" style="left: 300px; top: 90px; width: 640px; height: 420px;">
+		<header></header>
+		<div class="line"></div>
+		<div class="line short"></div>
+		<div class="line"></div>
+		<div class="line"></div>
+		<div class="line short"></div>
+	</div>
+	<div class="desk-file" style="left: 40px; top: 40px;"><i></i>Report.docx</div>
+	<div class="desk-file" style="left: 40px; top: 140px;"><i></i>Photos</div>
+	<div class="taskbar"></div>
+	<div class="os-cursor" id="os-cursor"></div>
+	<script type="module" src="preview.js"></script>
+</body>
+
+</html>

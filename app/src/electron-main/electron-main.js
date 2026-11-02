@@ -1,0 +1,1448 @@
+
+// Note: Don't require any third-party (or own) modules until after squirrel events are handled.
+// If anything goes wrong, it's very bad for it to go wrong during installation and uninstallation!
+// Privacy: VISION sends no telemetry, crash reports, or update checks anywhere.
+const path = require('path');
+const { app, globalShortcut, BrowserWindow, ipcMain } = require('electron');
+
+
+const fs = require('fs/promises');
+const { handleStartupEvent } = require('./squirrel-update.js');
+
+// TODO: is there any merit to app.quit when there are no windows open?
+
+// Needed for run-at-login on Windows. This is used as the registry key name.
+// Needs to be set early since `setLoginItemSettings` is used in the `--squirrel-uninstall` handler.
+app.setAppUserModelId("io.github.arjavnotfound.vision-face-control");
+
+// Handle installing/uninstalling shortcuts and the CLI's PATH modification on Windows.
+if (process.platform === 'win32') {
+	const possibleSquirrelEventFlag = process.argv[1];
+	if (handleStartupEvent(possibleSquirrelEventFlag)) {
+		return;
+	}
+}
+
+// From this point on, third party modules can be required now without risking interfering with the installer.
+
+const { getVersion } = require('./version.js');
+// The upstream auto-updater (which queried another project's GitHub releases) was removed.
+
+// --preview (design QA) runs in a throwaway profile: no real settings, no single-instance clash.
+if (process.argv.includes('--preview')) {
+	app.setPath('userData', path.join(app.getPath('temp'), 'vision-face-preview'));
+} else if (process.env.VISION_USER_DATA_DIR) {
+	// Tests / QA: isolated settings.
+	app.setPath('userData', process.env.VISION_USER_DATA_DIR);
+}
+
+// Compare command line arguments:
+// - unpackaged (in development):      "path/to/electron.exe" "." "maybe/a/file.png"
+// - packaged (usually in production): "path/to/jspaint.exe" "maybe/a/file.png"
+const { isPackaged } = app;
+const argsArray = process.argv.slice(isPackaged ? 1 : 2);
+
+const settingsFile = path.join(app.getPath('userData'), 'vision-settings.json');
+const formatName = "vision-settings";
+const formatVersion = 1;
+
+const { setLocale, getScreenOverlayMessageText } = require('./i18n.js');
+
+// Load settings early for CLI localization
+try {
+	loadLanguageSettingSync();
+} catch (error) {
+	console.error("Error loading settings synchronously during startup:", error);
+}
+
+// File cli.js must be loaded after locale is loaded, with how it's set up right now.
+const { parser } = require('./cli.js');
+
+// Note: this may exit the app, if the user runs `vision --help`.
+const args = parser.parse_args(argsArray);
+
+// After argument parsing that may have exited the app, handle single instance behavior.
+// Electron provides a way to communicate between instances of the app,
+// using a lock file to determine if the process is the primary instance.
+// However, it only provides communication in one direction
+// (from the second instance to the primary instance, via the "second-instance" event),
+// so we have to implement communication the other way ourselves.
+
+// This is used to communicate the output of a CLI command from the existing instance to the new instance.
+// Could use an in-memory pipe, or HTTP, but this may be the simplest way.
+const tempFilePath = path.join(app.getPath('temp'), `vision-cli-output-${Date.now()}.txt`);
+
+// Note: The "second-instance" event has an `argv` argument but it's unusably broken,
+// and the documented workaround is to pass the arguments as `additionalData` here.
+// https://www.electronjs.org/docs/api/app#event-second-instance
+const gotSingleInstanceLock = app.requestSingleInstanceLock({
+	// WARNING: key order and key length can cause this bug to crop up: https://github.com/electron/electron/issues/40615
+	// For instance, naming this key "argv" instead of "arguments" can cause `additionalData` to be null when no arguments are passed.
+	arguments: argsArray,
+	tempFilePath,
+});
+
+// Note: If the main process crashes during the "second-instance" event, the second instance will get the lock,
+// even if the first instance is still showing an error dialog.
+if (!gotSingleInstanceLock) {
+	// console.log("Already running. Opening in existing instance.");
+
+	if (args.version) {
+		// Special handling for --version: show versions of both instances.
+		// TODO: might want to ditch the streaming below and read the whole file in order to COMPARE the versions,
+		// and only show the version of the existing instance if it's different.
+		// Or to format it differently. Right now it's constrained to outputting the existing instance as the last line.
+		// Alternatively, I could pass the version into requestSingleInstanceLock (only if --version is passed, since it requires executing a git command),
+		// and format the output in the existing instance's "second-instance" handler.
+		// That would probably be cleaner, although it would be worse for error handling.
+		console.log("CLI version:", getVersion());
+		process.stdout.write("Running app's version: "); // avoid newline which would be added by console.log
+	}
+
+	// Proxy the output from the existing instance to the CLI command.
+	(async () => {
+		setTimeout(() => {
+			if (args.version) {
+				console.log("unknown");
+			}
+			console.error("Timed out waiting for file to exist:", tempFilePath);
+			console.error("The already-running app is meant to write to this file with the output for the CLI command.");
+			console.error("However, the app may have crashed or hung, or there may be a bug in the communication code.");
+			app.exit(1);
+		}, 10000);
+
+		// Wait for file to exist.
+		// (It may exist already, but we can't assume that.)
+		const waitFor = (fn) => new Promise((resolve) => {
+			const interval = setInterval(async () => {
+				const result = await fn();
+				if (result) {
+					clearInterval(interval);
+					resolve(result);
+				}
+			}, 100);
+		});
+		await waitFor(async () => fs.stat(tempFilePath).catch(() => null));
+		// Stream the file to the new instance.
+		// Note that this only avoids race conditions because the file is fully written before it's renamed and seen.
+		// So using streaming here is not super meaningful.
+		// (One could tail the file, but that would be more complex and I'm not sure you'd be able to tell when the file is closed without a sentinel value to mark the end of the stream.)
+		const stream = require('fs').createReadStream(tempFilePath);
+		stream.pipe(process.stdout);
+		stream.on('close', () => {
+			// Extra temp files will also be cleaned up on app startup, in case something goes wrong here.
+			fs.unlink(tempFilePath).catch((error) => {
+				console.error("Error deleting temp file:", error);
+			}).finally(() => {
+				app.quit();
+			});
+		});
+		stream.on('error', (error) => {
+			console.error("file stream error:", error);
+			app.quit();
+		});
+	})();
+
+	// app.quit();
+	// `app.quit` does not immediately exit the process.
+	// Return to avoid errors / main window briefly appearing.
+	//   [52128:0304/194956.188:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+	//   [52128:0304/194956.189:ERROR:cache_util.cc(145)] Unable to move cache folder C:\Users\Isaiah\AppData\Roaming\Electron\GPUCache to C:\Users\Isaiah\AppData\Roaming\Electron\old_GPUCache_000
+	//   [52128:0304/194956.189:ERROR:disk_cache.cc(196)] Unable to create cache
+	//   [52128:0304/194956.189:ERROR:shader_disk_cache.cc(613)] Shader Cache Creation failed: -2
+	return;
+} else {
+	// console.log("Got single instance lock.");
+	// When a second instance is opened, the "second-instance" event will be emitted in the this instance.
+	// See handler below.
+}
+
+// Clean up temp files from previous runs.
+// Only do this if the lock is acquired, so that multiple "second instances" can be handled in parallel, theoretically.
+// (Otherwise one instance could delete the file before another instance reads it.)
+// TODO: switch to a more inherently ephemeral communication method, like a pipe or a socket.
+(async () => {
+	try {
+		for (const file of await fs.readdir(app.getPath('temp'))) {
+			if (file.startsWith("vision-cli-output-")) {
+				await fs.unlink(path.join(app.getPath('temp'), file));
+			}
+		}
+	} catch (error) {
+		console.error("Error during temp file cleanup:", error);
+	}
+})();
+
+// Handle --version in the basic case where the app is not already running.
+if (args.version) {
+	console.log(getVersion());
+	app.quit();
+	return;
+}
+
+// Exit for arguments that are not supported when the app is not already running.
+// Some or all of these could be supported in the future.
+// `--profile` seems useful; `--adjust` not so much.
+const secondInstanceOnlyArgs = ["profile", "adjust", "set", "get", "start", "stop"];
+if (secondInstanceOnlyArgs.some(arg => args[arg])) {
+	const badArgs = secondInstanceOnlyArgs.filter(arg => args[arg]);
+	const badArgsString = badArgs.map(arg => `--${arg}`).join(", ");
+	if (badArgs.length === 1) {
+		console.log(`The argument ${badArgsString} is only supported when the app is already running.`);
+	} else {
+		console.log(`These arguments are only supported when the app is already running: ${badArgsString}.`);
+	}
+	console.log("If you have a use case, please open an issue at https://github.com/arjavnotfound/VISION-Research-Prototype/issues");
+	app.quit();
+	return;
+}
+
+// Normal app behavior continues here.
+
+const windowStateKeeper = require('electron-window-state');
+const inputDriver = require('./input-driver.js');
+const { setMouseLocation: setMouseLocationWithoutTracking, getMouseLocation, click, mouseDown, mouseUp, mouseUpSync, pressKey } = inputDriver;
+console.log(`[VISION] Native input driver: ${inputDriver.describe()}`);
+const { createMouseSafetyCoordinator } = require('./mouse-safety.js');
+const { createScrollHandler, createOverlaySync, summarizeInputFeedback } = require('./input-gates.js');
+const { ensureInitialRelativeMouseMove } = require('./win-relative-mouse.js');
+const { allowGestureButton, allowGestureScroll, isMouthClickMode } = require('./gesture-policy.js');
+const { createVisionBus } = require('./vision-bus.js');
+const screen = require('electron').screen; // Note: can't be used until ready event
+
+// Link to the voice assistant (see vision-bus.js). `live`: the assistant's mic is open.
+const assistantState = { connected: false, live: false, at: 0 };
+let internetOk = null;
+const ASSISTANT_STALE_MS = 15000;
+
+/** @type {BrowserWindow} */
+let appWindow;
+/** @type {BrowserWindow} */
+let screenOverlayWindow;
+
+let activeSettings = {};
+let enabled = true;
+let regainControlTimeout = null;
+
+function isClickingAllowed() {
+	if (regainControlTimeout || !enabled || activeSettings.clickingMode === 'off') {
+		return false;
+	}
+
+	// Failsafe: don't click if the window(s) are closed or destroyed.
+	if (
+		(!screenOverlayWindow || screenOverlayWindow.isDestroyed()) ||
+		(!appWindow || appWindow.isDestroyed())
+	) {
+		return false;
+	}
+	return true;
+}
+
+const mouseSafety = createMouseSafetyCoordinator({
+	mouseDown,
+	mouseUp,
+	emergencyMouseUpSync: mouseUpSync,
+	getClickingAllowed: isClickingAllowed,
+});
+
+mouseSafety.attachAppSafetyListeners(app);
+mouseSafety.attachProcessSafetyListeners(process);
+
+let screenScaleFactor = 1;
+function updateScreenScaleFactor() {
+	// Must wait for ready event before calling this
+	screenScaleFactor = screen.getPrimaryDisplay().scaleFactor;
+}
+
+/**
+ * Computes the bounding rectangle that spans all connected displays.
+ * Must be called after the app 'ready' event.
+ * @returns {{ x: number, y: number, width: number, height: number }}
+ */
+function computeVirtualDisplayBounds() {
+	const displays = screen.getAllDisplays();
+	const x = Math.min(...displays.map(d => d.bounds.x));
+	const y = Math.min(...displays.map(d => d.bounds.y));
+	const right = Math.max(...displays.map(d => d.bounds.x + d.bounds.width));
+	const bottom = Math.max(...displays.map(d => d.bounds.y + d.bounds.height));
+	return { x, y, width: right - x, height: bottom - y };
+}
+
+const { updateMenu, exportSettings, importSettings, setMenuUIMode } = require("./menus.js");
+const { createAppWindow: createAppWindowWithOptions, createPreviewRunner } = require('./app-window.js');
+const { createTray } = require('./tray.js');
+
+// Which UI to show. The new "Aperture" UI is the default; --legacy-ui keeps the original.
+const useLegacyUI = Boolean(args.legacy_ui);
+setMenuUIMode({ legacy: useLegacyUI, getAppWindow: () => appWindow });
+// eslint-disable-next-line no-unused-vars
+let tray = null; // kept referenced so the tray icon is not garbage collected
+
+function createAppWindow() {
+	return createAppWindowWithOptions({
+		legacy: useLegacyUI,
+		preloadPath: path.join(app.getAppPath(), 'src/preload-app-window.js'),
+		iconPath: path.join(__dirname, '../../images/vision-logo-512.png'),
+		windowStateKeeper,
+		screen,
+		syntheticFace: Boolean(args.synthetic_face),
+		// Started by the VISION launcher: open on the Start screen (one-app flow).
+		kiosk: process.env.VISION_ONE_APP === '1',
+	});
+}
+
+// Bring a VISION window to the front even when another app has focus (voice commands
+// arrive while the user works elsewhere; Windows otherwise only flashes the taskbar).
+function raiseWindow(win) {
+	if (!win || win.isDestroyed()) return;
+	if (win.isMinimized()) win.restore();
+	win.setAlwaysOnTop(true);
+	win.show();
+	win.focus();
+	setTimeout(() => {
+		if (!win.isDestroyed()) win.setAlwaysOnTop(false);
+	}, 400);
+}
+
+// Window + app commands from the new UI (title bar buttons, settings sheet).
+ipcMain.handle('windowControl', (event, action) => {
+	const win = BrowserWindow.fromWebContents(event.sender);
+	if (!win) return false;
+	if (action === 'minimize') {
+		win.minimize();
+	} else if (action === 'show') {
+		raiseWindow(win);
+	} else if (action === 'hide') {
+		// Keeps tracking running; the tray icon brings the window back.
+		win.hide();
+	} else if (action === 'quit' || action === 'close') {
+		// Clean quit: before-quit / will-quit release any held mouse button.
+		app.quit();
+	}
+	return true;
+});
+ipcMain.handle('appCommand', async (event, command) => {
+	if (command === 'export-settings') {
+		await exportSettings();
+	} else if (command === 'import-settings') {
+		await importSettings();
+	} else if (command === 'open-legacy-ui') {
+		app.relaunch({ args: [...process.argv.slice(1).filter((a) => a !== '--legacy-ui'), '--legacy-ui'] });
+		app.quit();
+	} else if (command === 'open-new-ui') {
+		app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--legacy-ui') });
+		app.quit();
+	} else if (command === 'devtools') {
+		BrowserWindow.fromWebContents(event.sender)?.webContents.toggleDevTools();
+	}
+	return true;
+});
+ipcMain.handle('getAppVersion', () => getVersion());
+// QA hooks: only exist when the fake input driver is active.
+if (process.env.VISION_FAKE_INPUT) {
+	ipcMain.handle('qa', (_event, command) => {
+		if (command?.type === 'physical-move') {
+			inputDriver.simulatePhysicalMove(command.dx ?? 40, command.dy ?? 0);
+			return true;
+		}
+		if (command?.type === 'safety-state') {
+			return mouseSafety.getButtonStates();
+		}
+		return false;
+	});
+}
+const { installCrashRecovery } = require('./crash-recovery.js');
+
+// Allow recovering from WebGL crash unlimited times.
+app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
+// Opt-in local debugging endpoint, used by scripts/bench/measure.js to read FPS.
+// Never enabled unless the environment variable is set explicitly.
+if (/^\d+$/.test(process.env.VISION_REMOTE_DEBUG_PORT || "")) {
+	app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+	app.commandLine.appendSwitch("remote-debugging-port", process.env.VISION_REMOTE_DEBUG_PORT);
+}
+app.commandLine.appendSwitch("enable-blink-features", "MiddleClickAutoscroll");
+async function loadSettings() {
+	let data;
+	try {
+		data = await fs.readFile(settingsFile, 'utf8');
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			return;
+		}
+		throw error;
+	}
+	const settings = JSON.parse(data);
+	if (settings.formatName !== formatName) {
+		throw new Error("Settings file format name doesn't match");
+	}
+	// Upgrade settings here
+	// e.g.:
+	// if (settings.formatVersion === 0) {
+	// 	settings.formatVersion++;
+	// 	settings.newSettingName = settings.someOldSettingName;
+	// 	delete settings.someOldSettingName;
+	// }
+	if (settings.formatVersion < formatVersion) {
+		throw new Error(`Unsupported settings file format version. There is no upgrade path from ${settings.formatVersion} to ${formatVersion}.`);
+	}
+	if (settings.formatVersion > formatVersion) {
+		throw new Error(`Unsupported settings file format version (${settings.formatVersion}). This version of the app only supports up to format version ${formatVersion}.`);
+	}
+	deserializeSettings(settings);
+}
+
+// TODO: DRY with loadSettings
+// Could use a { sync: true, languageOnly: true } options object
+// or could split out the shared functionality into a helper function
+// like handleFormatUpgrade(settings)
+function loadLanguageSettingSync() {
+	// Handle --cli-lang <lang> and --cli-lang=<lang>
+	const cliLangArg = process.argv.find(arg => arg === "--cli-lang" || arg.startsWith("--cli-lang="));
+	if (cliLangArg) {
+		let lang;
+		if (cliLangArg === "--cli-lang") {
+			const langIndex = process.argv.indexOf("--cli-lang");
+			if (langIndex !== -1 && process.argv[langIndex + 1]) {
+				lang = process.argv[langIndex + 1];
+			}
+		} else if (cliLangArg.startsWith("--cli-lang=")) {
+			lang = cliLangArg.split("=")[1];
+		}
+		if (lang) {
+			setLocale(lang);
+			return;
+		}
+	}
+
+	// Handle settings file
+	let data;
+	try {
+		data = require('fs').readFileSync(settingsFile, 'utf8');
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			return;
+		}
+		throw error;
+	}
+	const settings = JSON.parse(data);
+	if (settings.formatName !== formatName) {
+		throw new Error("Settings file format name doesn't match");
+	}
+	// Upgrade settings here
+	// e.g.:
+	// if (settings.formatVersion === 0) {
+	// 	settings.formatVersion++;
+	// 	settings.newSettingName = settings.someOldSettingName;
+	// 	delete settings.someOldSettingName;
+	// }
+	if (settings.formatVersion < formatVersion) {
+		throw new Error(`Unsupported settings file format version. There is no upgrade path from ${settings.formatVersion} to ${formatVersion}.`);
+	}
+	if (settings.formatVersion > formatVersion) {
+		throw new Error(`Unsupported settings file format version (${settings.formatVersion}). This version of the app only supports up to format version ${formatVersion}.`);
+	}
+	// deserializeSettings(settings);
+	if (settings.globalSettings.language !== undefined) {
+		setLocale(settings.globalSettings.language);
+	}
+}
+async function saveSettings() {
+	await fs.writeFile(settingsFile, JSON.stringify(serializeSettings(), null, '\t'));
+}
+function serializeSettings() {
+	// TODO: DRY with serializeSettings in vision.js? The main stuff is taken care of now (listing every setting)
+	// but it's still two places defining / dealing with the serialization format
+	return {
+		formatVersion,
+		formatName,
+		globalSettings: activeSettings,
+		// profiles: [],
+	};
+};
+function deserializeSettings(settings) {
+	// TODO: DRY with deserializeSettings in vision.js? The main stuff is taken care of now (listing every setting)
+	// but it's still two places defining / dealing with the serialization format
+
+	// Handles partial settings objects,
+	// to allow manually editing the settings file, removing settings to reset them to their defaults,
+	// as well as accepting settings updates over IPC from the UI.
+	// Don't use `... in settings.globalSettings` to check if a setting is defined.
+	// We must ignore `undefined` values so that the defaults carry over from the renderer to the main process in the Electron app.
+	// Similarly, `Object.assign` would overwrite existing settings with undefined values.
+	if ("globalSettings" in settings) {
+		for (const key in settings.globalSettings) {
+			if (settings.globalSettings[key] !== undefined) {
+				activeSettings[key] = settings.globalSettings[key];
+			}
+		}
+		if (settings.globalSettings.runAtLogin !== undefined) {
+			if (app.isPackaged) {
+				if (process.platform === 'win32') {
+					// Handle Squirrel installer on Windows.
+					// It places the app in a subdirectory, with a version number, but Update.exe can be used to launch the app.
+					const appFolder = path.dirname(process.execPath);
+					const updateExe = path.resolve(appFolder, '..', 'Update.exe');
+					const exeName = path.basename(process.execPath);
+
+					app.setLoginItemSettings({
+						openAtLogin: activeSettings.runAtLogin,
+						path: updateExe,
+						args: [
+							'--processStart', `"${exeName}"`,
+							// '--process-start-args', '"--hidden"',
+						]
+					});
+				} else {
+					app.setLoginItemSettings({
+						openAtLogin: activeSettings.runAtLogin,
+					});
+				}
+			} else {
+				// console.log("Ignoring runAtLogin setting because the app is not packaged.");
+				// Could maybe try to pass it arguments to run the app in development mode, but it might not be worth it.
+			}
+		}
+		if (settings.globalSettings.language !== undefined) {
+			setLocale(settings.globalSettings.language);
+			updateMenu();
+		}
+	}
+}
+
+// setMouseLocation/getMouseLocation are asynchronous,
+// which means we have to be smart about detecting manual mouse movement.
+// We don't want to pause the mouse control due to head tracker based movement.
+// So instead of detecting a distance from the last mouse position,
+// we'll check against a history of positions.
+// How long should the queue be? Points could be removed when setMouseLocation resolves,
+// if and only if it's guaranteed that getMouseLocation will return the new position at that point.
+// However, a simple time limit should be fine.
+const mousePosHistoryDuration = 5000; // in milliseconds; affects time to switch back to camera control after manual mouse movement (although maybe it shouldn't)
+const mousePosHistory = [];
+async function setMouseLocationVision(x, y) {
+	// On Windows, ensure the cursor is visible when using "Run at login".
+	// The cursor starts invisible at login and remains invisible when sending absolute mouse moves.
+	// ShowCursor() also does not work to show the cursor, but a relative mouse move does.
+	ensureInitialRelativeMouseMove();
+
+	const time = performance.now();
+	mousePosHistory.push({ point: { x, y }, time });
+	// Test robustness using this artificial delay:
+	// await new Promise((resolve) => setTimeout(resolve, Math.random() * 100));
+	await setMouseLocationWithoutTracking(x * screenScaleFactor, y * screenScaleFactor);
+}
+function pruneMousePosHistory() {
+	const now = performance.now();
+	while (mousePosHistory[0] && now - mousePosHistory[0].time > mousePosHistoryDuration) {
+		mousePosHistory.shift();
+	}
+}
+
+
+const createWindow = () => {
+	appWindow = createAppWindow();
+	const appWindowState = appWindow._visionWindowState;
+
+	// Toggle the DevTools with F12
+	appWindow.webContents.on("before-input-event", (_e, input) => {
+		if (input.type === "keyDown" && input.key === "F12") {
+			appWindow.webContents.toggleDevTools();
+
+			appWindow.webContents.on('devtools-opened', async () => {
+				// Can't use appWindow.webContents.devToolsWebContents.on("before-input-event") - it just doesn't intercept any events.
+				await appWindow.webContents.devToolsWebContents.executeJavaScript(`
+					new Promise((resolve)=> {
+						addEventListener("keydown", (event) => {
+							if (event.key === "F12") {
+								resolve();
+							}
+						}, { once: true });
+					})
+				`);
+				appWindow.webContents.toggleDevTools();
+			});
+		}
+	});
+
+	// Restore window state, and listen for window state changes.
+	appWindowState.manage(appWindow);
+
+	mouseSafety.attachWindowSafetyListeners(appWindow, 'appWindow');
+
+	// Clean up overlay and mouse safety when the app window is closed.
+	appWindow.on('closed', () => {
+		appWindow = null;
+		mouseSafety.releaseAllMouseButtons('app-window-closed');
+		clearTimeout(monitorMousePositionTid);
+		overlaySync.dispose();
+		clearTimeout(regainControlTimeout);
+		if (screenOverlayWindow && !screenOverlayWindow.isDestroyed()) {
+			try {
+				screenOverlayWindow.destroy();
+			} catch (_err) {
+				// Non-critical overlay destroy error on shutdown
+			}
+		}
+		app.quit();
+	});
+
+	// Helper for safely sending messages without spamming the console
+	function trySendOverlayWindowMessage(message, ...args) {
+		// Could include logic to log when toggling between able and unable to update,
+		// but for now it's enough to avoid errors spamming the console.
+		if (!screenOverlayWindow || screenOverlayWindow.isDestroyed()) {
+			// This can happen while closing the app normally.
+			return false;
+		}
+		if (screenOverlayWindow.webContents.isDestroyed()) {
+			return false;
+		}
+		if (screenOverlayWindow.webContents.isCrashed()) {
+			return false;
+		}
+		if (screenOverlayWindow.webContents.isLoadingMainFrame()) {
+			// This happens normally during startup.
+			return false;
+		}
+		screenOverlayWindow.webContents.send(message, ...args);
+		return true;
+	}
+
+	// Expose functionality to the renderer processes.
+
+	// Allow controlling the mouse, but pause if the mouse is moved normally.
+	const thresholdToRegainControl = 10; // in pixels
+	const regainControlForTime = 2000; // in milliseconds, AFTER the mouse hasn't moved for more than mouseMoveRequestHistoryDuration milliseconds (I think)
+	let inputFeedback = {};
+	let primaryDisplay = screen.getPrimaryDisplay();
+	let virtualDisplayBounds = computeVirtualDisplayBounds();
+	let isMultiMonitor = screen.getAllDisplays().length > 1;
+	let systemMousePosition = null;
+	const buildOverlayPayload = () => {
+		const workAreaContainerBounds = {
+			x: primaryDisplay.workArea.x - virtualDisplayBounds.x,
+			y: primaryDisplay.workArea.y - virtualDisplayBounds.y,
+			width: primaryDisplay.workArea.width,
+			height: primaryDisplay.workArea.height,
+		};
+		const isManualTakeback = enabled && regainControlTimeout !== null;
+
+		return {
+			isEnabled: enabled && !isManualTakeback,
+			isManualTakeback,
+			clickingMode: activeSettings.clickingMode,
+			dwellDrag: Boolean(activeSettings.dwellDrag),
+			dwellTime: activeSettings.dwellTime,
+			inputFeedback: summarizeInputFeedback(inputFeedback),
+			heldButtons: mouseSafety.getButtonStates(),
+			workAreaContainerBounds,
+			messageText: getScreenOverlayMessageText({ isManualTakeback, enabled }),
+			systemMousePosition,
+			soundEffectsEnabled: activeSettings.soundEffects,
+		};
+	};
+	// Coalesced: at most ~60 Hz, and only when something changed.
+	const overlaySync = createOverlaySync({
+		send: (payload) => {
+			if (!trySendOverlayWindowMessage('overlayUpdate', payload)) {
+				return false;
+			}
+			return true;
+		},
+		minIntervalMs: 16,
+	});
+	const updateDwellClickingAndHUD = () => {
+		overlaySync.request(buildOverlayPayload);
+	};
+
+	let monitorMousePositionTid = null;
+	async function monitorMousePosition() {
+		// Failsafe watchdog: never let a button stay held while clicking is disallowed.
+		mouseSafety.enforceClickingGate('watchdog');
+		try {
+			const pos = await getMouseLocation();
+			// Convert to overlay-local CSS coordinates (subtract the overlay window's virtual origin).
+			const x = Math.round(pos.x / screenScaleFactor - virtualDisplayBounds.x);
+			const y = Math.round(pos.y / screenScaleFactor - virtualDisplayBounds.y);
+			if (!systemMousePosition || systemMousePosition.x !== x || systemMousePosition.y !== y) {
+				systemMousePosition = { x, y };
+			}
+		} catch (error) {
+			console.error("Error getting mouse position:", error);
+		}
+		try {
+			// Update hide-HUD-near-cursor effect
+			updateDwellClickingAndHUD();
+		} catch (error) {
+			console.error("Error updating overlay (with new mouse position):", error);
+		}
+		clearTimeout(monitorMousePositionTid);
+		monitorMousePositionTid = setTimeout(monitorMousePosition, 16);
+	}
+	monitorMousePosition();
+
+	ipcMain.on('moveMouse', async (_event, x, y, time) => {
+		const curPos = await getMouseLocation();
+		curPos.x /= screenScaleFactor;
+		curPos.y /= screenScaleFactor;
+
+		pruneMousePosHistory();
+		const distances = mousePosHistory.map(({ point }) => Math.hypot(curPos.x - point.x, curPos.y - point.y));
+		const distanceMoved = distances.length ? Math.min(...distances) : 0;
+
+		if (distanceMoved > thresholdToRegainControl) {
+			clearTimeout(regainControlTimeout);
+			regainControlTimeout = setTimeout(() => {
+				regainControlTimeout = null; // used to check if we're pausing
+				updateDwellClickingAndHUD();
+			}, regainControlForTime);
+			// Fail-safe: release any held mouse buttons when manual physical takeover occurs!
+			mouseSafety.releaseAllMouseButtons('manual-takeover');
+			updateDwellClickingAndHUD();
+
+			mousePosHistory.push({ point: { x: curPos.x, y: curPos.y }, time: performance.now(), from: "moveMouse" });
+		} else if (regainControlTimeout === null && enabled) {
+			setMouseLocationVision(x, y);
+		}
+
+		trySendOverlayWindowMessage('moveMouse', x - virtualDisplayBounds.x, y - virtualDisplayBounds.y, time);
+	});
+
+	ipcMain.on('notifyToggleState', async (_event, nowEnabled) => {
+		let initialPos;
+		if (nowEnabled) { // don't rely on getMouseLocation when disabling the software
+			initialPos = await getMouseLocation();
+			initialPos.x /= screenScaleFactor;
+			initialPos.y /= screenScaleFactor;
+		}
+		enabled = nowEnabled;
+
+		if (!nowEnabled) {
+			// Fail-safe: release any held simulated buttons when tracking disabled!
+			mouseSafety.releaseAllMouseButtons('tracking-disabled');
+		}
+
+		// Start immediately if enabled.
+		clearTimeout(regainControlTimeout);
+		regainControlTimeout = null;
+		mousePosHistory.length = 0;
+		if (nowEnabled) {
+			// Avoid false positive for manual takeback.
+			mousePosHistory.push({ point: { x: initialPos.x, y: initialPos.y }, time: performance.now(), from: "notifyToggleState" });
+		}
+
+		updateDwellClickingAndHUD();
+	});
+	ipcMain.on('updateInputFeedback', (_event, data) => {
+		inputFeedback = data;
+		updateDwellClickingAndHUD();
+	});
+
+
+	ipcMain.on('setOptions', (_event, newOptions) => {
+		deserializeSettings(newOptions);
+		saveSettings();
+		if (activeSettings.clickingMode === 'off') {
+			mouseSafety.releaseAllMouseButtons('clicking-mode-off');
+		}
+	});
+
+	ipcMain.handle('getOptions', async () => {
+		return serializeSettings();
+	});
+
+	ipcMain.handle('getIsPackaged', async () => {
+		return app.isPackaged;
+	});
+
+
+	ipcMain.on('click', async (_event, x, y, _time) => {
+		if (!isClickingAllowed()) {
+			return;
+		}
+
+		// Translate coords in case of debug (doesn't matter when it's fullscreen).
+		x += screenOverlayWindow.getContentBounds().x;
+		y += screenOverlayWindow.getContentBounds().y;
+
+		await setMouseLocationVision(x, y);
+		await click(activeSettings.swapMouseButtons ? "right" : "left");
+		trySendOverlayWindowMessage('overlayPulse', 'L');
+	});
+
+	// Desktop dwell drag (off by default; setting "dwellDrag"): the overlay's first dwell
+	// presses the primary button, the next dwell releases it. Goes through mouseSafety, so
+	// presses obey the clicking gate and releases are always allowed.
+	ipcMain.handle('dwellMouseButton', async (_event, down, x, y) => {
+		if (down) {
+			if (!activeSettings.dwellDrag || !isClickingAllowed()) {
+				return false;
+			}
+			const bounds = screenOverlayWindow.getContentBounds();
+			await setMouseLocationVision(x + bounds.x, y + bounds.y);
+		}
+		const changed = await mouseSafety.setMouseButtonState(0, Boolean(down), Boolean(activeSettings.swapMouseButtons));
+		if (changed) {
+			trySendOverlayWindowMessage('overlayPulse', down ? 'DRAG' : 'DROP');
+		}
+		updateDwellClickingAndHUD();
+		return changed;
+	});
+
+	ipcMain.handle('setMouseButtonState', async (_event, button, down) => {
+		const policy = allowGestureButton({
+			button,
+			down,
+			clickingMode: activeSettings.clickingMode,
+			voiceLive: assistantState.live,
+			controlMap: activeSettings.controlMap,
+		});
+		if (!policy.allowed) {
+			return false;
+		}
+		const changed = await mouseSafety.setMouseButtonState(button, down, Boolean(activeSettings.swapMouseButtons));
+		if (changed) {
+			if (down) {
+				// Gesture click: shutter-snap on the overlay with the button the face asked for.
+				trySendOverlayWindowMessage('overlayPulse', button === 2 ? 'R' : button === 1 ? 'M' : 'L');
+			}
+			updateDwellClickingAndHUD();
+		}
+		return changed;
+	});
+
+	// Set up the screen overlay window.
+	const fullscreen = process.platform !== 'darwin' && !isMultiMonitor;
+	screenOverlayWindow = new BrowserWindow({
+		fullscreen,
+		x: virtualDisplayBounds.x,
+		y: virtualDisplayBounds.y,
+		width: virtualDisplayBounds.width,
+		height: virtualDisplayBounds.height,
+		frame: false,
+		transparent: true,
+		backgroundColor: '#00000000',
+		hasShadow: false,
+		roundedCorners: false,
+		alwaysOnTop: true,
+		resizable: false,
+		movable: false,
+		minimizable: false,
+		maximizable: false,
+		closable: false,
+		focusable: false,
+		skipTaskbar: true,
+		hiddenInMissionControl: true,
+		accessibleTitle: 'VISION Screen Overlay',
+		webPreferences: {
+			preload: path.join(app.getAppPath(), 'src/preload-screen-overlay.js'),
+		},
+	});
+	screenOverlayWindow.setIgnoreMouseEvents(true);
+	screenOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+
+	mouseSafety.attachWindowSafetyListeners(screenOverlayWindow, 'screenOverlayWindow');
+
+	// New overlay (halo, dwell ring, click pulse) unless the classic UI was requested.
+	screenOverlayWindow.loadFile(useLegacyUI ? `src/electron-screen-overlay.html` : `src/overlay/overlay.html`);
+	// After a (re)load the overlay has no state; make sure the next update is sent in full.
+	screenOverlayWindow.webContents.on('did-finish-load', () => {
+		overlaySync.invalidate();
+		updateDwellClickingAndHUD();
+	});
+	screenOverlayWindow.on('close', (event) => {
+		// If Windows Explorer is restarted while the app is running,
+		// the Screen Overlay Window can appear in the taskbar, and become closable.
+		// Various window attributes are forgotten, so we need to reset them.
+		// A more proactive approach of restoring skipTaskbar when Windows Explorer is restarted would be better.
+		// See: https://github.com/1j01/vision-hft/issues/47
+		// And: https://github.com/electron/electron/issues/29526
+		event.preventDefault();
+		screenOverlayWindow.setSkipTaskbar(true);
+		screenOverlayWindow.setClosable(false);
+		if (!isMultiMonitor && process.platform !== 'darwin') {
+			screenOverlayWindow.setFullScreen(true);
+		} else {
+			screenOverlayWindow.setFullScreen(false);
+			screenOverlayWindow.setBounds(virtualDisplayBounds);
+		}
+		screenOverlayWindow.setIgnoreMouseEvents(true);
+		// "screen-saver" is the highest level; it should show above the taskbar.
+		screenOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+		// The window isn't showing on top of the taskbar without this.
+		screenOverlayWindow.hide();
+		screenOverlayWindow.show();
+	});
+	screenOverlayWindow.on('closed', () => {
+		screenOverlayWindow = null;
+	});
+
+	function updateDisplayConfiguration() {
+		primaryDisplay = screen.getPrimaryDisplay();
+		virtualDisplayBounds = computeVirtualDisplayBounds();
+		isMultiMonitor = screen.getAllDisplays().length > 1;
+		if (screenOverlayWindow) {
+			if (!isMultiMonitor && process.platform !== 'darwin') {
+				// Keep fullscreen on single-monitor (non-macOS) to ensure the overlay covers the taskbar.
+			} else {
+				screenOverlayWindow.setFullScreen(false);
+				screenOverlayWindow.setBounds(virtualDisplayBounds);
+			}
+		}
+		updateDwellClickingAndHUD();
+		appWindow?.webContents.send('virtualDisplayBoundsChanged', virtualDisplayBounds);
+	}
+
+	screen.on('display-metrics-changed', updateDisplayConfiguration);
+	screen.on('display-added', updateDisplayConfiguration);
+	screen.on('display-removed', updateDisplayConfiguration);
+
+	// screenOverlayWindow.webContents.openDevTools({ mode: 'detach' });
+};
+
+ipcMain.handle('getVirtualDisplayBounds', () => computeVirtualDisplayBounds());
+
+installCrashRecovery({
+	getAppWindow: () => appWindow,
+	getScreenOverlayWindow: () => screenOverlayWindow,
+});
+
+// This method will be called when Electron has finished
+// initialization and is ready to create browser windows.
+// Some APIs can only be used after this event occurs.
+app.on('ready', async () => {
+	try {
+		await loadSettings();
+	} catch (error) {
+		// TODO: copy file to a backup location, and continue with default settings
+		// No blocking dialog (nobody should need a hand to get past it): keep the broken
+		// file for inspection and start with default settings.
+		console.error("Failed to load settings; starting with defaults:", error);
+		try {
+			await fs.rename(settingsFile, `${settingsFile}.broken-${Date.now()}`);
+		} catch (renameError) {
+			console.error("Could not move the broken settings file aside:", renameError);
+		}
+		activeSettings = {};
+	}
+	if (args.preview) {
+		// --preview: mocked engine, no camera, no overlay, no mouse control. For design QA.
+		updateMenu();
+		createPreviewRunner({ args, preloadPath: path.join(app.getAppPath(), 'src/preload-app-window.js') }).start();
+		return;
+	}
+	createWindow();
+	startVisionBus();
+	// Ensure the menus exist when language is not set (i.e. first run)
+	// This is computationally redundant when language is already set (handled in deserializeSettings)
+	updateMenu();
+	if (!useLegacyUI) {
+		tray = createTray({
+			iconPath: path.join(__dirname, '../../images/vision-logo-32.png'),
+			getWindow: () => appWindow,
+			toggleTracking: () => appWindow?.webContents.send("shortcut", "toggle-tracking"),
+			sendCommand: (command) => {
+				appWindow?.show();
+				appWindow?.webContents.send('uiCommand', command);
+			},
+		});
+	}
+
+	updateScreenScaleFactor();
+	screen.on('display-metrics-changed', (/*event, display, changedMetrics*/) => {
+		updateScreenScaleFactor();
+	});
+	screen.on('display-added', updateScreenScaleFactor);
+	screen.on('display-removed', updateScreenScaleFactor);
+
+	const success = globalShortcut.register('F9', () => {
+		// console.log('Toggle tracking');
+		appWindow?.webContents.send("shortcut", "toggle-tracking");
+	});
+	if (!success) {
+		// Not a blocking dialog: nobody should need a hand to dismiss it. Pause stays
+		// available from the window, the tray, closing the eyes, and the voice.
+		console.error("[VISION] Could not register the F9 shortcut (another app owns it).");
+	}
+});
+
+app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, additionalData) => {
+	// Someone tried to run a second instance, or is trying to use the vision CLI.
+	// If there are no arguments, we should focus the app's main window.
+	// If there are arguments, we should handle adjusting settings for the running app.
+
+	// Note: the "second-instance" event sends a broken argv which may rearrange and add extra arguments,
+	// so we have to use the `additionalData` object, passed from `requestSingleInstanceLock`.
+	// This hack is recommended in the docs: https://www.electronjs.org/docs/api/app#event-second-instance
+	console.log("second-instance", { uselessCorruptedArgv, workingDirectory, additionalData });
+
+	// Unfortunately, it turns out `additionalData` is buggy too, and becomes null under some obscure conditions.
+	// See https://github.com/electron/electron/issues/40615
+	if (!additionalData) {
+		// I would move this into `handleSecondInstance` and use `logToCLI`, but it won't work because `additionalData` is null.
+		// logToCLI(`Command line arguments were not received by the already-running application. They are meant to be passed via additionalData, however due to a bug in Electron, additionalData === ${additionalData}. See https://github.com/electron/electron/issues/40615`);
+		console.log(`second-instance: additionalData === ${additionalData}. See https://github.com/electron/electron/issues/40615`);
+		return;
+	}
+
+	function deliverOutputToCLI(output) {
+		console.log("second-instance: Outputting to CLI:", output);
+
+		// Basic implementation
+		// fs.writeFile(additionalData.tempFilePath, output)
+		// 	.then(() => {
+		// 		console.log("second-instance: Wrote output to", additionalData.tempFilePath);
+		// 	}, (error) => {
+		// 		console.error(`second-instance: Failed to write output to ${additionalData.tempFilePath}:`, error);
+		// 	});
+
+		// Write the file in chunks to test for race conditions.
+		// const stream = require('fs').createWriteStream(additionalData.tempFilePath);
+		// setTimeout(() => {
+		// 	stream.write(output.slice(0, Math.floor(output.length / 2)), 'utf8', () => {
+		// 		console.log("second-instance: Wrote first chunk to", additionalData.tempFilePath);
+		// 		setTimeout(() => {
+		// 			stream.write(output.slice(Math.floor(output.length / 2)), 'utf8', () => {
+		// 				console.log("second-instance: Wrote second chunk to", additionalData.tempFilePath);
+		// 				stream.end();
+		// 			});
+		// 		}, 2000); // Delay before writing the second chunk
+		// 	});
+		// }, 2000); // Delay before writing the first chunk
+		// stream.on('error', (error) => {
+		// 	console.error(`second-instance: Failed to write output to ${additionalData.tempFilePath}:`, error);
+		// });
+
+		// Rename the file after fully writing it to avoid race conditions.
+		// Can use setTimeout to test the file polling behavior and timeout error message.
+		// setTimeout(() => {
+		const tempTempFilePath = additionalData.tempFilePath + ".tmp";
+		fs.writeFile(tempTempFilePath, output)
+			.then(() => {
+				console.log("second-instance: Wrote output to", tempTempFilePath);
+				fs.rename(tempTempFilePath, additionalData.tempFilePath)
+					.then(() => {
+						console.log("second-instance: Renamed output file to", additionalData.tempFilePath);
+					}, (error) => {
+						console.error(`second-instance: Failed to rename output file to ${additionalData.tempFilePath}:`, error);
+					});
+			}, (error) => {
+				console.error(`second-instance: Failed to write output to ${tempTempFilePath}:`, error);
+			});
+		// }, 20000);
+	}
+
+	// `deliverOutputToCLI` has to be called exactly once.
+	// If it's not called, the CLI command will show a timeout error message.
+	// If it's called multiple times, only one output will be shown, or there might be an error renaming the file.
+	// In order to allow many return paths in this logic, without requiring a function call before each return,
+	// use an inner function (`handleSecondInstance`), and call `deliverOutputToCLI` at the end of the outer function.
+	let output = "";
+	function logToCLI(message) {
+		output += message + "\n";
+		// console.log(message);
+	}
+	function handleSecondInstance() {
+		const argv = additionalData.arguments;
+		if (argv.length === 0) {
+			// TODO: DRY with `activate` event handler?
+			if (BrowserWindow.getAllWindows().length === 0) {
+				logToCLI("The app is likely already launching.");
+			} else if (appWindow) {
+				logToCLI("Focusing the existing app window.");
+				if (appWindow.isMinimized()) {
+					appWindow.restore();
+				}
+				appWindow.show();
+			}
+			return;
+		}
+
+		const args = parser.parse_args(argv);
+		console.log("second-instance: parsed args:", args);
+		// if (args.profile) {
+		// 	const filePath = path.resolve(workingDirectory, args.profile[0]);
+		// 	console.log("second-instance: Opening settings profile:", filePath);
+		// }
+		if (args.start || args.stop) {
+			if (!!args.start === !!args.stop) {
+				logToCLI("Exactly one of --start or --stop must be provided.");
+				return;
+			}
+			if (!appWindow) {
+				// TODO: create window if it doesn't exist (like `activate`) and make sure to start enabled
+				// (but don't need to open the app for --stop)
+				// (and don't focus the window if it's already open)
+				logToCLI("The app window is not open.");
+				return;
+			}
+			if (enabled !== !!args.start) {
+				appWindow.webContents.send("shortcut", "toggle-tracking");
+				logToCLI(`Toggled head tracking to ${enabled ? "off" : "on"}.`);
+				return;
+			}
+			logToCLI(`Head tracking is already ${enabled ? "on" : "off"}.`);
+			return;
+		}
+		if (args.set || args.adjust || args.get || args.profile) {
+			logToCLI("Arguments not supported yet. CLI is a work in progress.");
+			return;
+		}
+		if (args.version) {
+			// This is special-cased to show both the CLI and running app versions.
+			// The output from here is combined on the CLI's side.
+			logToCLI(getVersion());
+			return;
+		}
+		// logToCLI("No arguments recognized.");
+		logToCLI("Happy birthday!"); // just in case
+	}
+
+	handleSecondInstance();
+	deliverOutputToCLI(output);
+});
+
+// Quit when all windows are closed, except on macOS. There, it's common
+// for applications and their menu bar to stay active until the user quits
+// explicitly with Cmd + Q.
+// NOTE: currently exiting with app.exit()
+// If re-assessing this, for macOS, make sure to handle the global shortcut, when the window doesn't exist.
+app.on('window-all-closed', () => {
+	if (process.platform !== 'darwin') {
+		app.quit();
+	}
+});
+
+app.on('activate', () => {
+	// On OS X it's common to re-create a window in the app when the
+	// dock icon is clicked and there are no other windows open.
+	// That said, we don't want to doubly create the window if the app is already launching,
+	// and BrowserWindow.getAllWindows().length === 0 is not a sufficient check for that.
+	// Currently (and I don't see a reason to change this) we don't leave the app running on macOS without a window,
+	// so we don't need to handle recreating the windows.
+	// if (BrowserWindow.getAllWindows().length === 0) {
+	// 	createWindow();
+	// }
+});
+
+ipcMain.handle('openCameraSettings', async (_event, cameraDeviceName) => {
+	console.log("Requested to open camera settings for device:", cameraDeviceName);
+	const { spawn } = require('child_process');
+	const pathToFfmpeg = require('ffmpeg-static');
+	console.log("Path to ffmpeg:", pathToFfmpeg);
+
+	const run = (program, args) => {
+		return new Promise((resolve, reject) => {
+			const proc = spawn(program, args);
+			let stdout = '';
+			let stderr = '';
+			proc.stdout.on('data', d => stdout += d);
+			proc.stderr.on('data', d => stderr += d);
+			proc.on('error', reject);
+			proc.on('close', code => {
+				resolve({ code, stdout, stderr });
+			});
+		});
+	};
+
+	let listDevicesResult;
+	try {
+		listDevicesResult = await run(pathToFfmpeg, [
+			'-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner'
+		]);
+	} catch (err) {
+		return { error: `Error listing devices: ${err.message}` };
+	}
+
+	console.log(`Device list output: ${listDevicesResult.stderr}`);
+
+	if (listDevicesResult.stderr.includes("Unrecognized option 'list_devices'")) {
+		return { error: `Can't show camera settings on this platform.` };
+	}
+
+	const videoDeviceRegex = /\[dshow @ [^\]]+\] "([^"]+)" \(video\)/g;
+	let match;
+	let deviceFound = false;
+
+	while ((match = videoDeviceRegex.exec(listDevicesResult.stderr)) !== null) {
+		const deviceName = match[1];
+		console.log(`Found video device: ${deviceName}`);
+		if (
+			deviceName === cameraDeviceName ||
+			deviceName === cameraDeviceName.replace(/\s\(.*\)$/, '')
+		) {
+			deviceFound = true;
+			cameraDeviceName = deviceName;
+			break;
+		}
+	}
+
+	if (!deviceFound) {
+		console.error(`Camera device "${cameraDeviceName}" not found in device list.`);
+		return { error: `Camera device "${cameraDeviceName}" not found in device list.` };
+	}
+
+	console.log(`Opening settings dialog for camera device: ${cameraDeviceName}`);
+
+	try {
+		const result = await run(pathToFfmpeg, [
+			'-f', 'dshow',
+			'-show_video_device_dialog', 'true',
+			'-i', `video=${cameraDeviceName}`
+		]);
+		console.log(`Command output: ${result.stderr}`);
+		const dshowRegex = /\[dshow @ [^\]]+\] (.*)(Input #[\d+], dshow, .*)/g;
+		// const relevantOutput = result.stderr.split('\n').filter(line => line.startsWith('[dshow @'));
+		if (result.code !== 0) {
+			if (result.stderr.includes('requested filter does not have a property page to show')) {
+				// or shorter: "No settings found for this camera source."
+				return { error: `The camera settings dialog is not available for this camera.` };
+			}
+			// return { error: `ffmpeg exited with code ${result.code}\n\n${result.stderr}` };
+			// ffmpeg actually returns code 1 even after successfully showing the dialog.
+			// check for actual arbitrary errors in the output via dshowRegex
+			const match = dshowRegex.exec(result.stderr);
+			if (match) {
+				return { error: match[1] };
+			}
+		}
+		// TODO: could fall back to opening ms-settings:privacy-webcam on Windows 10 and 11
+		// There's also a way to link to the settings for a specific camera in Windows 11:
+		// https://learn.microsoft.com/en-us/windows/apps/develop/camera/launch-camera-settings
+	} catch (err) {
+		console.error(`Error opening camera settings: ${err.message}`);
+		return { error: `Error opening camera settings: ${err.message}` };
+	}
+	return { success: true };
+});
+
+ipcMain.handle('openOnScreenKeyboard', async () => {
+	console.log("Requested to open built-in On-Screen Keyboard");
+	if (process.platform === 'win32') {
+		const { spawn, exec } = require('child_process');
+		try {
+			// On Windows, launching osk.exe via PowerShell Start-Process avoids 32/64-bit redirection issues
+			// and ensures the On-Screen Keyboard process launches detached and interactive.
+			const proc = spawn('powershell.exe', [
+				'-NoProfile',
+				'-WindowStyle', 'Hidden',
+				'-ExecutionPolicy', 'Bypass',
+				'-Command', 'Start-Process osk.exe'
+			], { detached: true, stdio: 'ignore' });
+			proc.unref();
+			return { success: true };
+		} catch (err) {
+			console.error("Failed to spawn On-Screen Keyboard via PowerShell:", err);
+			try {
+				const fallbackProc = spawn('cmd.exe', ['/c', 'start', 'osk.exe'], { detached: true, stdio: 'ignore' });
+				fallbackProc.unref();
+				return { success: true };
+			} catch (fallbackErr) {
+				console.error("Failed to spawn On-Screen Keyboard via cmd, trying exec:", fallbackErr);
+				try {
+					exec('start osk.exe', { windowsHide: true });
+					return { success: true };
+				} catch (finalErr) {
+					console.error("All OSK launch methods failed:", finalErr);
+					return { error: finalErr.message };
+				}
+			}
+		}
+	} else if (process.platform === 'darwin') {
+		// macOS Accessibility Keyboard trigger
+		const { spawn } = require('child_process');
+		try {
+			spawn('osascript', ['-e', 'tell application "System Events" to key code 53'], { detached: true, stdio: 'ignore' });
+			return { success: true };
+		} catch (err) {
+			return { error: err.message };
+		}
+	} else {
+		// Linux virtual keyboard
+		const { spawn } = require('child_process');
+		try {
+			spawn('onboard', [], { detached: true, stdio: 'ignore' });
+			return { success: true };
+		} catch (err) {
+			return { error: err.message };
+		}
+	}
+});
+
+// Mouth-open + head-tilt scrolling. Uses the module-level isClickingAllowed gate
+// (this used to throw a ReferenceError because the gate was scoped inside 'ready').
+const handleScroll = createScrollHandler({ isClickingAllowed, pressKey });
+ipcMain.handle('scrollMouse', (_event, deltaY) => {
+	if (!allowGestureScroll({ voiceLive: assistantState.live, controlMap: activeSettings.controlMap }).allowed) {
+		return false;
+	}
+	return handleScroll(deltaY);
+});
+
+ipcMain.handle('releaseButtons', (_event, reason) => {
+	mouseSafety.releaseAllMouseButtons(String(reason || 'ui'));
+	return true;
+});
+
+// Adaptive control map: a gesture the UI re-routed to a click (e.g. raised brows -> right
+// click) clicks at the current cursor position, behind the same clicking gate.
+let lastMappedClick = 0;
+ipcMain.handle('mappedClick', async (_event, button) => {
+	if (!isClickingAllowed() || !['left', 'right'].includes(button)) {
+		return false;
+	}
+	const now = Date.now();
+	if (now - lastMappedClick < 700) {
+		return false;
+	}
+	lastMappedClick = now;
+	await click(button);
+	try {
+		screenOverlayWindow?.webContents.send('overlayPulse', button === 'right' ? 'R' : 'L');
+	} catch (_error) {
+		// overlay closing
+	}
+	return true;
+});
+
+// ---- VISION bus (only when started by the VISION launcher, which sets the token)
+// Launcher preflight (camera, mic, internet, voice keys, web build), shown on the Start screen.
+let preflight = null;
+try {
+	preflight = process.env.VISION_PREFLIGHT ? JSON.parse(process.env.VISION_PREFLIGHT) : null;
+} catch (_error) {
+	preflight = null;
+}
+
+function sendBusState() {
+	appWindow?.webContents.send('busState', {
+		preflight,
+		assistant: { connected: assistantState.connected, live: assistantState.live, seen: assistantState.at > 0 },
+		internet: internetOk,
+		busEnabled: Boolean(process.env.VISION_BUS_TOKEN),
+	});
+}
+ipcMain.handle('getBusState', () => {
+	sendBusState();
+	return true;
+});
+
+function setAssistantState({ connected, live }) {
+	const wasLive = assistantState.live;
+	if (!assistantState.at) {
+		console.log('[VISION] Voice assistant linked');
+	}
+	assistantState.connected = connected;
+	assistantState.live = live;
+	assistantState.at = Date.now();
+	if (live && !wasLive && isMouthClickMode(activeSettings.clickingMode)) {
+		// Talking starts: let go of anything the mouth was holding.
+		mouseSafety.releaseAllMouseButtons('voice-on');
+	}
+	if (live !== wasLive) {
+		console.log(`[VISION] Voice ${live ? 'on: mouth gestures paused' : 'off'}`);
+	}
+	sendBusState();
+}
+
+function showAppWindow() {
+	if (appWindow) raiseWindow(appWindow);
+}
+
+const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'reset', 'remap', 'show', 'controls']);
+async function handleBusCommand(cmd, value) {
+	if (cmd === 'quit') {
+		mouseSafety.releaseAllMouseButtons('voice-quit');
+		setTimeout(() => app.quit(), 400);
+		return { done: 'quit' };
+	}
+	if (cmd === 'status') {
+		return { state: busStatus() };
+	}
+	if (cmd === 'selftest-gesture') {
+		// CHECK.bat: a left-wink click through the gesture policy, the clicking gate and the
+		// button watchdog into the input driver. Only with the fake driver (never a real click).
+		if (!process.env.VISION_FAKE_INPUT) {
+			throw new Error('self-test needs the fake input driver');
+		}
+		const policy = allowGestureButton({ button: 0, down: true, clickingMode: 'blink', voiceLive: assistantState.live, controlMap: activeSettings.controlMap });
+		if (!policy.allowed) {
+			return { done: 'blocked', reason: policy.reason };
+		}
+		const pressed = await mouseSafety.setMouseButtonState(0, true, false);
+		await new Promise((resolve) => setTimeout(resolve, 80));
+		const released = await mouseSafety.setMouseButtonState(0, false, false);
+		return { done: 'gesture', pressed, released, held: mouseSafety.getButtonStates() };
+	}
+	if (!BUS_UI_COMMANDS.has(cmd)) {
+		throw new Error(`unknown command: ${cmd}`);
+	}
+	if (!appWindow) {
+		throw new Error('VISION window is not open');
+	}
+	if (['recalibrate', 'reset', 'show', 'controls', 'remap'].includes(cmd)) {
+		showAppWindow();
+	}
+	// The UI answers with what it did, so the assistant never claims a change that did not happen.
+	const reply = await new Promise((resolve) => {
+		const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		const timer = setTimeout(() => {
+			ipcMain.removeAllListeners(`busReply:${id}`);
+			resolve({ done: cmd, note: 'no reply from the window' });
+		}, 2500);
+		ipcMain.once(`busReply:${id}`, (_event, result) => {
+			clearTimeout(timer);
+			resolve(result ?? { done: cmd });
+		});
+		appWindow.webContents.send('uiCommand', { type: 'bus', id, cmd, value });
+	});
+	return reply;
+}
+
+function busStatus() {
+	return {
+		tracking: enabled,
+		clickingMode: activeSettings.clickingMode,
+		voiceLive: assistantState.live,
+		controlMap: activeSettings.controlMap ?? null,
+	};
+}
+
+async function checkInternet() {
+	if (process.env.VISION_SIMULATE_OFFLINE === '1') {
+		internetOk = false;
+		sendBusState();
+		return;
+	}
+	try {
+		await require('dns').promises.resolve('livekit.io');
+		internetOk = true;
+	} catch (_error) {
+		internetOk = false;
+	}
+	sendBusState();
+}
+
+function startVisionBus() {
+	const token = process.env.VISION_BUS_TOKEN;
+	if (!token) return;
+	const bus = createVisionBus({
+		port: Number(process.env.VISION_BUS_PORT || 47811),
+		token,
+		onAssistant: setAssistantState,
+		onCommand: handleBusCommand,
+		getState: busStatus,
+	});
+	bus.start().catch((error) => console.error('[VISION] Bus failed to start:', error));
+	// The overlay sends a heartbeat every few seconds; if it stops, voice is off.
+	setInterval(() => {
+		if (assistantState.at && Date.now() - assistantState.at > ASSISTANT_STALE_MS && (assistantState.connected || assistantState.live)) {
+			setAssistantState({ connected: false, live: false });
+			assistantState.at = 1;
+		}
+	}, 3000).unref();
+	checkInternet();
+	setInterval(checkInternet, 10000).unref();
+}

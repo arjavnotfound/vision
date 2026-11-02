@@ -1,0 +1,176 @@
+/* VISION desktop overlay: visible over every app, so it must stay tiny and calm.
+   Click-through (the window ignores mouse events). Moves with transforms only. */
+
+@font-face {
+	font-family: "Geist Mono";
+	src: url("../ui/fonts/GeistMono-Variable.woff2") format("woff2");
+	font-weight: 100 900;
+}
+
+:root {
+	--ember: #FF5A1F;
+	--ember-soft: rgba(255, 90, 31, .18);
+	--bone: #F2EDE4;
+	--grey: rgba(200, 194, 184, .85);
+	--warn: #FFC24B;
+	--ink: rgba(11, 10, 9, .78);
+}
+
+html,
+body {
+	margin: 0;
+	overflow: hidden;
+	background: transparent;
+	width: 100%;
+	height: 100%;
+	font-family: "Geist Mono", ui-monospace, Consolas, monospace;
+}
+
+/* The dwell clicker's own indicator and hover halo are replaced by ours. */
+.vision-dwell-indicator,
+.vision-hover-halo {
+	display: none !important;
+}
+
+#button-that-takes-up-the-entire-screen {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	background: transparent;
+	border: 0;
+	opacity: 0;
+}
+
+.cursor {
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+	will-change: transform;
+	z-index: 10;
+}
+
+/* Halo: a thin bone ring centred on the cursor hotspot. A faint ink hairline around it
+   keeps it visible on white windows. */
+.halo {
+	position: absolute;
+	left: -17px;
+	top: -17px;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 1.5px solid var(--bone);
+	box-shadow: 0 0 0 1px rgba(11, 10, 9, .28), inset 0 0 0 1px rgba(11, 10, 9, .18);
+	transition: border-color 200ms, box-shadow 200ms, opacity 300ms;
+}
+
+/* Dwell ring: conic fill just outside the halo. */
+.dwell {
+	--p: 0;
+	position: absolute;
+	left: -26px;
+	top: -26px;
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	background: conic-gradient(var(--ember) calc(var(--p) * 1turn), rgba(255, 90, 31, .16) 0);
+	-webkit-mask: radial-gradient(circle, transparent 21.5px, #000 22px, #000 25px, transparent 25.5px);
+	mask: radial-gradient(circle, transparent 21.5px, #000 22px, #000 25px, transparent 25.5px);
+	opacity: 0;
+	transition: opacity 120ms linear;
+	filter: drop-shadow(0 0 4px rgba(255, 90, 31, .7));
+}
+
+.cursor.is-dwelling .dwell {
+	opacity: 1;
+}
+
+.cursor.is-holding .halo {
+	border-style: dashed;
+}
+
+/* Shutter-snap pulse on a click. */
+.snap {
+	position: absolute;
+	left: -17px;
+	top: -17px;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 2px solid var(--ember);
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* Click: an ember ring that expands and fades (~350 ms). */
+.cursor.is-snapping .snap {
+	animation: snap 350ms cubic-bezier(.16, 1, .3, 1);
+}
+
+@keyframes snap {
+	0% {
+		opacity: 1;
+		scale: 1;
+	}
+
+	100% {
+		opacity: 0;
+		scale: 2.1;
+	}
+}
+
+/* Tiny label next to the cursor: L / R / M / DRAG, PAUSED · F9, NO FACE ... */
+.tag {
+	position: absolute;
+	left: 22px;
+	top: 14px;
+	padding: 3px 7px 3px 8px;
+	border-radius: 6px;
+	background: var(--ink);
+	color: var(--bone);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: .18em;
+	white-space: nowrap;
+	opacity: 0;
+	transform: translateY(2px);
+	transition: opacity 140ms, transform 140ms;
+}
+
+.tag.is-shown {
+	opacity: 1;
+	transform: none;
+}
+
+.tag--ember {
+	color: var(--ember);
+}
+
+/* Paused / manual takeover: hollow grey ring. */
+.cursor.is-paused .halo {
+	border-color: var(--grey);
+	box-shadow: none;
+	opacity: .7;
+}
+
+.cursor.is-paused.is-quiet .halo {
+	opacity: .3;
+}
+
+.cursor.is-noface .halo {
+	border-color: var(--warn);
+	box-shadow: 0 0 8px rgba(255, 194, 75, .45);
+}
+
+.cursor.is-hidden {
+	visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cursor.is-snapping .snap {
+		animation: none;
+	}
+}

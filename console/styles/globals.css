@@ -1,0 +1,280 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ==========================================================================
+   APERTURE — VISION's design system.
+   Optics and precision instruments: an iris, a viewfinder, a lens.
+   One accent (ember). Hairlines instead of borders. Warm inks, not blue-black.
+   ========================================================================== */
+
+/* Ember Dark (default) */
+:root,
+[data-theme='ember'] {
+  color-scheme: dark;
+  --ink-0: #0b0a09;
+  --ink-1: #131210;
+  --ink-2: #1b1916;
+  --ink-3: #24211d;
+  --rule: rgba(242, 237, 228, 0.09);
+  --rule-strong: rgba(242, 237, 228, 0.16);
+  --bone: #f2ede4;
+  --bone-2: #b4aea4;
+  /* Brief value #6E6961 is 3.6:1 on ink-0; lifted to pass WCAG AA (4.6:1) for 11–12px labels. */
+  --bone-3: #8a847a;
+  --ember: #ff5a1f;
+  /* Ember used as TEXT. Identical on dark; deepened on paper for AA. */
+  --ember-text: #ff5a1f;
+  --ember-soft: rgba(255, 90, 31, 0.14);
+  --ember-glow: 0 0 40px rgba(255, 90, 31, 0.35);
+  --ok: #9be564;
+  --warn: #ffc24b;
+  --err: #ff4d4d;
+
+  /* Aperture internals */
+  --blade-a: #2a2621;
+  --blade-b: #1d1a17;
+  --blade-edge: rgba(242, 237, 228, 0.14);
+  --lens: #050404;
+  --glass: rgba(19, 18, 16, 0.95);
+  --shadow-lift: 0 18px 50px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --grain-opacity: 0.035;
+  --grain-blend: overlay;
+}
+
+/* Paper Light — for washed-out expo projectors. */
+[data-theme='paper'] {
+  color-scheme: light;
+  --ink-0: #f1ece2;
+  --ink-1: #e8e2d6;
+  --ink-2: #ded7c9;
+  --ink-3: #d3cbbb;
+  --rule: rgba(20, 18, 15, 0.12);
+  --rule-strong: rgba(20, 18, 15, 0.22);
+  --bone: #14120f;
+  --bone-2: #48433b;
+  --bone-3: #5f594f;
+  --ember: #ff5a1f;
+  --ember-text: #a3380a;
+  --ember-soft: rgba(255, 90, 31, 0.13);
+  --ember-glow: 0 0 36px rgba(255, 90, 31, 0.3);
+  --ok: #3f8f12;
+  --warn: #a86b00;
+  --err: #d42a2a;
+
+  --blade-a: #2a2621;
+  --blade-b: #1d1a17;
+  --blade-edge: rgba(242, 237, 228, 0.16);
+  --lens: #050404;
+  --glass: rgba(236, 230, 219, 0.96);
+  --shadow-lift: 0 18px 46px rgba(60, 45, 25, 0.18), 0 2px 6px rgba(60, 45, 25, 0.12);
+  --grain-opacity: 0.05;
+  --grain-blend: multiply;
+}
+
+/* Legacy shadcn tokens, mapped so leftover primitives (toasts) match. */
+:root {
+  --radius: 18px;
+  --background: var(--ink-0);
+  --foreground: var(--bone);
+  --card: var(--ink-1);
+  --card-foreground: var(--bone);
+  --popover: var(--ink-2);
+  --popover-foreground: var(--bone);
+  --primary: var(--ember);
+  --primary-foreground: var(--ink-0);
+  --secondary: var(--ink-2);
+  --secondary-foreground: var(--bone);
+  --muted: var(--ink-2);
+  --muted-foreground: var(--bone-2);
+  --accent: var(--ink-3);
+  --accent-foreground: var(--bone);
+  --destructive: var(--err);
+  --border: var(--rule);
+  --input: var(--rule-strong);
+  --ring: var(--ember);
+}
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Doto only for the state word and clock; falls back to Geist Mono. */
+  --font-display: var(--font-doto), var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-ink-0: var(--ink-0);
+  --color-ink-1: var(--ink-1);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-bone: var(--bone);
+  --color-bone-2: var(--bone-2);
+  --color-bone-3: var(--bone-3);
+  --color-ember: var(--ember);
+  --color-ember-text: var(--ember-text);
+  --color-ember-soft: var(--ember-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+
+  --radius-panel: 28px;
+  --radius-card: 18px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-rule;
+  }
+  html,
+  body {
+    background: var(--ink-0);
+    color: var(--bone);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--ember-soft);
+    color: var(--bone);
+  }
+}
+
+/* ---------- Type ---------------------------------------------------------- */
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+@utility display-word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-variation-settings: 'ROND' 100;
+}
+
+/* ---------- Texture: film grain ------------------------------------------ */
+
+.grain-layer {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: var(--grain-blend);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 1.4 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+}
+.grain-layer.fixed-screen {
+  position: fixed;
+  z-index: 100;
+  border-radius: 0;
+}
+
+/* ---------- Surfaces ------------------------------------------------------ */
+
+.surface-glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  backdrop-filter: blur(24px) saturate(1.1);
+  box-shadow:
+    inset 0 0 0 1px var(--rule),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    var(--shadow-lift);
+}
+
+/* Thin shimmer for the THINKING state word. */
+@keyframes aperture-shimmer {
+  0% {
+    background-position: 140% 0;
+  }
+  100% {
+    background-position: -40% 0;
+  }
+}
+.shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--bone-2) 0%,
+    var(--bone-2) 38%,
+    var(--bone) 50%,
+    var(--bone-2) 62%,
+    var(--bone-2) 100%
+  );
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: aperture-shimmer 2.6s linear infinite;
+}
+
+/* ---------- Reduced motion ------------------------------------------------ */
+
+[data-reduced-motion='true'] *,
+[data-reduced-motion='true'] *::before,
+[data-reduced-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text {
+    animation: none;
+    color: var(--bone-2);
+    background: none;
+  }
+}
+[data-reduced-motion='true'] .shimmer-text {
+  animation: none;
+  color: var(--bone-2);
+  background: none;
+}
+
+/* ---------- Next dev overlay must never cover the overlay controls -------- */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dev-tools-button] {
+  display: none !important;
+}
+
+/* ---------- Electron: the window IS the surface --------------------------- */
+html.is-electron,
+html.is-electron body {
+  background: transparent !important;
+  overflow: hidden !important;
+  user-select: none;
+}
+
+/* Floating orb anchor: the orb's RIGHT edge is fixed, so the strip grows to the
+   left with the mark under the pointer. Browser: centred orb (68px).
+   Electron: the window itself is right-anchored at the orb, 22px padding. */
+.orb-anchor {
+  right: calc(50% - 34px);
+}
+html.is-electron .orb-anchor {
+  right: 22px;
+}

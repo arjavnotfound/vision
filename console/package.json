@@ -1,0 +1,51 @@
+{
+  "name": "agent-starter-react",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \"tests/*.test.ts\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "shadcn:install": "pnpm dlx shadcn@latest add --yes @agents-ui/all && pnpm format"
+  },
+  "dependencies": {
+    "@livekit/components-react": "^2.9.20",
+    "@livekit/protocol": "^1.41.0",
+    "clsx": "^2.1.1",
+    "livekit-client": "^2.17.2",
+    "livekit-server-sdk": "^2.13.3",
+    "lucide-react": "^0.555.0",
+    "motion": "^12.16.0",
+    "next": "15.5.18",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@trivago/prettier-plugin-sort-imports": "^5.2.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.2",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.5.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "tailwindcss": "^4",
+    "tw-animate-css": "^1.3.0",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

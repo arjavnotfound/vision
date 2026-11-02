@@ -1,0 +1,65 @@
+{
+  "name": "vision-hft",
+  "version": "2.9.0",
+  "description": "VISION Face Control engine: head tracking and facial gestures for hands-free pointing",
+  "license": "MIT",
+  "author": {
+    "name": "arjavnotfound",
+    "url": "https://github.com/arjavnotfound"
+  },
+  "keywords": [
+    "vision",
+    "camera-mouse",
+    "mouse",
+    "camera",
+    "webcam",
+    "head-tracker",
+    "head-tracking",
+    "facial-recognition",
+    "face-tracker",
+    "face-tracking",
+    "headmouse",
+    "facial-mouse",
+    "facemesh",
+    "eye-tracker",
+    "eye-tracking",
+    "eye-gaze",
+    "accessibility",
+    "assistive-technology",
+    "cursor",
+    "pointer",
+    "pointing",
+    "input-method",
+    "hands-free",
+    "handsfree",
+    "desktop-automation",
+    "telekinesis"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arjavnotfound/VISION-Research-Prototype.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arjavnotfound/VISION-Research-Prototype/issues"
+  },
+  "homepage": "https://github.com/arjavnotfound/VISION-Research-Prototype",
+  "main": "vision.js",
+  "browser": "vision.js",
+  "files": [
+    "vision.js",
+    "vision.css",
+    "src/",
+    "locales/",
+    "images/",
+    "audio/",
+    "lib/"
+  ],
+  "devDependencies": {
+    "@david18284/one-euro-filter": "^1.0.3",
+    "@mediapipe/face_mesh": "^0.4.1633559619",
+    "@tensorflow-models/face-landmarks-detection": "^1.0.6"
+  },
+  "scripts": {
+    "copy-deps": "node copy-deps.js"
+  }
+}
