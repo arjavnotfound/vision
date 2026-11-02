@@ -102,7 +102,7 @@ electronAPI.onOverlayUpdate((_event, data) => {
 
 	screenOverlay.update(data);
 
-	// "Trick" V.I.S.I.O.N. into stopping/starting the dwell clicker.
+	// "Trick" VISION into stopping/starting the dwell clicker.
 	// Update: I'm now setting `dwellClicker.paused`, just keeping the event dispatching
 	// in case it's needed to cancel a dwell click in progress.
 	// TODO: ensure setting `paused` to `true` cancels any in-progress dwell click.

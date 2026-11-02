@@ -84,7 +84,7 @@ function showAbout() {
 		type: 'info',
 		title: t("desktop.about.title", { defaultValue: 'About VISION' }),
 		message: 'VISION Face Control',
-		detail: `Version ${require('./version').getVersion()}\n\nControl your computer with your head and face.\n\nOpen-source credits: based on Tracky Mouse by Isaiah Odhner (MIT); MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat.`,
+		detail: `Version ${require('./version').getVersion()}\n\nControl your computer with your head and face.\n\nOpen-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat.`,
 	});
 }
 

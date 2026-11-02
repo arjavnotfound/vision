@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Secrets scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix core
+          npm ci --prefix app
+          pnpm --dir console install --frozen-lockfile
+          uv sync --project agent --python 3.13
+
+      - name: Face control and app tests
+        run: npm test
+      - name: Lint (app, core, scripts)
+        run: npx eslint .
+
+      - name: Console
+        working-directory: console
+        run: |
+          pnpm lint
+          pnpm exec tsc --noEmit
+          pnpm test
+          pnpm build
+
+      - name: Agent
+        working-directory: agent
+        run: |
+          uv run ruff check src tests
+          uv run pytest -q

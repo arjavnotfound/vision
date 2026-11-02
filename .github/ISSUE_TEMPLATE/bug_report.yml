@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in VISION does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Part of VISION
+      options: [Face control, Voice assistant, Installer or updates, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VISION version
+      description: Shown in Settings, or the installer file name.
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Attach main.log and agent.log from %APPDATA%\VISION\logs if you can. Check them for anything private first.

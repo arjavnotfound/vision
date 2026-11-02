@@ -1,7 +1,7 @@
 import { autoscroll } from "./autoscroll.js";
 
 // Pointer event simulation logic should be built into vision in the future.
-// These simulated events connect the V.I.S.I.O.N. head tracker to the V.I.S.I.O.N. dwell clicker,
+// These simulated events connect the VISION head tracker to the VISION dwell clicker,
 // as well as any other pointermove/pointerenter/pointerleave/click handlers on the page.
 
 /** a special value so other code can detect these simulated events */

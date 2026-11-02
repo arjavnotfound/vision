@@ -1,12 +1,12 @@
 {
-  "date": "2026-11-02T12:12:33.279Z",
+  "date": "2026-11-02T13:05:21.221Z",
   "passed": 13,
   "total": 13,
   "results": [
     {
       "name": "engine tracking with synthetic face",
       "pass": true,
-      "evidence": "status tracking, camera error null, loop 66.9 FPS"
+      "evidence": "status tracking, camera error null, loop 66.8 FPS"
     },
     {
       "name": "left wink fires LEFT CLICK",
@@ -26,7 +26,7 @@
     {
       "name": "mouth open + tilt up scrolls up",
       "pass": true,
-      "evidence": "20 scroll steps (up)"
+      "evidence": "19 scroll steps (up)"
     },
     {
       "name": "open mouth fires LEFT CLICK / hold",
@@ -41,7 +41,7 @@
     {
       "name": "F9 pauses and releases a held gesture click",
       "pass": true,
-      "evidence": "held true, released in 27 ms, paused true"
+      "evidence": "held true, released in 13 ms, paused true"
     },
     {
       "name": "F9 resumes",
@@ -51,17 +51,17 @@
     {
       "name": "physical mouse takeover releases a held button",
       "pass": true,
-      "evidence": "released in 15 ms; main log: manual-takeover release"
+      "evidence": "released in 13 ms; main log: manual-takeover release"
     },
     {
       "name": "dwell click on the desktop",
       "pass": true,
-      "evidence": "clicked after 1810 ms"
+      "evidence": "clicked after 1809 ms"
     },
     {
       "name": "dwell drag: grab then drop",
       "pass": true,
-      "evidence": "down, then up after 1811 ms"
+      "evidence": "down, then up after 1812 ms"
     },
     {
       "name": "quitting releases a held button",
@@ -69,5 +69,5 @@
       "evidence": "held true, exited true, releases logged: 1"
     }
   ],
-  "runDir": "C:\\Users\\arjav\\AppData\\Local\\Temp\\vision-qa-8Ni4zZ"
+  "runDir": "C:\\Users\\arjav\\AppData\\Local\\Temp\\vision-qa-Az52yr"
 }

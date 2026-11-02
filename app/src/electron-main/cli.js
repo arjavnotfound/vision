@@ -4,7 +4,7 @@ const { t } = require('./i18n');
 
 const parser = new ArgumentParser({
 	prog: "vision",
-	description: t("cli.description", { defaultValue: "Control your mouse hands-free. This CLI controls the running V.I.S.I.O.N. app. It's meant for external programs like a voice command system to toggle V.I.S.I.O.N. and adjust settings on the fly." }),
+	description: t("cli.description", { defaultValue: "Control your mouse hands-free. This CLI controls the running VISION app. It's meant for external programs like a voice command system to toggle VISION and adjust settings on the fly." }),
 	// 	epilog: `Configuration Options (for use with --set, --adjust, and --get):
 	// - "startEnabled"              default: false  controls whether head tracking is enabled when the app starts.
 	// - "runAtLogin"                default: false  controls whether the app starts when you log in.

@@ -1,0 +1,63 @@
+name: Release
+
+# Push a tag like v1.2.0 (matching app/package.json "version") to build and publish
+# the Windows installer and the MSIX. Release notes are generated from merged changes;
+# the Releases page is the changelog.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix core
+          npm ci --prefix app
+          pnpm --dir console install --frozen-lockfile
+          uv sync --project agent --python 3.13
+
+      - name: Tests
+        run: |
+          npm test
+          npx eslint .
+          pnpm --dir console test
+          uv run --project agent pytest -q agent/tests
+
+      - name: Version matches tag
+        shell: bash
+        run: test "v$(node -p "require('./app/package.json').version")" = "${GITHUB_REF_NAME}"
+
+      - name: Create the release with generated notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --title "VISION ${GITHUB_REF_NAME#v}" --generate-notes
+
+      - name: Build and upload installer + MSIX
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional code signing. Without these secrets the build is unsigned.
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          npm run build:agent
+          npm run build:console
+          npm run release --prefix app

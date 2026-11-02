@@ -1,9 +1,15 @@
+import os
 import textwrap
 
 import pytest
 from livekit.agents import AgentSession, inference, llm
 
 from agent import Assistant
+
+# Live Gemini evals: skipped where no key is configured (CI, fresh clones).
+pytestmark = pytest.mark.skipif(
+    not os.getenv("GOOGLE_API_KEY"), reason="needs GOOGLE_API_KEY (live Gemini eval)"
+)
 
 
 def _judge_llm() -> llm.LLM:

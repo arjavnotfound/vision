@@ -1900,7 +1900,7 @@ Vision._initInner = function (div, initOptions, reinit) {
 		</div>
 
 		<p class="vision-desktop-app-download-message" hidden>
-			${t("ui.desktopAppPromo.message", { defaultValue: 'V.I.S.I.O.N. — Research Prototype (Event Expo 67)' })}
+			${t("ui.desktopAppPromo.message", { defaultValue: 'VISION' })}
 		</p>
 	`;
 	if (!div) {
@@ -2253,7 +2253,7 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 		// https://github.com/1j01/vision/issues/72
 
 		// Also, the "Swap mouse buttons" setting is likely not useful for
-		// web apps embedding V.I.S.I.O.N. and designed for head trackers,
+		// web apps embedding VISION and designed for head trackers,
 		// since it necessitates mode switching for dwell clicker usage,
 		// so it may make sense to hide (or not) even if it is supported there in the future.
 		// The main point of this option is to counteract the system-level mouse button setting,
@@ -2459,10 +2459,10 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					},
 					type: "checkbox",
 					default: false,
-					description: t("settings.startEnabled.description", { defaultValue: "If enabled, V.I.S.I.O.N. will start controlling the cursor as soon as it's launched." }),
-					// description: t("settings.startEnabled.description.alt1", { defaultValue: "Makes V.I.S.I.O.N. active when launched. Otherwise, you can start it manually when you're ready." }),
-					// description: t("settings.startEnabled.description.alt2", { defaultValue: "Makes V.I.S.I.O.N. active as soon as it's launched." }),
-					// description: t("settings.startEnabled.description.alt3", { defaultValue: "Automatically starts V.I.S.I.O.N. as soon as it's run." }),
+					description: t("settings.startEnabled.description", { defaultValue: "If enabled, VISION will start controlling the cursor as soon as it's launched." }),
+					// description: t("settings.startEnabled.description.alt1", { defaultValue: "Makes VISION active when launched. Otherwise, you can start it manually when you're ready." }),
+					// description: t("settings.startEnabled.description.alt2", { defaultValue: "Makes VISION active as soon as it's launched." }),
+					// description: t("settings.startEnabled.description.alt3", { defaultValue: "Automatically starts VISION as soon as it's run." }),
 				},
 				{
 					// For "experimental" label:
@@ -2504,8 +2504,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					type: "checkbox",
 					default: false,
 					visible: () => isDesktopApp,
-					description: t("settings.runAtLogin.description", { defaultValue: "If enabled, V.I.S.I.O.N. will automatically start when you log into your computer." }),
-					// description: t("settings.runAtLogin.description.alt1", { defaultValue: "Makes V.I.S.I.O.N. start automatically when you log into your computer." }),
+					description: t("settings.runAtLogin.description", { defaultValue: "If enabled, VISION will automatically start when you log into your computer." }),
+					// description: t("settings.runAtLogin.description.alt1", { defaultValue: "Makes VISION start automatically when you log into your computer." }),
 				},
 				{
 					label: t("settings.language.label", { defaultValue: "Language" }),
@@ -2526,8 +2526,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 						}
 						reinit();
 					},
-					description: t("settings.language.description", { defaultValue: "Select the language for the V.I.S.I.O.N. interface." }),
-					// description: t("settings.language.description.alt1", { defaultValue: "Changes the language V.I.S.I.O.N. is displayed in." }),
+					description: t("settings.language.description", { defaultValue: "Select the language for the VISION interface." }),
+					// description: t("settings.language.description.alt1", { defaultValue: "Changes the language VISION is displayed in." }),
 				},
 			],
 		},
