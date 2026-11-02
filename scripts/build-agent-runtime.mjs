@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global process */
 // Builds build/agent-runtime: a standalone CPython 3.13 (python-build-standalone, the
 // builds uv uses) with the agent's locked dependencies installed into it. The installer
 // ships it, so users need no Python, uv or Node. Needs uv on PATH.
