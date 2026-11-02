@@ -21,4 +21,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	setVoiceState: (state) => ipcRenderer.send('vision-voice-state', state),
 	/** LiveKit server URL + token, minted by the main process. */
 	getConnectionDetails: (options) => ipcRenderer.invoke('vision-connection-details', options),
+	/** { voice, language, hasKeys, voices, keyFields }. */
+	getVoiceConfig: () => ipcRenderer.invoke('vision-voice-config'),
+	/** { voice?, language? }: applies to the next voice session. */
+	setVoiceConfig: (change) => ipcRenderer.invoke('vision-voice-config-set', change),
+	/** Stored encrypted by the main process; starts the voice agent. */
+	saveVoiceKeys: (keys) => ipcRenderer.invoke('vision-voice-keys-save', keys),
+	onVoiceConfigChanged: (callback) => {
+		const listener = (_event, config) => callback(config);
+		ipcRenderer.on('vision-voice-config-changed', listener);
+		return () => ipcRenderer.removeListener('vision-voice-config-changed', listener);
+	},
 });

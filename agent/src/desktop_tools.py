@@ -22,6 +22,7 @@ import desktop
 import vision_bus
 from intent_guard import IntentError, IntentGuard, NeedsConfirmationError
 from tools import ActionCallback, ActionGuard
+from voice_settings import VOICES
 
 DRAG_AUTO_RELEASE_SECONDS = 20.0
 APP_WINDOW_WAIT_SECONDS = 4.0
@@ -149,6 +150,8 @@ class DesktopTools:
             self.change_click_mode,
             self.move_control,
             self.back_to_start,
+            self.change_voice,
+            self.change_language,
             self.quit_vision,
         ]
 
@@ -492,6 +495,47 @@ class DesktopTools:
     async def back_to_start(self, context: RunContext) -> str:
         """Go back to VISION's Start screen for the next person (settings reset, recalibrate)."""
         return await self._vision("reset", label="back to start")
+
+    @function_tool()
+    async def change_voice(self, context: RunContext, voice: str) -> str:
+        """Change VISION's speaking voice. It takes effect from the next conversation.
+
+        Args:
+            voice: One of Aoede (default), Puck, Charon, Kore, Fenrir, Leda, Orus, Zephyr,
+                Callirrhoe, Autonoe, Enceladus, Iapetus, Umbriel, Algieba, Despina,
+                Erinome, Algenib, Rasalgethi, Laomedeia, Achernar, Alnilam, Schedar,
+                Gacrux, Pulcherrima, Achird, Zubenelgenubi, Vindemiatrix, Sadachbia,
+                Sadaltager, Sulafat. If the user does not name one, pick a different one.
+        """
+        name = next(
+            (v for v in VOICES if v.lower() == (voice or "").strip().lower()), None
+        )
+        if not name:
+            raise ToolError("That voice does not exist. Pick one from the list.")
+        await self._vision("voice-settings", {"voice": name}, label=f"voice {name}")
+        return (
+            f"Voice set to {name}. Tell the user it applies from the next conversation."
+        )
+
+    @function_tool()
+    async def change_language(self, context: RunContext, language: str) -> str:
+        """Change the language VISION replies in ("speak Hindi", "detect my language").
+        It takes effect from the next conversation.
+
+        Args:
+            language: 'auto' (reply in whatever the user speaks, including Hinglish),
+                'english' or 'hindi'.
+        """
+        code = {
+            "auto": "auto", "detect": "auto", "automatic": "auto",
+            "english": "en", "en": "en", "hindi": "hi", "hi": "hi",
+        }.get((language or "").strip().lower())  # fmt: skip
+        if not code:
+            raise ToolError("Use auto, english or hindi.")
+        await self._vision(
+            "voice-settings", {"language": code}, label=f"language {code}"
+        )
+        return f"Language set to {language}. Tell the user it applies from the next conversation."
 
     @function_tool()
     async def quit_vision(self, context: RunContext) -> str:

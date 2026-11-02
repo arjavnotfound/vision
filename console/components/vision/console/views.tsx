@@ -19,6 +19,7 @@ import { CropMarks, StateWord, StreamingText, useFocusLock } from '../primitives
 import { useVision } from '../vision-model';
 import { ActivityTimeline } from './activity-timeline';
 import { QuickCommands } from './quick-commands';
+import { VoiceSettings } from './voice-settings';
 
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return <h2 className={cn('label-mono text-bone-3', className)}>{children}</h2>;
@@ -354,6 +355,8 @@ export function SettingsView() {
           <span className="text-bone-2 text-[15px]">{searchProvider}</span>
         </SettingRow>
       </section>
+
+      <VoiceSettings />
     </div>
   );
 }

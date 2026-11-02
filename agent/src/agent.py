@@ -25,6 +25,7 @@ from desktop_tools import DesktopTools
 from intent_guard import IntentGuard, has_wake_word
 from prompts import AGENT_INSTRUCTIONS, WAKE_RULE
 from tools import ActionCallback, BrowserTools
+from voice_settings import load_voice_settings
 
 load_dotenv(".env.local")
 logger = logging.getLogger("vision.agent")
@@ -34,10 +35,6 @@ WAKE_GATE = (
     os.getenv("VISION_WAKE_GATE", "") == "1" or os.getenv("VISION_STAGE", "") == "1"
 )
 _background_tasks: set[asyncio.Task] = set()
-
-
-DEFAULT_VOICE = "Aoede"
-DEFAULT_LANGUAGE = "en-US"
 
 
 async def text_input_cb(sess: AgentSession, ev: room_io.TextInputEvent) -> None:
@@ -102,8 +99,18 @@ class Assistant(Agent):
             ),
         )
 
-        selected_voice = os.getenv("VISION_VOICE", "").strip() or DEFAULT_VOICE
-        selected_lang = os.getenv("VISION_LANGUAGE", "").strip() or DEFAULT_LANGUAGE
+        # Read per session: a voice / language change applies to the next session.
+        self.voice_settings = load_voice_settings()
+        logger.info(
+            "VISION voice session settings: voice=%s language=%s",
+            self.voice_settings.voice,
+            self.voice_settings.language,
+        )
+        language_kwargs = (
+            {"language": self.voice_settings.language_code}
+            if self.voice_settings.language_code
+            else {}
+        )
 
         super().__init__(
             # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
@@ -114,8 +121,8 @@ class Assistant(Agent):
             llm=llm_override
             or google.beta.realtime.RealtimeModel(
                 model="gemini-3.1-flash-live-preview",
-                voice=selected_voice,
-                language=selected_lang,
+                voice=self.voice_settings.voice,
+                **language_kwargs,
                 tool_response_scheduling=genai_types.FunctionResponseScheduling.WHEN_IDLE,
                 # Keeps a session within Gemini Live limits; the plugin already resumes
                 # with its session handle after a server GoAway.
@@ -131,7 +138,9 @@ class Assistant(Agent):
             # 3. Add `from livekit.plugins import openai` to the top of this file
             # 4. Replace the llm argument with:
             #     llm=openai.realtime.RealtimeModel(voice="marin")
-            instructions=AGENT_INSTRUCTIONS + (WAKE_RULE if WAKE_GATE else ""),
+            instructions=AGENT_INSTRUCTIONS
+            + self.voice_settings.language_rule
+            + (WAKE_RULE if WAKE_GATE else ""),
             tools=[
                 *self.browser_tools.tools,
                 *self.desktop_tools.tools,

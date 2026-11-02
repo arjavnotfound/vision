@@ -1375,6 +1375,11 @@ async function handleBusCommand(cmd, value) {
 	if (cmd === 'status') {
 		return { state: busStatus() };
 	}
+	if (cmd === 'voice-settings') {
+		// "Change your voice", "speak Hindi": takes effect from the next voice session.
+		if (!voiceSettings) throw new Error('voice settings are not available');
+		return { done: 'voice-settings', settings: applyVoiceSettings(value ?? {}) };
+	}
 	if (cmd === 'selftest-gesture') {
 		// CHECK.bat: a left-wink click through the gesture policy, the clicking gate and the
 		// button watchdog into the input driver. Only with the fake driver (never a real click).
@@ -1479,12 +1484,38 @@ function startAssistant(busReady) {
 	const { readDevKeys, hasVoiceKeys } = require('./voice-keys.js');
 	const { createConnectionDetails } = require('./livekit-token.js');
 	const { createAgentSupervisor, resolveAgentCommand } = require('./agent-supervisor.js');
+	const { createVoiceSettings, VOICES, VOICE_KEY_FIELDS } = require('./voice-settings.js');
 	const appPath = app.getAppPath();
-	// shortcut: installed builds get no keys until the first-run keys sheet (safeStorage) lands.
-	const voiceKeys = app.isPackaged ? {} : readDevKeys(path.join(appPath, '..', 'agent'));
+	voiceSettings = createVoiceSettings({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage });
+	// Keys typed into Settings (encrypted); dev builds also read agent/.env.local, which wins.
+	const voiceKeys = { ...voiceSettings.readKeys(), ...(app.isPackaged ? {} : readDevKeys(path.join(appPath, '..', 'agent'))) };
 	const keysOk = hasVoiceKeys(voiceKeys);
 	preflight = { ...(preflight ?? {}), keys: keysOk, build: 'ok' };
 	sendBusState();
+
+	const fromOrb = (event) => orb?.getWindow()?.webContents === event.sender;
+	const voiceConfig = () => ({ ...voiceSettings.read(), hasKeys: hasVoiceKeys(voiceKeys), voices: VOICES, keyFields: VOICE_KEY_FIELDS });
+	ipcMain.handle('vision-voice-config', (event) => (fromOrb(event) ? voiceConfig() : null));
+	ipcMain.handle('vision-voice-config-set', (event, change) => {
+		if (!fromOrb(event)) throw new Error('not allowed');
+		return applyVoiceSettings(change);
+	});
+	ipcMain.handle('vision-voice-keys-save', (event, keys) => {
+		if (!fromOrb(event)) throw new Error('not allowed');
+		const clean = {};
+		for (const { name } of VOICE_KEY_FIELDS) {
+			const value = String(keys?.[name] ?? '').trim();
+			if (!value) throw new Error(`${name} is empty`);
+			clean[name] = value;
+		}
+		voiceSettings.saveKeys(clean);
+		Object.assign(voiceKeys, clean);
+		preflight = { ...preflight, keys: true };
+		sendBusState();
+		console.log('[VISION] Voice keys saved; starting the voice agent');
+		busReady.then(() => agentSupervisor.restart());
+		return voiceConfig();
+	});
 
 	orb = createOrbWindow({
 		preloadPath: path.join(appPath, 'src/preload-orb.js'),
@@ -1498,17 +1529,33 @@ function startAssistant(busReady) {
 		hidden: process.env.VISION_QUIET === '1',
 	});
 
-	if (!keysOk) {
-		console.log('[VISION] Voice keys missing: voice is off, face control works');
-		return;
-	}
 	agentSupervisor = createAgentSupervisor({
 		command: resolveAgentCommand({ isPackaged: app.isPackaged, appPath, resourcesPath: process.resourcesPath }),
-		getEnv: () => ({ ...voiceKeys, VISION_BUS_PORT: process.env.VISION_BUS_PORT, VISION_BUS_TOKEN: process.env.VISION_BUS_TOKEN }),
+		getEnv: () => ({
+			...voiceKeys,
+			VISION_BUS_PORT: process.env.VISION_BUS_PORT,
+			VISION_BUS_TOKEN: process.env.VISION_BUS_TOKEN,
+			// Read by the agent at the start of every voice session (voice, language).
+			VISION_SETTINGS_FILE: voiceSettings.settingsFile,
+		}),
 		logFile: agentLogFile,
 		onGiveUp: () => console.error('[VISION] The voice assistant stopped working. Face control still works.'),
 	});
+	if (!keysOk) {
+		console.log('[VISION] Voice keys missing: voice is off until they are added in Settings; face control works');
+		return;
+	}
 	busReady.then(() => agentSupervisor.start());
+}
+
+let voiceSettings = null;
+
+/** Voice / language change from Settings or by voice. Applies to the next voice session. */
+function applyVoiceSettings(change) {
+	const next = voiceSettings.update({ voice: change?.voice, language: change?.language });
+	console.log(`[VISION] Voice settings: ${next.voice}, language ${next.language}`);
+	orb?.getWindow()?.webContents.send('vision-voice-config-changed', next);
+	return next;
 }
 
 app.on('will-quit', () => {
