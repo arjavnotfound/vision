@@ -82,6 +82,6 @@ describe('agent supervisor', () => {
 		assert.equal(dev.exe, path.join('C:', 'v', 'agent', '.venv', 'Scripts', 'python.exe'));
 		const prod = resolveAgentCommand({ isPackaged: true, appPath: '', resourcesPath: path.join('C:', 'r') });
 		assert.equal(prod.exe, path.join('C:', 'r', 'agent-runtime', 'python.exe'));
-		assert.deepEqual(prod.args.slice(0, 2), ['-E', '-s']);
+		assert.deepEqual(prod.args.slice(0, 3), ['-E', '-s', '-u']);
 	});
 });
