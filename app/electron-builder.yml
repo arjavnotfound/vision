@@ -1,0 +1,67 @@
+# VISION installer. Build from the repo root: npm run dist (see README).
+appId: io.github.arjavnotfound.vision
+productName: VISION
+copyright: © 2026 arjavnotfound
+directories:
+  output: ../release
+  buildResources: ../assets
+
+files:
+  - package.json
+  - src/**/*
+  - images/**/*
+  - "!**/*.cc"
+
+extraResources:
+  - from: ../console/out
+    to: console
+  - from: ../agent/src
+    to: agent/src
+    filter: ["**/*.py"]
+  - from: ../build/agent-runtime
+    to: agent-runtime
+  - from: ../LICENSE
+    to: LICENSE.txt
+  - from: ../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+
+# Native code must stay outside the asar archive.
+asarUnpack:
+  - node_modules/koffi/**
+  - node_modules/ffmpeg-static/**
+
+win:
+  icon: icon.ico
+  target: [nsis]
+  # Signing: set CSC_LINK / CSC_KEY_PASSWORD (GitHub secrets). Without them the build is
+  # unsigned and does not fail.
+  publisherName: arjavnotfound
+
+nsis:
+  # Per-user install: no admin rights, no UAC prompt.
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VISION
+  artifactName: VISION-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+
+# Microsoft Store package (not submitted). Replace the identity values with the ones from
+# Partner Center before submitting.
+appx:
+  identityName: arjavnotfound.VISION
+  publisher: CN=arjavnotfound
+  publisherDisplayName: arjavnotfound
+  displayName: VISION
+  applicationId: VISION
+  backgroundColor: "#0B0B0C"
+  languages: [en-US, hi-IN]
+  artifactName: VISION-${version}.${ext}
+
+publish:
+  provider: github
+  owner: arjavnotfound
+  repo: vision
+  releaseType: release

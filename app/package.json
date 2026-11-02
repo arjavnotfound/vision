@@ -1,59 +1,42 @@
 {
-  "name": "vision-face-control",
-  "productName": "VISION Face Control",
+  "name": "vision",
+  "productName": "VISION",
   "version": "1.0.0",
-  "description": "VISION Face Control: move the cursor and click with your head and face.",
+  "description": "VISION: hands-free computer control with your face, plus a voice assistant.",
   "license": "MIT",
   "author": {
     "name": "arjavnotfound",
     "url": "https://github.com/arjavnotfound"
   },
   "keywords": [
-    "camera-mouse",
-    "mouse",
-    "camera",
-    "webcam",
-    "head-tracker",
-    "head-tracking",
-    "facial-recognition",
-    "face-tracker",
-    "face-tracking",
-    "headmouse",
-    "facial-mouse",
-    "facemesh",
-    "eye-tracker",
-    "eye-tracking",
-    "eye-gaze",
     "accessibility",
     "assistive-technology",
-    "cursor",
-    "pointer",
-    "pointing",
-    "input-method",
+    "head-tracking",
+    "face-tracking",
     "hands-free",
-    "handsfree",
-    "desktop-automation",
-    "telekinesis"
+    "voice-assistant",
+    "windows"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arjavnotfound/VISION-Research-Prototype.git"
+    "url": "git+https://github.com/arjavnotfound/vision.git"
   },
   "bugs": {
-    "url": "https://github.com/arjavnotfound/VISION-Research-Prototype/issues"
+    "url": "https://github.com/arjavnotfound/vision/issues"
   },
-  "homepage": "https://github.com/arjavnotfound/VISION-Research-Prototype",
+  "homepage": "https://github.com/arjavnotfound/vision",
   "main": "src/electron-main/electron-main.js",
   "scripts": {
-    "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "publish": "electron-forge publish"
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:msix": "electron-builder --win appx --publish never",
+    "release": "electron-builder --win nsis appx --publish always"
   },
   "dependencies": {
     "@livekit/protocol": "1.44.0",
     "argparse": "^2.0.1",
     "bindings": "^1.5.0",
+    "electron-updater": "^6.8.11",
     "electron-window-state": "^5.0.3",
     "ffmpeg-static": "^5.3.0",
     "fs-plus": "^3.1.1",
@@ -62,16 +45,8 @@
     "vision-hft": "file:../core"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^7.11.2",
-    "@electron-forge/maker-deb": "^7.11.2",
-    "@electron-forge/maker-msix": "^7.11.2",
-    "@electron-forge/maker-rpm": "^7.11.2",
-    "@electron-forge/maker-squirrel": "^7.11.2",
-    "@electron-forge/maker-zip": "^7.11.2",
-    "@electron-forge/publisher-github": "^7.11.2",
-    "@reforged/maker-appimage": "^5.2.0",
     "electron": "^31.7.7",
-    "tar": "^7.5.9"
+    "electron-builder": "^26.18.0"
   },
   "optionalDependencies": {
     "serenade-driver": "^1.1.13"
@@ -80,6 +55,6 @@
     "electron@31.7.7": true,
     "ffmpeg-static@5.3.0": true,
     "koffi@3.2.1": true,
-    "electron-winstaller@5.3.0": true
+    "electron-winstaller@5.4.0": false
   }
 }
