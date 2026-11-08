@@ -14,7 +14,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	getHotkey: () => ipcRenderer.invoke('vision-hotkey'),
 	/** Always true now: Face Control's Start screen does onboarding. */
 	isOneApp: () => ipcRenderer.invoke('vision-one-app'),
-	isWakeMode: () => ipcRenderer.invoke('vision-wake-mode'),
 	hide: () => ipcRenderer.send('vision-hide'),
 	quit: () => ipcRenderer.send('vision-quit'),
 	/** Tell Face Control whether the mic is live (it pauses mouth gestures meanwhile). */

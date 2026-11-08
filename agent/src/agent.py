@@ -1,8 +1,6 @@
-import asyncio
 import contextlib
 import json
 import logging
-import os
 
 from dotenv import load_dotenv
 from google.genai import types as genai_types
@@ -22,19 +20,13 @@ from livekit.plugins import ai_coustics, google
 
 from browser import BrowserManager
 from desktop_tools import DesktopTools
-from intent_guard import IntentGuard, has_wake_word
-from prompts import AGENT_INSTRUCTIONS, WAKE_RULE
+from intent_guard import IntentGuard
+from prompts import AGENT_INSTRUCTIONS
 from tools import ActionCallback, BrowserTools
 from voice_settings import load_voice_settings
 
 load_dotenv(".env.local")
 logger = logging.getLogger("vision.agent")
-
-# Stage: the presenter narrates out loud; VISION acts only on "Hey Vision ...".
-WAKE_GATE = (
-    os.getenv("VISION_WAKE_GATE", "") == "1" or os.getenv("VISION_STAGE", "") == "1"
-)
-_background_tasks: set[asyncio.Task] = set()
 
 
 async def text_input_cb(sess: AgentSession, ev: room_io.TextInputEvent) -> None:
@@ -81,7 +73,7 @@ class Assistant(Agent):
         self.browser = browser or BrowserManager(headless=True)
         # Noise guard shared by every tool: what the user actually said, and whether it
         # was clear enough to act on (see intent_guard.py).
-        self.intent = IntentGuard(wake_required=WAKE_GATE)
+        self.intent = IntentGuard()
         self.browser_tools = BrowserTools(
             self.browser, action_callback=on_tool_action, intent=self.intent
         )
@@ -138,9 +130,7 @@ class Assistant(Agent):
             # 3. Add `from livekit.plugins import openai` to the top of this file
             # 4. Replace the llm argument with:
             #     llm=openai.realtime.RealtimeModel(voice="marin")
-            instructions=AGENT_INSTRUCTIONS
-            + self.voice_settings.language_rule
-            + (WAKE_RULE if WAKE_GATE else ""),
+            instructions=AGENT_INSTRUCTIONS + self.voice_settings.language_rule,
             tools=[
                 *self.browser_tools.tools,
                 *self.desktop_tools.tools,
@@ -240,8 +230,7 @@ async def my_agent(ctx: JobContext):
             f" error={str(error).splitlines()[0][:200]}" if error else "",
         )
 
-    # Wake gate: every user turn passes here. "Hey Vision ..." -> tell the overlay
-    # (chime + open the pill); anything else while gated -> cut any reply at once.
+    # Every user turn passes here once.
     last_heard = {"text": ""}
 
     def _heard(text: str) -> None:
@@ -250,18 +239,6 @@ async def my_agent(ctx: JobContext):
             return
         last_heard["text"] = text
         assistant.intent.note_user(text)
-        if has_wake_word(text):
-            task = asyncio.ensure_future(
-                on_tool_action(
-                    {"type": "wake", "action": "wake", "target": "", "ts": 0}
-                )
-            )
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
-        elif assistant.intent.ignoring:
-            logger.info("VISION ignored speech without the wake word: %r", text[:80])
-            with contextlib.suppress(Exception):
-                session.interrupt()
 
     # Noise guard: remember what the user actually said (final transcripts).
     @session.on("user_input_transcribed")

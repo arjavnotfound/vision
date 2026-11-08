@@ -91,14 +91,5 @@ AGENT_INSTRUCTIONS = textwrap.dedent(
     """
 )
 
-# Stage / wake-gated mode: the presenter talks to the audience the whole time.
-WAKE_RULE = textwrap.dedent(
-    """
-    # Wake word (most important rule)
-
-    Only respond or act when the user's sentence starts with "Hey Vision" (it may be transcribed as "Hi Vision", "Hey Visions" or "A Vision"). Otherwise stay completely silent and call no tools: the presenter is talking to an audience, not to you. The one exception: a short answer (such as "yes" or "no") to a question you just asked. Keep every reply to one short sentence.
-    """
-)
-
 # Compatibility alias for existing tests
 AGENT_ISNTRUCTIONS = AGENT_INSTRUCTIONS

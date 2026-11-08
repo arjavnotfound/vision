@@ -23,8 +23,6 @@ export interface ElectronAPI {
   /** One-app VISION: tell Face Control when the mic is live (mouth gestures pause). */
   setVoiceState?: (state: { connected: boolean; live: boolean }) => void;
   isOneApp?: () => Promise<boolean>;
-  /** Stage / wake-word mode: always listening, acts only on "Hey Vision". */
-  isWakeMode?: () => Promise<boolean>;
   /** LiveKit server URL + token, minted by the VISION main process. */
   getConnectionDetails?: (options: { agentName?: string }) => Promise<{
     serverUrl: string;

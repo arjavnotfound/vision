@@ -141,13 +141,8 @@ class IntentGuard:
     def __init__(
         self,
         clock: Callable[[], float] = time.monotonic,
-        *,
-        wake_required: bool = False,
     ) -> None:
         self._clock = clock
-        # Stage: the presenter narrates all the time; only "Hey Vision ..." is for VISION.
-        self.wake_required = wake_required
-        self._ignored = False
         self._text = ""
         self._typed = False
         self._at = -1e9
@@ -161,9 +156,6 @@ class IntentGuard:
             return
         if not typed and has_wake_word(text):
             self._wake_at = self._clock()
-            self._ignored = False
-        else:
-            self._ignored = self.wake_required and not typed and not self._after_wake()
         self._text = text
         self._typed = typed
         self._at = self._clock()
@@ -176,18 +168,6 @@ class IntentGuard:
         return self._clock() - self._wake_at <= WAKE_SECONDS
 
     @property
-    def ignoring(self) -> bool:
-        """The latest speech was not addressed to VISION (no wake word, wake gate on)."""
-        return self._ignored
-
-    def _check_addressed(self) -> None:
-        if self._ignored:
-            raise IntentError(
-                "Not addressed to VISION (no 'Hey Vision'). Stay completely silent: "
-                "no reply, no tool calls."
-            )
-
-    @property
     def last_utterance(self) -> str:
         return self._text
 
@@ -196,7 +176,6 @@ class IntentGuard:
 
     def check_action(self) -> None:
         """Any action: refuse when the latest speech was a short non-command."""
-        self._check_addressed()
         if not self._recent() or self._typed:
             return
         if self._after_wake():
@@ -212,7 +191,6 @@ class IntentGuard:
 
     def check_open(self, target: str) -> None:
         """Opening a new site or app: needs a clear request, or a confirmed yes."""
-        self._check_addressed()
         key = _key(target)
         if key in self._confirmed:
             self._confirmed.discard(key)

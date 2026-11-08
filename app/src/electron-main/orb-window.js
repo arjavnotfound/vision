@@ -61,7 +61,7 @@ function getBoundsForMode(mode) {
 	return { x, y, ...size };
 }
 
-function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, wakeMode = false, hidden = false }) {
+function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, hidden = false }) {
 	let win = null;
 	let hotkey = null;
 	let hotkeyLabel = ''; // empty until a candidate registers
@@ -178,7 +178,6 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	ipcMain.on('vision-mode', (event, mode) => fromOrb(event) && applyMode(mode));
 	ipcMain.handle('vision-hotkey', () => hotkeyLabel);
 	ipcMain.handle('vision-one-app', () => true);
-	ipcMain.handle('vision-wake-mode', () => wakeMode);
 	ipcMain.on('vision-hide', (event) => fromOrb(event) && win.hide());
 	ipcMain.on('vision-quit', (event) => fromOrb(event) && app.quit());
 	// { connected, live }: live = the mic is open (strip/console showing and not muted).

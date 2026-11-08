@@ -35,16 +35,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   const voiceAssistant = useVoiceAssistant();
   const { microphoneTrack } = useLocalParticipant();
   const transcript = useConversationTranscript();
-  // Wake-word mode (Stage): always listening, acts only on "Hey Vision".
-  const wakeRef = useRef<() => void>(() => undefined);
-  const vision = useVisionActions(() => wakeRef.current());
-  const [alwaysListen, setAlwaysListen] = useState(false);
-  useEffect(() => {
-    void getElectron()
-      ?.isWakeMode?.()
-      .then((on) => setAlwaysListen(Boolean(on)))
-      .catch(() => undefined);
-  }, []);
+  const vision = useVisionActions();
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [failurePulse, setFailurePulse] = useState(0);
@@ -69,9 +60,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     isBusy,
     agentSpeaking: agent.state === 'speaking',
     activitySignal: `${transcript.latestUser?.text}|${transcript.latestAgent?.text}|${vision.activity.length}|${agent.state}`,
-    alwaysListen,
   });
-  wakeRef.current = controller.wake;
 
   // Connected to LiveKit but the agent never joined (its worker is offline): say so.
   const { reportOffline } = controller;

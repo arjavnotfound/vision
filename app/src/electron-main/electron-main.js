@@ -1494,7 +1494,6 @@ function startAssistant(busReady) {
 		consoleUrl: process.env.VISION_CONSOLE_URL,
 		getConnectionDetails: (options) => createConnectionDetails(voiceKeys, options),
 		onVoiceState: setAssistantState,
-		wakeMode: process.env.VISION_STAGE === '1' || voiceKeys.VISION_WAKE_GATE === '1' || voiceKeys.VISION_STAGE === '1',
 		hidden: process.env.VISION_QUIET === '1',
 	});
 

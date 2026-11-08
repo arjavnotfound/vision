@@ -255,31 +255,7 @@ def test_narration_is_not_a_wake(said):
     assert not has_wake_word(said)
 
 
-def test_gate_ignores_narration_and_acts_on_the_wake_word():
-    clock = Clock()
-    g = IntentGuard(clock=clock, wake_required=True)
-    g.note_user("VISION can open any app on the computer, for example Notepad")
-    assert g.ignoring
-    with pytest.raises(IntentError, match="Hey Vision"):
-        g.check_open("Notepad")
-    with pytest.raises(IntentError, match="Hey Vision"):
-        g.check_action()
-    clock.now += 5
-    g.note_user("Hey Vision, open Notepad and type hello from VISION")
-    assert not g.ignoring
-    g.check_open("Notepad")
-    g.check_action()
-    clock.now += 4
-    g.note_user("No")  # answer to "Save changes?" inside the follow-up window
-    g.check_action()
-    clock.now += 30
-    g.note_user("and that is how it works")
-    with pytest.raises(IntentError):
-        g.check_action()
-
-
-def test_without_the_gate_nothing_changes():
+def test_a_clear_open_request_is_accepted():
     g = IntentGuard(clock=Clock())
     g.note_user("open Notepad please")
-    assert not g.ignoring
     g.check_open("Notepad")

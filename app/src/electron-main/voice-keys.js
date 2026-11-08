@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 const VOICE_KEY_NAMES = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'GOOGLE_API_KEY'];
-// Passed through to the agent when set (voice, language, search engine, wake gate).
-const VOICE_OPTION_NAMES = ['VISION_VOICE', 'VISION_LANGUAGE', 'VISION_SEARCH_PROVIDER', 'VISION_WAKE_GATE', 'VISION_STAGE'];
+// Passed through to the agent when set (voice, language, search engine).
+const VOICE_OPTION_NAMES = ['VISION_VOICE', 'VISION_LANGUAGE', 'VISION_SEARCH_PROVIDER'];
 
 function parseDotEnv(text) {
 	const values = {};

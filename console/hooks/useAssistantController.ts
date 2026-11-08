@@ -9,8 +9,6 @@ import { visionAudio } from '@/lib/vision-audio';
 export const COLLAPSE_AFTER_MS = 8_000;
 /** End the LiveKit session after this long with no interaction at all. */
 export const END_SESSION_AFTER_MS = 90_000;
-/** Wake-word mode: the pill closes this long after the last activity (about 2 s of quiet). */
-export const WAKE_COLLAPSE_AFTER_MS = 2_500;
 /** After the strip collapses, the voice session closes this long later (short-lived sessions). */
 export const SESSION_END_AFTER_COLLAPSE_MS = 10_000;
 /** Mic stays off this long after VISION stops speaking (room / PA echo). */
@@ -50,11 +48,6 @@ interface ControllerInput {
   /** Anything that changes when the conversation moves (captions, actions, state). */
   activitySignal: unknown;
   initialSurface?: Surface;
-  /**
-   * Wake-word mode (Stage): the session stays connected and the mic stays live; the
-   * agent acts only on "Hey Vision ..." and tells us via `wake()`.
-   */
-  alwaysListen?: boolean;
 }
 
 export interface AssistantController {
@@ -66,7 +59,6 @@ export interface AssistantController {
   /** Report that the session could not get going (e.g. the agent never joined). */
   reportOffline: () => void;
   activate: () => void;
-  wake: () => void;
   collapse: () => void;
   openConsole: () => void;
   closeConsole: () => void;
@@ -103,7 +95,6 @@ export function useAssistantController({
   agentSpeaking = false,
   activitySignal,
   initialSurface = 'orb',
-  alwaysListen = false,
 }: ControllerInput): AssistantController {
   const [surface, setSurface] = useState<Surface>(initialSurface);
   const [userMuted, setUserMuted] = useState(false);
@@ -151,11 +142,11 @@ export function useAssistantController({
   // user muted it themselves).
   useEffect(() => {
     if (!isConnected) return;
-    void setMic(room, (alwaysListen || surface !== 'orb') && !userMuted && !speakingHold);
-  }, [room, isConnected, surface, userMuted, speakingHold, alwaysListen]);
+    void setMic(room, surface !== 'orb' && !userMuted && !speakingHold);
+  }, [room, isConnected, surface, userMuted, speakingHold]);
 
   // Face Control pauses mouth gestures while the mic is live (talking opens the mouth).
-  const micLive = isConnected && (alwaysListen || surface !== 'orb') && !userMuted;
+  const micLive = isConnected && surface !== 'orb' && !userMuted;
   useEffect(() => {
     getElectron()?.setVoiceState?.({ connected: isConnected, live: micLive });
   }, [isConnected, micLive]);
@@ -172,34 +163,16 @@ export function useAssistantController({
   // Strip → orb after a quiet spell.
   useEffect(() => {
     if (surface !== 'strip' || isBusy || isStarting) return;
-    const wait = Math.max(
-      0,
-      lastInteraction + (alwaysListen ? WAKE_COLLAPSE_AFTER_MS : COLLAPSE_AFTER_MS) - Date.now()
-    );
+    const wait = Math.max(0, lastInteraction + COLLAPSE_AFTER_MS - Date.now());
     const timer = setTimeout(() => setSurface('orb'), wait);
     return () => clearTimeout(timer);
-  }, [surface, isBusy, isStarting, lastInteraction, alwaysListen]);
-
-  // Wake-word mode: keep a session connected so ''Hey Vision'' can be heard; after a
-  // drop (e.g. Gemini 1008) reconnect silently a few seconds later.
-  const startRef = useRef(start);
-  startRef.current = start;
-  useEffect(() => {
-    if (!alwaysListen || isConnected || isStarting) return;
-    const timer = setTimeout(() => {
-      setIsStarting(true);
-      Promise.resolve(startRef.current())
-        .catch(() => undefined)
-        .finally(() => setIsStarting(false));
-    }, 3_000);
-    return () => clearTimeout(timer);
-  }, [alwaysListen, isConnected, isStarting]);
+  }, [surface, isBusy, isStarting, lastInteraction]);
 
   // Short-lived voice sessions: a Gemini Live session left open (even muted) was
   // aborted with 1008 every ~2.5 min. So once the strip has collapsed back to the orb
   // and nothing is happening, end the session; the next activation opens a fresh one.
   useEffect(() => {
-    if (alwaysListen || !isConnected || isBusy || surface !== 'orb') return;
+    if (!isConnected || isBusy || surface !== 'orb') return;
     const timer = setTimeout(() => {
       void end();
     }, SESSION_END_AFTER_COLLAPSE_MS);
@@ -208,7 +181,7 @@ export function useAssistantController({
 
   // Backstop: end the session after a long quiet spell.
   useEffect(() => {
-    if (alwaysListen || !isConnected || isBusy) return;
+    if (!isConnected || isBusy) return;
     const wait = Math.max(0, lastInteraction + END_SESSION_AFTER_MS - Date.now());
     const timer = setTimeout(() => {
       void end();
@@ -245,13 +218,6 @@ export function useAssistantController({
     }
   }, [isConnected, isStarting, start, touch, reportOffline]);
 
-  /** Wake word heard by the agent: soft chime, open the pill (no new session needed). */
-  const wake = useCallback(() => {
-    touch();
-    visionAudio.playTing('connect');
-    setSurface((current) => (current === 'orb' ? 'strip' : current));
-  }, [touch]);
-
   const collapse = useCallback(() => {
     touch();
     setSurface('orb');
@@ -285,7 +251,6 @@ export function useAssistantController({
     isOffline,
     reportOffline,
     activate,
-    wake,
     collapse,
     openConsole,
     closeConsole,

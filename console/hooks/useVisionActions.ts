@@ -25,10 +25,7 @@ const CONFIRM_TIMEOUT_MS = 30_000;
 let counter = 0;
 const makeId = () => `act-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 
-/** `onWake`: the agent heard "Hey Vision" (wake-word mode). */
-export function useVisionActions(onWake?: () => void): VisionActionsState {
-  const onWakeRef = useRef(onWake);
-  onWakeRef.current = onWake;
+export function useVisionActions(): VisionActionsState {
   const room = useMaybeRoomContext();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [actionPulse, setActionPulse] = useState(0);
@@ -52,10 +49,6 @@ export function useVisionActions(onWake?: () => void): VisionActionsState {
       try {
         raw = JSON.parse(new TextDecoder().decode(payload));
       } catch {
-        return;
-      }
-      if ((raw as { type?: string } | null)?.type === 'wake') {
-        onWakeRef.current?.();
         return;
       }
       const question = confirmFromEvent(raw);
