@@ -279,6 +279,8 @@ async function boot() {
 			confirmLabel: "Yes, switch",
 			onConfirm: answer(() => applySwitch(offer)),
 			secondary: { label: "No, keep it", onClick: answer(() => { }) },
+			// One decline, at the left edge: the centre, where the pointer rests, stays empty.
+			cancel: false,
 		});
 	}
 	function applySwitch(offer) {

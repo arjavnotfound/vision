@@ -37,7 +37,9 @@ export function openSheet(layer, { title, onClose }) {
 	return { sheet, body, close };
 }
 
-export function openConfirm(layer, { title, text, confirmLabel, danger = false, onConfirm, secondary = null }) {
+// cancel: false drops the Cancel button and the click-outside dismiss, when `secondary`
+// already declines and a stray click must not answer for the user.
+export function openConfirm(layer, { title, text, confirmLabel, danger = false, onConfirm, secondary = null, cancel = true }) {
 	const scrim = h("div", { class: "scrim" });
 	const close = () => {
 		scrim.remove();
@@ -49,11 +51,11 @@ export function openConfirm(layer, { title, text, confirmLabel, danger = false, 
 		h("div", { class: "confirm__actions" },
 			secondary ? h("button", { class: "btn btn--ghost", "data-dwell": true, onclick: () => { close(); secondary.onClick(); } }, secondary.label) : null,
 			h("div", { class: "session__spacer" }),
-			h("button", { class: "btn", "data-dwell": true, onclick: close }, "Cancel"),
+			cancel ? h("button", { class: "btn", "data-dwell": true, onclick: close }, "Cancel") : null,
 			h("button", { class: `btn ${danger ? "btn--danger" : "btn--ember"} btn--wide`, "data-dwell": true, onclick: () => { close(); onConfirm(); } }, confirmLabel),
 		),
 	);
-	scrim.addEventListener("click", close);
+	if (cancel) scrim.addEventListener("click", close);
 	layer.append(scrim, box);
 	return { close };
 }
