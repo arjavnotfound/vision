@@ -262,13 +262,23 @@ async function boot() {
 			? `${action} seems to be firing by accident. Switch it to: ${to}?`
 			: `${action} has not been used for a while. Switch it to: ${to}?`;
 		speak(text);
-		host.windowControl("show");
-		openConfirm(layer, {
+		// Shown without taking focus: the user may be typing elsewhere. Answering or
+		// ignoring it puts the window back the way it was.
+		const before = host.windowControl("show-inactive");
+		const putBack = async () => {
+			const state = await before;
+			if (state === "hidden") host.windowControl("hide");
+			if (state === "minimized") host.windowControl("minimize");
+		};
+		// Ignored for 20 s: close it, so it never sits over the user's app.
+		const ignored = setTimeout(() => { dialog.close(); putBack(); }, 20000);
+		const answer = (fn) => () => { clearTimeout(ignored); fn(); putBack(); };
+		const dialog = openConfirm(layer, {
 			title: "Switch a control?",
 			text,
 			confirmLabel: "Yes, switch",
-			onConfirm: () => applySwitch(offer),
-			secondary: { label: "No, keep it", onClick: () => { } },
+			onConfirm: answer(() => applySwitch(offer)),
+			secondary: { label: "No, keep it", onClick: answer(() => { }) },
 		});
 	}
 	function applySwitch(offer) {

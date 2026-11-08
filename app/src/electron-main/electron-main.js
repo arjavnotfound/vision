@@ -308,17 +308,25 @@ function createAppWindow() {
 	});
 }
 
-// Bring a VISION window to the front even when another app has focus (voice commands
-// arrive while the user works elsewhere; Windows otherwise only flashes the taskbar).
+// The user asked for the window (tray, Start screen): show it and give it focus.
 function raiseWindow(win) {
 	if (!win || win.isDestroyed()) return;
 	if (win.isMinimized()) win.restore();
-	win.setAlwaysOnTop(true);
 	win.show();
 	win.focus();
-	setTimeout(() => {
-		if (!win.isDestroyed()) win.setAlwaysOnTop(false);
-	}, 400);
+}
+
+// Background events (voice commands, the adaptive offer): show the window above the
+// user's app without taking keyboard focus. Returns how it was before.
+function showWindowInactive(win) {
+	if (!win || win.isDestroyed()) return null;
+	const before = !win.isVisible() ? 'hidden' : win.isMinimized() ? 'minimized' : 'shown';
+	// Leaving topmost puts the window at the top of the normal windows, above the user's
+	// app, without activating it (moveTop alone stays behind the foreground window).
+	win.setAlwaysOnTop(true);
+	win.showInactive();
+	win.setAlwaysOnTop(false);
+	return before;
 }
 
 // Window + app commands from the new UI (title bar buttons, settings sheet).
@@ -329,6 +337,8 @@ ipcMain.handle('windowControl', (event, action) => {
 		win.minimize();
 	} else if (action === 'show') {
 		raiseWindow(win);
+	} else if (action === 'show-inactive') {
+		return showWindowInactive(win);
 	} else if (action === 'hide') {
 		// Keeps tracking running; the tray icon brings the window back.
 		win.hide();
@@ -1225,7 +1235,7 @@ function setAssistantState({ connected, live }) {
 }
 
 function showAppWindow() {
-	if (appWindow) raiseWindow(appWindow);
+	showWindowInactive(appWindow);
 }
 
 const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls']);
