@@ -140,18 +140,29 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 
 	// Only the visible disc or strip takes the mouse; the transparent rest passes clicks on.
 	let passing = null;
+	let pointerAt = null; // window-relative cursor position of the last poll inside the window
+	// The pointer must arrive from outside: one already resting where the orb appears
+	// (at launch, or when it is shown) must not open it.
+	let enteredFromOutside = false;
 	function passThrough(pass) {
 		if (!win || pass === passing) return;
 		passing = pass;
 		win.setIgnoreMouseEvents(pass);
+		// A resting head pointer sends no further moves, so the renderer would never see
+		// it arrive on the disc and the dwell would not start. Tell it where it is.
+		if (!pass && pointerAt) win.webContents.sendInputEvent({ type: 'mouseMove', x: pointerAt.x, y: pointerAt.y });
 	}
 	function pollPointer() {
 		if (!win || marker || !win.isVisible()) return;
 		const p = screen.getCursorScreenPoint();
 		const b = win.getBounds();
-		if (p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height) {
-			win.webContents.send('vision-pointer', p.x - b.x, p.y - b.y);
+		const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
+		if (!inside) enteredFromOutside = true;
+		if (inside && enteredFromOutside) {
+			pointerAt = { x: p.x - b.x, y: p.y - b.y };
+			win.webContents.send('vision-pointer', pointerAt.x, pointerAt.y);
 		} else {
+			pointerAt = null;
 			passThrough(true);
 		}
 	}
@@ -225,6 +236,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	passThrough(true);
 	// A text field (the keys sheet) needs the keyboard: focusable only while it is in use.
 	win.on('blur', () => win?.setFocusable(false));
+	win.on('show', () => { enteredFromOutside = false; });
 	win.webContents.once('did-finish-load', () => {
 		if (win && !hidden) win.showInactive();
 	});
