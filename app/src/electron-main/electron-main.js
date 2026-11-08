@@ -353,6 +353,9 @@ const { installCrashRecovery } = require('./crash-recovery.js');
 
 // Allow recovering from WebGL crash unlimited times.
 app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
+// Camera frames as GPU textures make every drawImage into the tracking canvas a GPU
+// readback; on Electron 45 that cut the tracking loop from 67 to about 57 FPS.
+app.commandLine.appendSwitch("disable-features", "MediaFoundationD3D11VideoCapture");
 // Opt-in local debugging endpoint, used by scripts/bench/measure.js to read FPS.
 // Never enabled unless the environment variable is set explicitly.
 if (/^\d+$/.test(process.env.VISION_REMOTE_DEBUG_PORT || "")) {

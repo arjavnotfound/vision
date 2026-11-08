@@ -38,21 +38,21 @@
     "electron-updater": "^6.8.11",
     "electron-window-state": "^5.0.3",
     "ffmpeg-static": "^5.3.0",
-    "koffi": "^3.2.1",
+    "koffi": "^3.3.7",
     "livekit-server-sdk": "^2.13.3",
     "vision-hft": "file:../core"
   },
   "devDependencies": {
-    "electron": "^31.7.7",
+    "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   },
   "optionalDependencies": {
     "serenade-driver": "^1.1.13"
   },
   "allowScripts": {
-    "electron@31.7.7": true,
+    "electron@45.2.3": true,
     "ffmpeg-static@5.3.0": true,
-    "koffi@3.2.1": true,
+    "koffi@3.3.7": true,
     "electron-winstaller@5.4.0": false
   }
 }
