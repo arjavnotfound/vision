@@ -308,16 +308,6 @@ export function SettingsView() {
             {hotkeyLabel || 'None'}
           </kbd>
         </SettingRow>
-        <SettingRow
-          title="Wake word"
-          hint="“Hey Vision”. Experimental: often unavailable in the desktop app."
-        >
-          <Toggle
-            label="Experimental wake word"
-            on={settings.wakeWord}
-            onChange={(wakeWord) => updateSettings({ wakeWord })}
-          />
-        </SettingRow>
       </section>
 
       <section className="bg-ink-1 rounded-[18px] px-6 py-3 shadow-[inset_0_0_0_1px_var(--rule)]">

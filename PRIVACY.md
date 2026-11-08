@@ -18,8 +18,6 @@ The assistant is optional. It only runs after you add voice keys in Settings.
   the orb, the microphone is off.
   - Exception: if you turn on wake-word mode ("Hey Vision"), VISION keeps listening while
     it is on, so audio is sent continuously.
-  - The experimental browser wake word in Settings (off by default) uses Chromium's speech
-    recognition, which sends audio to Google while it is on.
 - Audio travels over LiveKit (WebRTC) to Google's Gemini Live API, which understands it
   and speaks the reply. These services are run by LiveKit and Google under their own terms,
   using the accounts whose keys you entered.

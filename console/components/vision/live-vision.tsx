@@ -15,7 +15,7 @@ import { useConversationTranscript } from '@/hooks/useConversationTranscript';
 import { useVisionActions } from '@/hooks/useVisionActions';
 import { useWakeWord } from '@/hooks/useWakeWord';
 import { getElectron } from '@/lib/electron';
-import { settingsStore, updateSettings, useSettings } from '@/lib/settings';
+import { settingsStore, updateSettings } from '@/lib/settings';
 import type { ApertureState } from './aperture-core';
 import {
   type ConnectionState,
@@ -45,7 +45,6 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       .then((on) => setAlwaysListen(Boolean(on)))
       .catch(() => undefined);
   }, []);
-  const settings = useSettings();
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [failurePulse, setFailurePulse] = useState(0);
@@ -100,7 +99,8 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   const hotkeyLabel = useActivationHotkey(activate);
   useWakeWord({
     onWakeWord: activate,
-    enabled: settings.wakeWord && controller.surface === 'orb',
+    // Off for good: Web Speech fails in Electron. T06 replaces this hook.
+    enabled: false,
   });
 
   // First run: show onboarding in the console.
