@@ -16,7 +16,10 @@ Every console surface (orb, strip, console states and tabs, onboarding) from the
 port 3999 and stops it when done (first compile takes about a minute):
 
     cd agent
-    uv run python ../scripts/qa/capture-console.py <dir> [--theme paper]
+    uv run python ../scripts/qa/capture-console.py <dir> [--theme paper] [--hotkey Ctrl+Shift+Space]
+
+The preview is not inside Electron, so it shows no talk hotkey unless `--hotkey` passes
+the one the live app registered (its log prints `[VISION] Talk hotkey: ...`).
 
 The shipped static export has no `/preview`. A QA build can include it with
 `VISION_ENABLE_PREVIEW=1 pnpm build` in `console/` (read at build time).

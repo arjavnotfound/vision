@@ -14,6 +14,7 @@ import argparse
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -53,6 +54,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     parser.add_argument("--theme", choices=["ember", "paper"], default="ember")
+    parser.add_argument("--hotkey", default="", help="talk hotkey the live app registered, e.g. Ctrl+Shift+Space")
     args = parser.parse_args()
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -70,7 +72,8 @@ def main() -> int:
             browser = p.chromium.launch(channel="chrome")
             for name, query, width, height in jobs(args.theme):
                 page = browser.new_page(viewport={"width": width, "height": height})
-                page.goto(f"{BASE}/preview?{query}", wait_until="networkidle")
+                hotkey = f"&hotkey={urllib.parse.quote(args.hotkey)}" if args.hotkey else ""
+                page.goto(f"{BASE}/preview?{query}{hotkey}", wait_until="networkidle")
                 page.wait_for_timeout(900)  # let entry animations settle
                 page.screenshot(path=str(out / f"{name}.png"))
                 page.close()

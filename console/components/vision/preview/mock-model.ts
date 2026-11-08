@@ -128,7 +128,7 @@ export function buildMockModel(o: MockOptions): VisionModel {
     micLevel: o.mic,
     outputLevel: o.out,
     isMuted: false,
-    hotkeyLabel: 'Ctrl+Alt+Space',
+    hotkeyLabel: '',
     searchProvider: 'Bing',
     showOnboarding: o.onboarding,
     consoleTab: o.tab,

@@ -67,6 +67,8 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
   const open = params.get('open') === '1';
   const muted = params.get('muted') === '1';
   const chip = params.get('chip') ?? undefined;
+  // Preview runs outside Electron: show a talk hotkey only when the caller passes the registered one.
+  const hotkey = params.get('hotkey') ?? '';
   const mic = useMockLevel(true, 0.4);
   const out = useMockLevel(true, 2.1);
   const [pulse, setPulse] = useState(0);
@@ -97,8 +99,9 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
         actions: ACTIONS,
       }),
       ...(muted ? { isMuted: true } : {}),
+      hotkeyLabel: hotkey,
     }),
-    [surface, state, tab, mic, out, pulse, now, muted]
+    [surface, state, tab, mic, out, pulse, now, muted, hotkey]
   );
 
   return (
