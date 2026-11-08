@@ -1,6 +1,26 @@
 // Preload for the voice assistant window (orb / strip / console).
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Hit regions: the window is click-through except over a visible element (the disc, the
+// strip, the console panel). Full-window wrappers and the page itself are padding. Main
+// sends the cursor position while it is inside the window: VISION's head pointer moves
+// with SetCursorPos, which Electron's forwarded mouse events never see.
+ipcRenderer.on('vision-pointer', (_event, x, y) => {
+	const el = document.elementFromPoint(x, y);
+	const rect = el && el !== document.documentElement && el !== document.body ? el.getBoundingClientRect() : null;
+	ipcRenderer.send('vision-hit', Boolean(rect) && (rect.width < window.innerWidth - 1 || rect.height < window.innerHeight - 1));
+});
+
+// The window cannot take focus, so a text field asks for the keyboard while in use.
+const TEXT_FIELD = 'textarea, [contenteditable=""], [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit])';
+const isTextField = (el) => Boolean(el?.closest?.(TEXT_FIELD));
+window.addEventListener('pointerdown', (event) => {
+	if (isTextField(event.target)) ipcRenderer.send('vision-keyboard', true);
+}, true);
+window.addEventListener('focusout', (event) => {
+	if (isTextField(event.target) && !isTextField(event.relatedTarget)) ipcRenderer.send('vision-keyboard', false);
+}, true);
+
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
 	/** 'orb' | 'orb-hint' | 'strip' | 'console': resizes the window. */

@@ -21,6 +21,29 @@ const MODE_BOUNDS = {
 	console: { width: 1200, height: 780 },
 };
 const BOTTOM_MARGIN = 12;
+// Over a full-screen app the resting orb shrinks to this scale at the right edge, away
+// from the video controls at the bottom centre, and ignores the mouse.
+const MARKER_SCALE = 0.4;
+const FULLSCREEN_POLL_MS = 1000;
+const POINTER_POLL_MS = 50;
+
+/** Windows: true while a full-screen app or presentation is in front. Never throws. */
+function createFullScreenProbe() {
+	if (process.platform !== 'win32') return () => false;
+	try {
+		const koffi = require('koffi');
+		const query = koffi.load('shell32.dll').func('int32 SHQueryUserNotificationState(_Out_ int32* state)');
+		return () => {
+			const state = [0];
+			if (query(state) !== 0) return false;
+			// QUNS_BUSY, QUNS_RUNNING_D3D_FULL_SCREEN, QUNS_PRESENTATION_MODE
+			return state[0] === 2 || state[0] === 3 || state[0] === 4;
+		};
+	} catch (error) {
+		console.warn('[VISION] Full-screen detection unavailable:', error?.message || error);
+		return () => false;
+	}
+}
 
 // Preferred first; if another app already owns a chord, fall back to the next.
 const HOTKEY_CANDIDATES = [
@@ -63,6 +86,10 @@ function getBoundsForMode(mode) {
 
 function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, hidden = false }) {
 	let win = null;
+	let mode = 'orb';
+	let marker = false; // the small full-screen marker is showing
+	let fullScreenApp = false;
+	const isFullScreenApp = createFullScreenProbe();
 	let hotkey = null;
 	let hotkeyLabel = ''; // empty until a candidate registers
 	const voiceState = { connected: false, live: false };
@@ -84,6 +111,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	function activate() {
 		if (!win) return;
 		if (!win.isVisible()) win.showInactive();
+		// The renderer opens the strip, which also brings the orb back from the marker.
 		win.webContents.send('vision-activate');
 	}
 
@@ -103,9 +131,47 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		}
 	}
 
-	function applyMode(mode) {
-		if (!win || !MODE_BOUNDS[mode]) return;
-		win.setBounds(getBoundsForMode(mode), false);
+	function markerBounds() {
+		const { bounds } = screen.getPrimaryDisplay();
+		const width = Math.round(MODE_BOUNDS.orb.width * MARKER_SCALE);
+		const height = Math.round(MODE_BOUNDS.orb.height * MARKER_SCALE);
+		return { x: bounds.x + bounds.width - width - 8, y: Math.round(bounds.y + (bounds.height - height) / 2), width, height };
+	}
+
+	// Only the visible disc or strip takes the mouse; the transparent rest passes clicks on.
+	let passing = null;
+	function passThrough(pass) {
+		if (!win || pass === passing) return;
+		passing = pass;
+		win.setIgnoreMouseEvents(pass);
+	}
+	function pollPointer() {
+		if (!win || marker || !win.isVisible()) return;
+		const p = screen.getCursorScreenPoint();
+		const b = win.getBounds();
+		if (p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height) {
+			win.webContents.send('vision-pointer', p.x - b.x, p.y - b.y);
+		} else {
+			passThrough(true);
+		}
+	}
+
+	function layout() {
+		if (!win) return;
+		const wantMarker = fullScreenApp && (mode === 'orb' || mode === 'orb-hint');
+		if (wantMarker !== marker) {
+			marker = wantMarker;
+			win.webContents.setZoomFactor(marker ? MARKER_SCALE : 1);
+			win.setOpacity(marker ? 0.6 : 1);
+			passThrough(true);
+		}
+		win.setBounds(marker ? markerBounds() : getBoundsForMode(mode), false);
+	}
+
+	function applyMode(next) {
+		if (!win || !MODE_BOUNDS[next]) return;
+		mode = next;
+		layout();
 	}
 
 	function setVoiceState(state) {
@@ -138,7 +204,8 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		maximizable: false,
 		fullscreenable: false,
 		backgroundColor: '#00000000',
-		focusable: true,
+		// Clicking or dwelling on the orb must never take keyboard focus from the user's app.
+		focusable: false,
 		show: false,
 		title: 'VISION',
 		icon: iconPath,
@@ -155,9 +222,14 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	// Keep the orb above regular apps without stealing focus.
 	win.setAlwaysOnTop(true, 'screen-saver');
 	win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	passThrough(true);
+	// A text field (the keys sheet) needs the keyboard: focusable only while it is in use.
+	win.on('blur', () => win?.setFocusable(false));
 	win.webContents.once('did-finish-load', () => {
 		if (win && !hidden) win.showInactive();
 	});
+	// Chromium remembers zoom per origin; the marker's zoom must not outlive the marker.
+	win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(marker ? MARKER_SCALE : 1));
 	// A crashed or frozen renderer would leave a dead orb that only a hand could fix.
 	win.webContents.on('render-process-gone', (_event, details) => {
 		console.error('[VISION] Orb renderer gone:', details.reason, '- reloading');
@@ -175,7 +247,13 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	registerHotkey();
 
 	const fromOrb = (event) => win && event.sender === win.webContents;
-	ipcMain.on('vision-mode', (event, mode) => fromOrb(event) && applyMode(mode));
+	ipcMain.on('vision-mode', (event, next) => fromOrb(event) && applyMode(next));
+	ipcMain.on('vision-hit', (event, over) => fromOrb(event) && !marker && passThrough(!over));
+	ipcMain.on('vision-keyboard', (event, wanted) => {
+		if (!fromOrb(event)) return;
+		win.setFocusable(Boolean(wanted));
+		if (wanted) win.focus();
+	});
 	ipcMain.handle('vision-hotkey', () => hotkeyLabel);
 	ipcMain.handle('vision-one-app', () => true);
 	ipcMain.on('vision-hide', (event) => fromOrb(event) && win.hide());
@@ -190,6 +268,16 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	// Heartbeat: Face Control treats a silent assistant as voice off.
 	const heartbeat = setInterval(() => onVoiceState({ ...voiceState }), 4000);
 	heartbeat.unref();
+	const fullScreenPoll = setInterval(() => {
+		const now = isFullScreenApp();
+		if (now === fullScreenApp) return;
+		fullScreenApp = now;
+		console.log(`[VISION] Full-screen app ${now ? 'in front: orb shrinks to a marker' : 'gone'}`);
+		layout();
+	}, FULLSCREEN_POLL_MS);
+	fullScreenPoll.unref();
+	const pointerPoll = setInterval(pollPointer, POINTER_POLL_MS);
+	pointerPoll.unref();
 
 	return {
 		activate,
@@ -199,6 +287,8 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		getWindow: () => win,
 		destroy: () => {
 			clearInterval(heartbeat);
+			clearInterval(fullScreenPoll);
+			clearInterval(pointerPoll);
 			if (hotkey) globalShortcut.unregister(hotkey);
 			win?.destroy();
 		},
