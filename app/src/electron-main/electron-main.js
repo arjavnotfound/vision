@@ -40,6 +40,8 @@ try {
 }
 const formatName = "vision-settings";
 const formatVersion = 1;
+// No settings file yet: this is the first launch ever (Start screen, then calibration).
+const firstRun = !require('fs').existsSync(settingsFile);
 
 const { setLocale, getScreenOverlayMessageText } = require('./i18n.js');
 
@@ -200,7 +202,6 @@ const assistantEnabled = process.env.VISION_NO_ASSISTANT !== '1' && !args.previe
 const { agentLogFile } = require('./logs.js').installFileLogging(path.join(app.getPath('appData'), 'VISION', 'logs'));
 const { createOrbWindow, registerConsoleScheme } = require('./orb-window.js');
 if (assistantEnabled) {
-	process.env.VISION_ONE_APP ??= '1';
 	// A fresh secret per run for the localhost bus (a pre-set one is kept for scripted checks).
 	process.env.VISION_BUS_TOKEN ||= require('crypto').randomBytes(16).toString('hex');
 	registerConsoleScheme();
@@ -277,7 +278,7 @@ function computeVirtualDisplayBounds() {
 }
 
 const { updateMenu, exportSettings, importSettings, setMenuUIMode } = require("./menus.js");
-const { createAppWindow: createAppWindowWithOptions, createPreviewRunner } = require('./app-window.js');
+const { createAppWindow: createAppWindowWithOptions, createPreviewRunner, planLaunch } = require('./app-window.js');
 const { createTray } = require('./tray.js');
 
 setMenuUIMode({ getAppWindow: () => appWindow });
@@ -285,13 +286,19 @@ setMenuUIMode({ getAppWindow: () => appWindow });
 let tray = null; // kept referenced so the tray icon is not garbage collected
 
 function createAppWindow() {
+	const plan = planLaunch({
+		firstRun,
+		assistant: assistantEnabled,
+		oneAppEnv: process.env.VISION_ONE_APP,
+		startEnabled: activeSettings.startEnabled,
+	});
+	console.log(`[VISION] Launch: ${firstRun ? 'first run' : 'later run'}${plan.hidden ? ', starting in the tray' : ''}`);
 	return createAppWindowWithOptions({
 		preloadPath: path.join(app.getAppPath(), 'src/preload-app-window.js'),
 		windowStateKeeper,
 		screen,
 		syntheticFace: Boolean(args.synthetic_face),
-		// Started by the VISION launcher: open on the Start screen (one-app flow).
-		kiosk: process.env.VISION_ONE_APP === '1',
+		...plan,
 	});
 }
 

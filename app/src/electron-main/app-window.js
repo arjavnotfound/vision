@@ -10,7 +10,23 @@ const NEW_UI_PAGE = 'src/ui/index.html';
 const NEW_UI_ICON = path.join(__dirname, '../../images/vision', process.platform === 'win32' ? 'vision.ico' : 'vision-app-icon-512.png');
 const OVERLAY_PREVIEW_PAGE = 'src/overlay/preview.html';
 
-function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace = false, kiosk = false }) {
+/**
+ * How the face window opens. `kiosk`: the hands-free UI (spoken help, no native dialogs).
+ * `start`: the Start screen and calibration (first run only). `hidden`: straight to the
+ * tray, which needs tracking on at launch or the user has nothing to work with.
+ * VISION_ONE_APP=1 keeps the old full-screen Start screen on every launch.
+ */
+function planLaunch({ firstRun, assistant, oneAppEnv, startEnabled }) {
+	const forced = oneAppEnv === '1';
+	return {
+		kiosk: assistant || forced,
+		start: firstRun || forced,
+		maximize: forced,
+		hidden: assistant && !firstRun && !forced && startEnabled === true,
+	};
+}
+
+function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace = false, kiosk = false, start = false, maximize = false, hidden = false }) {
 	const webPreferences = {
 		preload: preloadPath,
 		// Disable throttling of animations and timers so the mouse control can still work when minimized.
@@ -28,7 +44,7 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	// Quiet mode (VISION_QUIET=1, used by CHECK.bat): start minimised, silent, no focus.
 	const quiet = kiosk && process.env.VISION_QUIET === '1';
 	const win = new BrowserWindow({
-		show: !quiet,
+		show: !quiet && !hidden,
 		x: state.x,
 		y: state.y,
 		width: Math.min(state.width, work.width),
@@ -46,12 +62,12 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	const query = {};
 	if (syntheticFace) query.synthetic = '1';
 	if (kiosk) query.kiosk = '1';
+	if (start) query.start = '1';
 	if (quiet) {
 		query.quiet = '1';
 		// Minimised from the start: it shows in the taskbar but never covers the screen.
 		win.minimize();
-	} else if (kiosk) {
-		// One-app mode: the Start screen fills the screen.
+	} else if (maximize) {
 		win.maximize();
 	}
 	win.loadFile(NEW_UI_PAGE, Object.keys(query).length ? { query } : undefined);
@@ -170,4 +186,4 @@ function createPreviewRunner({ args, preloadPath }) {
 	};
 }
 
-module.exports = { createAppWindow, createPreviewRunner, PREVIEW_JOBS };
+module.exports = { createAppWindow, createPreviewRunner, planLaunch, PREVIEW_JOBS };

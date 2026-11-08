@@ -23,8 +23,10 @@ import { createRecoveryMonitor } from "./recovery.js";
 const params = new URLSearchParams(location.search);
 const isPreview = params.has("preview");
 const sceneName = params.get("scene") || "tracking";
-// Started from VISION.bat: Start screen, adaptive calibration, try-it, voice link.
+// One-app (hands-free) mode: adaptive calibration, spoken help, voice link.
 const isKiosk = params.has("kiosk") && !isPreview;
+// First run only: the Start screen, calibration and try-it.
+const showStartScreen = isKiosk && params.has("start");
 if (params.has("quiet")) setSpeechMuted(true);
 
 const ENGINE_ROOT = "../../node_modules/vision-hft";
@@ -535,7 +537,7 @@ async function boot() {
 	// ---- first run
 	if (isKiosk) {
 		if (!st.get("onboardingComplete")) st.set("onboardingComplete", true);
-		showStart();
+		if (showStartScreen) showStart();
 	} else if (!isPreview && !st.get("onboardingComplete")) {
 		// Same hands-free resume as the Start screen: onboarding tells a new user to close their eyes to start.
 		if (st.has("closeEyesToToggle") && !st.get("closeEyesToToggle")) st.set("closeEyesToToggle", true);
