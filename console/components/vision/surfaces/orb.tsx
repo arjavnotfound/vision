@@ -117,7 +117,7 @@ export function FloatingOrb({
               className="bg-bone text-ink-0 flex h-[34px] items-center gap-2 rounded-full px-[14px] font-mono text-[10.5px] font-medium tracking-[0.16em] whitespace-nowrap uppercase"
             >
               Look here to talk
-              <span className="opacity-60">· {hotkey}</span>
+              {hotkey && <span className="opacity-60">· {hotkey}</span>}
             </motion.div>
           )}
         </AnimatePresence>
@@ -134,7 +134,7 @@ export function FloatingOrb({
         <div className="flex h-full flex-row-reverse items-center gap-3 rounded-full py-[6px] pr-[6px] pl-[6px]">
           {/* Mark: anchored right. Dwell target only while resting. */}
           <DwellTarget
-            label={`Talk to VISION (${model.hotkeyLabel})`}
+            label={model.hotkeyLabel ? `Talk to VISION (${model.hotkeyLabel})` : 'Talk to VISION'}
             onActivate={actions.activate}
             onHoverChange={setHover}
             disabled={open}

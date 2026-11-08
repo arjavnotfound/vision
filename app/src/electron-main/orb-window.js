@@ -64,7 +64,7 @@ function getBoundsForMode(mode) {
 function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, wakeMode = false, hidden = false }) {
 	let win = null;
 	let hotkey = null;
-	let hotkeyLabel = labelFor(HOTKEY_CANDIDATES[0]);
+	let hotkeyLabel = ''; // empty until a candidate registers
 	const voiceState = { connected: false, live: false };
 
 	const ses = session.fromPartition(PARTITION);
@@ -176,7 +176,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 
 	const fromOrb = (event) => win && event.sender === win.webContents;
 	ipcMain.on('vision-mode', (event, mode) => fromOrb(event) && applyMode(mode));
-	ipcMain.handle('vision-hotkey', () => (hotkey ? hotkeyLabel : ''));
+	ipcMain.handle('vision-hotkey', () => hotkeyLabel);
 	ipcMain.handle('vision-one-app', () => true);
 	ipcMain.handle('vision-wake-mode', () => wakeMode);
 	ipcMain.on('vision-hide', (event) => fromOrb(event) && win.hide());

@@ -114,11 +114,17 @@ export function Onboarding({
       state: 'idle',
       title: (
         <>
-          Look at the eye, or press{' '}
-          <kbd className="bg-ink-2 text-bone rounded-[10px] px-2.5 py-0.5 font-mono text-[0.78em] tracking-[0.04em] shadow-[inset_0_0_0_1px_var(--rule-strong)]">
-            {model.hotkeyLabel}
-          </kbd>
-          , to talk.
+          {model.hotkeyLabel ? (
+            <>
+              Look at the eye, or press{' '}
+              <kbd className="bg-ink-2 text-bone rounded-[10px] px-2.5 py-0.5 font-mono text-[0.78em] tracking-[0.04em] shadow-[inset_0_0_0_1px_var(--rule-strong)]">
+                {model.hotkeyLabel}
+              </kbd>
+              , to talk.
+            </>
+          ) : (
+            'Look at the eye to talk.'
+          )}
         </>
       ),
       cta: (

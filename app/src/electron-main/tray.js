@@ -25,7 +25,7 @@ function createTray({ iconPath: _iconPath, getWindow, toggleTracking, sendComman
 	tray.setToolTip('VISION');
 	tray.setContextMenu(Menu.buildFromTemplate([
 		{ label: 'Show VISION', click: show },
-		...(talk ? [{ label: `Talk to VISION (${talk.label})`, click: talk.activate }] : []),
+		...(talk ? [{ label: talk.label ? `Talk to VISION (${talk.label})` : 'Talk to VISION', click: talk.activate }] : []),
 		{ label: 'Pause / resume tracking (F9)', click: toggleTracking },
 		{ label: 'Calibrate…', click: () => sendCommand('calibrate') },
 		{ label: 'Back to Start (next person)', click: () => sendCommand('reset') },

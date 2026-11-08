@@ -300,9 +300,12 @@ export function SettingsView() {
             </DwellTarget>
           </div>
         </SettingRow>
-        <SettingRow title="Talk hotkey" hint="Works from any app.">
+        <SettingRow
+          title="Talk hotkey"
+          hint={hotkeyLabel ? 'Works from any app.' : 'Every talk hotkey is taken by another app.'}
+        >
           <kbd className="bg-ink-2 text-bone inline-flex h-12 items-center rounded-[12px] px-4 font-mono text-[15px] tracking-[0.06em] shadow-[inset_0_0_0_1px_var(--rule-strong),inset_0_-2px_0_var(--rule)]">
-            {hotkeyLabel}
+            {hotkeyLabel || 'None'}
           </kbd>
         </SettingRow>
         <SettingRow
