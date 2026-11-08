@@ -1,4 +1,4 @@
-// Main window creation (new frameless UI or the classic one) and the --preview runner
+// Main window creation and the --preview runner
 // used for design QA screenshots.
 
 const { BrowserWindow, app } = require('electron');
@@ -8,32 +8,14 @@ const path = require('path');
 const NEW_UI_PAGE = 'src/ui/index.html';
 // VISION mark (Landolt C): .ico on Windows for crisp taskbar/title icons, PNG elsewhere.
 const NEW_UI_ICON = path.join(__dirname, '../../images/vision', process.platform === 'win32' ? 'vision.ico' : 'vision-app-icon-512.png');
-const LEGACY_PAGE = 'src/electron-app.html';
 const OVERLAY_PREVIEW_PAGE = 'src/overlay/preview.html';
 
-function createAppWindow({ legacy, preloadPath, iconPath, windowStateKeeper, screen, syntheticFace = false, kiosk = false }) {
+function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace = false, kiosk = false }) {
 	const webPreferences = {
 		preload: preloadPath,
 		// Disable throttling of animations and timers so the mouse control can still work when minimized.
 		backgroundThrottling: false,
 	};
-
-	if (legacy) {
-		// Classic research UI in a standard window (native frame + native menu bar).
-		const state = windowStateKeeper({ defaultWidth: 750, defaultHeight: 700 });
-		const win = new BrowserWindow({
-			x: state.x,
-			y: state.y,
-			width: state.width,
-			height: state.height,
-			backgroundColor: '#0d1117',
-			webPreferences,
-			icon: iconPath,
-		});
-		win.loadFile(LEGACY_PAGE);
-		win._visionWindowState = state;
-		return win;
-	}
 
 	// "The Instrument": frameless, about 1200x780, never larger than the work area
 	// (school laptops are often 1366x768).

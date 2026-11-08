@@ -47,10 +47,8 @@
   "browser": "vision.js",
   "files": [
     "vision.js",
-    "vision.css",
     "src/",
     "locales/",
-    "images/",
     "audio/",
     "lib/"
   ],

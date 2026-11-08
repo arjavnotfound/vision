@@ -7,9 +7,9 @@ const { t } = require('./i18n');
 const isMac = process.platform === 'darwin';
 
 let currentMenu = null;
-let uiMode = { legacy: false, getAppWindow: () => null };
+let uiMode = { getAppWindow: () => null };
 
-/** Called by electron-main: which UI is shown (affects "About"). */
+/** Called by electron-main: where "About" is shown. */
 function setMenuUIMode(mode) {
 	uiMode = { ...uiMode, ...mode };
 }
@@ -75,7 +75,7 @@ async function importSettings() {
 
 function showAbout() {
 	const win = uiMode.getAppWindow();
-	if (!uiMode.legacy && win && !win.isDestroyed()) {
+	if (win && !win.isDestroyed()) {
 		win.show();
 		win.webContents.send('uiCommand', 'about');
 		return;

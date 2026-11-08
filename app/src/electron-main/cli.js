@@ -76,11 +76,6 @@ parser.add_argument("-v", "--version", {
 	action: "store_true",
 });
 
-parser.add_argument("--legacy-ui", {
-	help: t("cli.args.legacy-ui.description", { defaultValue: "Use the original research interface instead of the new one." }),
-	action: "store_true",
-});
-
 // Design QA (no camera, no mouse control). Hidden from --help.
 parser.add_argument("--preview", { help: SUPPRESS, action: "store_true" });
 parser.add_argument("--scene", { help: SUPPRESS });

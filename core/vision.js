@@ -722,10 +722,7 @@ Vision._initInner = function (div, initOptions, reinit) {
 	}
 	try {
 		// Load settings early so that they can be used to define settings (among other things)
-		// It's a bit hacky to load them twice but yeah
-		// (Actually in the desktop app it's even more hacky because I
-		// added code in electron-app.html to load the settings via the electron API
-		// and populate localStorage so that this code will work)
+		// The desktop UI (app/src/ui/js/main.js) copies the stored settings into localStorage first.
 		const settingsJSON = localStorage.getItem("vision-settings");
 		if (settingsJSON) {
 			locale = JSON.parse(settingsJSON)?.globalSettings?.language || locale;
@@ -2045,13 +2042,9 @@ Vision._initInner = function (div, initOptions, reinit) {
 					max: 100,
 					default: 0,
 					labels: {
-						// min: t("settings.tiltInfluence.sliderMin.alt1", { defaultValue: "Optical flow" }), // too technical
-						// min: t("settings.tiltInfluence.sliderMin.alt2", { defaultValue: "Point tracking" }), // still technical but at least it's terminology we're already using
 						min: t("settings.tiltInfluence.sliderMin", { defaultValue: "Point tracking (2D)" }),
-						// max: t("settings.tiltInfluence.sliderMax.alt1", { defaultValue: "Head tilt" }),
 						max: t("settings.tiltInfluence.sliderMax", { defaultValue: "Head tilt (3D)" }),
 					},
-					// description: t("settings.tiltInfluence.description.alt1", { defaultValue: "Determines whether cursor movement is based on 3D head tilt, or 2D motion of the face in the camera feed." }),
 					description: t("settings.tiltInfluence.description", {
 						defaultValue: `Blends between using point tracking (2D) and detected head tilt (3D).
 - At 0% it will use only point tracking. This moves the cursor according to visible movement of 2D points on your face within the camera's view, so it responds to both head rotation and translation.
@@ -2071,8 +2064,6 @@ Vision._initInner = function (div, initOptions, reinit) {
 						max: t("settings.motionThreshold.sliderMax", { defaultValue: "Steady" }),
 					},
 					description: t("settings.motionThreshold.description", { defaultValue: "Minimum distance to move the cursor in one frame, in pixels. Helps to fully stop the cursor." }),
-					// description: t("settings.motionThreshold.description.alt1", { defaultValue: "Movement less than this distance in pixels will be ignored." }),
-					// description: t("settings.motionThreshold.description.alt2", { defaultValue: "Speed in pixels/frame required to move the cursor." }),
 				},
 				{
 					type: "group",
@@ -2111,19 +2102,6 @@ Vision._initInner = function (div, initOptions, reinit) {
 							},
 							description: t("settings.pointTracking.verticalSensitivity.description", { defaultValue: "Speed of cursor movement in response to vertical head movement." }),
 						},
-						// {
-						// 	label: t("settings.pointTracking.smoothing.label", { defaultValue: "Smoothing" }),
-						// 	className: "vision-smoothing",
-						// 	key: "headTrackingSmoothing",
-						// 	type: "slider",
-						// 	min: 0,
-						// 	max: 100,
-						// 	default: 50,
-						// 	labels: {
-						// 		min: t("settings.shared.sliderMinLinear", { defaultValue: "Linear" }), // or "Direct", "Raw", "None"
-						// 		max: t("settings.shared.sliderMaxSmooth", { defaultValue: "Smooth" }), // or "Smoothed"
-						// 	},
-						// },
 
 						// TODO:
 						// - eyeTrackingSensitivityX
@@ -2147,8 +2125,6 @@ Vision._initInner = function (div, initOptions, reinit) {
 								min: t("settings.shared.sliderMinLinear", { defaultValue: "Linear" }), // or "Direct", "Raw"
 								max: t("settings.shared.sliderMaxSmooth", { defaultValue: "Smooth" }),
 							},
-							// description: t("settings.pointTracking.acceleration.description.alt1", { defaultValue: "Higher acceleration makes the cursor move faster when the head moves quickly, and slower when the head moves slowly." }),
-							// description: t("settings.pointTracking.acceleration.description.alt2", { defaultValue: "Makes the cursor move extra fast for quick head movements, and extra slow for slow head movements. Helps to stabilize the cursor." }),
 							description: t("settings.pointTracking.acceleration.description", {
 								defaultValue: `Makes the cursor move relatively fast for quick head movements, and relatively slow for slow head movements.
 Helps to stabilize the cursor. However, when using point tracking in combination with head tilt, a lower value may work better since head tilt is linear, and you want the point tracking to roughly match the head tracking for it to act as a seamless auto-calibration.` }),
@@ -2174,9 +2150,6 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 								min: t("settings.headTilt.range.sliderMinLittleNeckMovement", { defaultValue: "Little neck movement" }),
 								max: t("settings.headTilt.range.sliderMaxLargeNeckMovement", { defaultValue: "Large neck movement" }),
 							},
-							// description: t("settings.headTilt.horizontalRange.description.alt1", { defaultValue: "Range of horizontal head tilt that moves the cursor from one side of the screen to the other." }),
-							// description: t("settings.headTilt.horizontalRange.description.alt2", { defaultValue: "How much you need to tilt your head left and right to reach the edges of the screen." }),
-							// description: t("settings.headTilt.horizontalRange.description.alt3", { defaultValue: "How much you need to tilt your head left or right to reach the edge of the screen." }),
 							description: t("settings.headTilt.horizontalRange.description", { defaultValue: "Controls how much you need to tilt your head left or right to reach the edge of the screen." }),
 						},
 						{
@@ -2193,9 +2166,6 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 								min: t("settings.headTilt.range.sliderMinLittleNeckMovement", { defaultValue: "Little neck movement" }),
 								max: t("settings.headTilt.range.sliderMaxLargeNeckMovement", { defaultValue: "Large neck movement" }),
 							},
-							// description: t("settings.headTilt.verticalRange.description.alt1", { defaultValue: "Range of vertical head tilt required to move the cursor from the top to the bottom of the screen." }),
-							// description: t("settings.headTilt.verticalRange.description.alt2", { defaultValue: "How much you need to tilt your head up and down to reach the edges of the screen." }),
-							// description: t("settings.headTilt.verticalRange.description.alt3", { defaultValue: "How much you need to tilt your head up or down to reach the edge of the screen." }),
 							description: t("settings.headTilt.verticalRange.description", { defaultValue: "Controls how much you need to tilt your head up or down to reach the edge of the screen." }),
 						},
 						{
@@ -2218,7 +2188,6 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 							// And shouldn't the option behave opposite? I think we have pitch yaw and roll all reversed from standard aviation definitions.
 							// Since it's opposite, even though it's technically yaw (angle units), it's easier to think of as moving the cursor.
 							// Hence I've renamed the setting.
-							// description: t("settings.headTilt.horizontalOffset.description.alt2", { defaultValue: "Adjusts the position of the cursor when the camera sees the head facing straight ahead.\n⚠️ This horizontal offset is not recommended. Move the camera instead if possible. 📷" }),
 							// TODO: should this say "horizontal" in the (main part of the) description?
 							description: t("settings.headTilt.horizontalOffset.description", {
 								defaultValue: `Adjusts the position of the cursor when the camera sees the head facing straight ahead.
@@ -2239,7 +2208,6 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 								min: t("settings.shared.directionDown", { defaultValue: "Down" }),
 								max: t("settings.shared.directionUp", { defaultValue: "Up" }),
 							},
-							// description: t("settings.headTilt.verticalOffset.description.alt1", { defaultValue: "Adjusts the center position of vertical head tilt." }),
 							description: t("settings.headTilt.verticalOffset.description", { defaultValue: "Adjusts the position of the cursor when the camera sees the head facing straight ahead." }),
 						},
 					],
@@ -2314,7 +2282,6 @@ Could also be used to right click with the dwell clicker in a pinch.` }),
 					default: 800,
 					visible: () => isDesktopApp || clickingModeSupported,
 					disabled: () => s.clickingMode === "off" || s.clickingMode === "dwell",
-					// description: t("settings.delayBeforeDragging.description.alt1", { defaultValue: "Locks mouse movement during the start of a click to prevent accidental dragging." }),
 					// Throwing a // in here so it's not detected by i18next-cli, whereas the others are allowed
 					// simply because it wasn't previously detected and translated
 					// due to being both commented out and multiline (though multiline and commented out t() calls are separately supported)
@@ -2374,7 +2341,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 						{ value: "", label: t("settings.cameraSource.defaultCamera", { defaultValue: "Default" }) },
 					],
 					default: "",
-					// description: t("settings.cameraSource.description.alt1", { defaultValue: "Select which camera to use for head tracking." }),
 					description: t("settings.cameraSource.description", { defaultValue: "Selects which camera is used for head tracking." }),
 				},
 				// TODO: move this inline with the camera source dropdown?
@@ -2416,8 +2382,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 							showToast(t("openCameraSettings.errors.sharedHeading", { defaultValue: "Failed to open camera settings:" }) + "\n" + error.name + ": " + error.message);
 						}
 					},
-					// description: t("settings.openCameraSettings.description.alt1", { defaultValue: "Open your camera's system settings window to adjust properties like brightness and contrast." }),
-					// description: t("settings.openCameraSettings.description.alt2", { defaultValue: "Opens the system settings window for your camera to adjust properties like auto-focus and auto-exposure." }),
 					description: t("settings.openCameraSettings.description", { defaultValue: "Opens the system settings dialog for the selected camera, to adjust properties like auto-focus and auto-exposure." }),
 				},
 				// TODO: try moving this to the corner of the camera view, so it's clearer it applies only to the camera view
@@ -2460,9 +2424,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					type: "checkbox",
 					default: false,
 					description: t("settings.startEnabled.description", { defaultValue: "If enabled, VISION will start controlling the cursor as soon as it's launched." }),
-					// description: t("settings.startEnabled.description.alt1", { defaultValue: "Makes VISION active when launched. Otherwise, you can start it manually when you're ready." }),
-					// description: t("settings.startEnabled.description.alt2", { defaultValue: "Makes VISION active as soon as it's launched." }),
-					// description: t("settings.startEnabled.description.alt3", { defaultValue: "Automatically starts VISION as soon as it's run." }),
 				},
 				{
 					// For "experimental" label:
@@ -2470,7 +2431,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					// - I considered adding "⚠️" but it feels a little too alarming
 					// label: "Close eyes to start/stop (<span style=\"border-bottom: 1px dotted;\" title=\"Planned refinements include: visual and auditory feedback, improved detection accuracy, and separate settings for durations to toggle on and off.\">experimental</span>)",
 					// label: "Close eyes to start/stop (<span style=\"border-bottom: 1px dotted;\" title=\"• Missing visual and auditory feedback.\n• Missing settings for duration(s) to toggle on and off.\n• Affected by false positive blink detections, especially when looking downward.\">Experimental</span>)",
-					// label: t("settings.closeEyesToToggle.label", { defaultValue: "Close eyes to start/stop (<span style=\"border-bottom: 1px dotted;\" title=\"• There is currently no visual or auditory feedback.\n• There are no settings for duration(s) to toggle on and off.\n• It is affected by false positive blink detections, especially when looking downward.\">Experimental</span>)" }),
 					label: t("settings.closeEyesToToggle.label", { defaultValue: "Close eyes to start/stop" }),
 					className: "vision-close-eyes-to-toggle",
 					key: "closeEyesToToggle",
@@ -2505,7 +2465,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					default: false,
 					visible: () => isDesktopApp,
 					description: t("settings.runAtLogin.description", { defaultValue: "If enabled, VISION will automatically start when you log into your computer." }),
-					// description: t("settings.runAtLogin.description.alt1", { defaultValue: "Makes VISION start automatically when you log into your computer." }),
 				},
 				{
 					label: t("settings.language.label", { defaultValue: "Language" }),
@@ -2527,7 +2486,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 						reinit();
 					},
 					description: t("settings.language.description", { defaultValue: "Select the language for the VISION interface." }),
-					// description: t("settings.language.description.alt1", { defaultValue: "Changes the language VISION is displayed in." }),
 				},
 			],
 		},
@@ -5064,156 +5022,6 @@ Vision.initEngine = function (opts = {}) {
 		},
 	};
 	return engine;
-};
-
-Vision.initScreenOverlay = () => {
-
-	const template = `
-	<div class="vision-hide-near-cursor">
-		<div id="vision-screen-overlay-work-area">
-			<div class="vision-absolute-center">
-				<div class="vision-screen-overlay-status-indicator vision-manual-takeback-indicator">
-					<img src="${Vision.dependenciesRoot}/images/manual-takeback.svg" alt="hand reaching for mouse" width="128" height="128">
-				</div>
-				<div class="vision-screen-overlay-status-indicator vision-head-not-found-indicator">
-					<img src="${Vision.dependenciesRoot}/images/head-not-found.svg" alt="head not found" width="128" height="128">
-				</div>
-			</div>
-			<div id="vision-screen-overlay-message"></div>
-		</div>
-	</div>
-	`;
-	const fragment = document.createRange().createContextualFragment(template);
-	document.body.appendChild(fragment);
-
-	const message = document.getElementById("vision-screen-overlay-message");
-	const workAreaContainer = document.getElementById("vision-screen-overlay-work-area");
-	message.dir = "auto";
-
-	const hideNearCursorEls = document.querySelectorAll(".vision-hide-near-cursor");
-
-	const inputFeedbackCanvas = document.createElement("canvas");
-	inputFeedbackCanvas.style.position = "fixed";
-	inputFeedbackCanvas.style.zIndex = "899990"; // just below .vision-pointer
-	inputFeedbackCanvas.style.top = "0";
-	inputFeedbackCanvas.style.left = "0";
-	inputFeedbackCanvas.style.pointerEvents = "none";
-	inputFeedbackCanvas.width = 32;
-	inputFeedbackCanvas.height = 32;
-	document.body.appendChild(inputFeedbackCanvas);
-	const inputFeedbackCtx = inputFeedbackCanvas.getContext("2d");
-	function drawInputFeedback({ inputFeedback, isEnabled }) {
-		const { blinkInfo, mouthInfo } = inputFeedback;
-		inputFeedbackCtx.clearRect(0, 0, inputFeedbackCanvas.width, inputFeedbackCanvas.height);
-		if (!isEnabled) {
-			return;
-		}
-		// draw meters for blink and mouth openness
-		// TODO: draw meter backings to disambiguate showing zero vs being occluded by taskbar
-		// (Ideally it should stay on top of the taskbar and context menus all the time
-		// 	but that's another issue: https://github.com/1j01/vision/issues/14)
-		const drawMeter = (x, yCenter, width, height, { active, thresholdMet }) => {
-			inputFeedbackCtx.fillStyle = active ? "red" : thresholdMet ? "yellow" : "cyan";
-			inputFeedbackCtx.fillRect(x, yCenter - height / 2, width, height);
-		};
-		if (blinkInfo?.used) {
-			for (const eye of [blinkInfo.leftEye, blinkInfo.rightEye]) {
-				drawMeter(eye === blinkInfo.leftEye ? 5 : 20, 5, 10, Math.max(2, 20 * eye.heightRatio), eye);
-			}
-		}
-		if (mouthInfo?.used) {
-			drawMeter(0, 20, 23, Math.max(2, 40 * mouthInfo.heightRatio), mouthInfo);
-		}
-	}
-
-	function updateMousePos(x, y) {
-		// inputFeedbackCanvas.style.transform = `translate(${x - inputFeedbackCanvas.width / 2}px, ${y - inputFeedbackCanvas.height / 2}px)`;
-		// inputFeedbackCanvas.style.transform = `translate(${x}px, ${y}px)`;
-		inputFeedbackCanvas.style.transform = `translate(${Math.min(x, window.innerWidth - inputFeedbackCanvas.width)}px, ${Math.min(y, window.innerHeight - inputFeedbackCanvas.height)}px)`;
-
-	}
-
-	function update(data) {
-		const {
-			messageText,
-			isEnabled,
-			isManualTakeback,
-			inputFeedback,
-			workAreaContainerBounds,
-			bottomOffset,
-			systemMousePosition,
-		} = data;
-
-		if (workAreaContainerBounds) {
-			workAreaContainer.style.left = `${workAreaContainerBounds.x}px`;
-			workAreaContainer.style.top = `${workAreaContainerBounds.y}px`;
-			workAreaContainer.style.width = `${workAreaContainerBounds.width}px`;
-			workAreaContainer.style.height = `${workAreaContainerBounds.height}px`;
-			message.style.bottom = "0px";
-		} else {
-			// bottomOffset was a never-released part of an unstable API.
-			// workAreaContainerBounds could be made required, just like bottomOffset was.
-			workAreaContainer.style.left = "0px";
-			workAreaContainer.style.top = "0px";
-			workAreaContainer.style.width = "100%";
-			workAreaContainer.style.height = `calc(100% - ${bottomOffset ?? 0}px)`;
-		}
-
-		// Other diagnostics in the future would be stuff like:
-		// - head too far away (smaller than a certain size) https://github.com/1j01/vision/issues/49
-		// - bad lighting conditions
-		// see: https://github.com/1j01/vision/issues/26
-
-		document.body.classList.toggle("vision-manual-takeback", isManualTakeback ?? false);
-		document.body.classList.toggle("vision-head-not-found", inputFeedback.headNotFound ?? false);
-
-		// Only touch the DOM when something actually changed.
-		if (messageText !== lastMessageText) {
-			message.innerText = messageText;
-			lastMessageText = messageText;
-		}
-
-		const fadeOut = !isEnabled && !isManualTakeback;
-		if (fadeOut !== lastFadeOut) {
-			lastFadeOut = fadeOut;
-			if (fadeOut) {
-				// Fade out the message after a little while so it doesn't get in the way.
-				message.style.animation = "vision-fade-out 2s ease-in-out forwards 10s";
-			} else {
-				message.style.animation = "";
-				message.style.opacity = "1";
-			}
-		}
-
-		drawInputFeedback(data);
-
-		if (systemMousePosition) {
-			const { x, y } = systemMousePosition;
-			if (x !== lastCursorX || y !== lastCursorY) {
-				lastCursorX = x;
-				lastCursorY = y;
-				const rootStyle = document.documentElement.style;
-				rootStyle.setProperty("--vision-cursor-x", `${x}px`);
-				rootStyle.setProperty("--vision-cursor-y", `${y}px`);
-				if (!cursorKnown) {
-					cursorKnown = true;
-					for (const el of hideNearCursorEls) {
-						el.classList.add("vision-cursor-known");
-					}
-				}
-			}
-		}
-	}
-	let lastMessageText = null;
-	let lastFadeOut = null;
-	let lastCursorX = null;
-	let lastCursorY = null;
-	let cursorKnown = false;
-
-	return {
-		update,
-		updateMousePos,
-	};
 };
 
 // CommonJS export is untested. Script tag usage recommended.

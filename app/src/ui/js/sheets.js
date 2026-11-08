@@ -241,8 +241,6 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
 				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),
 			)),
-			KIOSK ? null : section("CLASSIC INTERFACE", h("p", { class: "prose" }, "The original research interface is still available for comparison."),
-				h("div", { class: "row-grid" }, h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("open-legacy-ui") }, "Restart in classic UI"))),
 			section("PRIVACY", h("p", { class: "prose" }, "Face control runs entirely on this computer: camera video never leaves it and is never saved. The voice assistant sends audio online only while it listens. No telemetry or crash reports.")),
 		],
 	};

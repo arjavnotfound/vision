@@ -55,7 +55,7 @@ async function getPageTarget() {
 		try {
 			const res = await fetch(`http://127.0.0.1:${port}/json`);
 			const targets = await res.json();
-			const page = targets.find((t) => t.type === "page" && /(electron-app|ui\/index)\.html/.test(t.url));
+			const page = targets.find((t) => t.type === "page" && /ui\/index\.html/.test(t.url));
 			if (page) return page;
 		} catch (_error) {
 			// not up yet
@@ -105,18 +105,11 @@ function cdp(wsUrl) {
 	};
 }
 
-// Works for both the legacy UI (reads its telemetry DOM) and the new engine API.
+// Reads the engine API exposed by the desktop UI.
 const PROBE = `(() => {
-	const engine = window.visionEngine;
-	if (engine && engine.getState) {
-		const s = engine.getState();
-		return { fps: s.fps, faceFound: s.faceFound, facemeshHz: s.facemeshHz ?? null, ui: "new" };
-	}
-	const fpsText = document.querySelector('#telemetry-fps')?.textContent;
-	const word = document.querySelector('#active-action-word')?.textContent || "";
-	// While paused the status word is "STANDBY", so use the tracked point count as the face signal.
-	const points = parseInt(document.querySelector('#telemetry-points')?.textContent || "0", 10);
-	return { fps: parseFloat(fpsText), points, faceFound: points > 0, word, ui: "legacy" };
+	const s = window.visionEngine?.getState?.();
+	if (!s) return { fps: NaN, faceFound: false, facemeshHz: null, ui: "none" };
+	return { fps: s.fps, faceFound: s.faceFound, facemeshHz: s.facemeshHz ?? null, ui: "new" };
 })()`;
 
 (async () => {

@@ -54,7 +54,7 @@ async function bootRealEngine(host) {
 	for (const file of ENGINE_SCRIPTS) {
 		await loadScript(`${ENGINE_ROOT}/${file}`);
 	}
-	// The engine reads the language from localStorage at start-up (as in the legacy window).
+	// The engine reads the language from localStorage at start-up.
 	try {
 		const options = await host.getOptions();
 		localStorage.setItem("vision-settings", JSON.stringify(options));

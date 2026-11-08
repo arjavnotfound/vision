@@ -299,17 +299,13 @@ const { updateMenu, exportSettings, importSettings, setMenuUIMode } = require(".
 const { createAppWindow: createAppWindowWithOptions, createPreviewRunner } = require('./app-window.js');
 const { createTray } = require('./tray.js');
 
-// Which UI to show. The new "Aperture" UI is the default; --legacy-ui keeps the original.
-const useLegacyUI = Boolean(args.legacy_ui);
-setMenuUIMode({ legacy: useLegacyUI, getAppWindow: () => appWindow });
+setMenuUIMode({ getAppWindow: () => appWindow });
 // eslint-disable-next-line no-unused-vars
 let tray = null; // kept referenced so the tray icon is not garbage collected
 
 function createAppWindow() {
 	return createAppWindowWithOptions({
-		legacy: useLegacyUI,
 		preloadPath: path.join(app.getAppPath(), 'src/preload-app-window.js'),
-		iconPath: path.join(__dirname, '../../images/vision-logo-512.png'),
 		windowStateKeeper,
 		screen,
 		syntheticFace: Boolean(args.synthetic_face),
@@ -353,12 +349,6 @@ ipcMain.handle('appCommand', async (event, command) => {
 		await exportSettings();
 	} else if (command === 'import-settings') {
 		await importSettings();
-	} else if (command === 'open-legacy-ui') {
-		app.relaunch({ args: [...process.argv.slice(1).filter((a) => a !== '--legacy-ui'), '--legacy-ui'] });
-		app.quit();
-	} else if (command === 'open-new-ui') {
-		app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--legacy-ui') });
-		app.quit();
 	} else if (command === 'devtools') {
 		BrowserWindow.fromWebContents(event.sender)?.webContents.toggleDevTools();
 	}
@@ -872,8 +862,8 @@ const createWindow = () => {
 
 	mouseSafety.attachWindowSafetyListeners(screenOverlayWindow, 'screenOverlayWindow');
 
-	// New overlay (halo, dwell ring, click pulse) unless the classic UI was requested.
-	screenOverlayWindow.loadFile(useLegacyUI ? `src/electron-screen-overlay.html` : `src/overlay/overlay.html`);
+	// Halo, dwell ring, click pulse.
+	screenOverlayWindow.loadFile('src/overlay/overlay.html');
 	// After a (re)load the overlay has no state; make sure the next update is sent in full.
 	screenOverlayWindow.webContents.on('did-finish-load', () => {
 		overlaySync.invalidate();
@@ -966,18 +956,15 @@ app.on('ready', async () => {
 	// Ensure the menus exist when language is not set (i.e. first run)
 	// This is computationally redundant when language is already set (handled in deserializeSettings)
 	updateMenu();
-	if (!useLegacyUI) {
-		tray = createTray({
-			iconPath: path.join(__dirname, '../../images/vision-logo-32.png'),
-			getWindow: () => appWindow,
-			toggleTracking: () => appWindow?.webContents.send("shortcut", "toggle-tracking"),
-			sendCommand: (command) => {
-				appWindow?.show();
-				appWindow?.webContents.send('uiCommand', command);
-			},
-			talk: orb && { label: orb.getHotkeyLabel(), activate: orb.activate },
-		});
-	}
+	tray = createTray({
+		getWindow: () => appWindow,
+		toggleTracking: () => appWindow?.webContents.send("shortcut", "toggle-tracking"),
+		sendCommand: (command) => {
+			appWindow?.show();
+			appWindow?.webContents.send('uiCommand', command);
+		},
+		talk: orb && { label: orb.getHotkeyLabel(), activate: orb.activate },
+	});
 
 	updateScreenScaleFactor();
 	screen.on('display-metrics-changed', (/*event, display, changedMetrics*/) => {

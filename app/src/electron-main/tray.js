@@ -6,8 +6,7 @@ const { Tray, Menu, nativeImage } = require('electron');
 // The VISION mark. Windows picks the right size from the .ico for the tray.
 const TRAY_ICON = path.join(__dirname, '../../images/vision', process.platform === 'win32' ? 'vision.ico' : 'vision-app-icon-32.png');
 
-// `iconPath` is accepted for compatibility but the VISION mark is always used.
-function createTray({ iconPath: _iconPath, getWindow, toggleTracking, sendCommand, talk }) {
+function createTray({ getWindow, toggleTracking, sendCommand, talk }) {
 	let tray;
 	try {
 		tray = new Tray(nativeImage.createFromPath(TRAY_ICON));
