@@ -268,6 +268,12 @@ function updateScreenScaleFactor() {
  * Must be called after the app 'ready' event.
  * @returns {{ x: number, y: number, width: number, height: number }}
  */
+// A window that covers a whole monitor counts as a full-screen app to Windows, which
+// then holds back notifications. One pixel short of the bottom edge avoids that.
+function overlayBounds(bounds) {
+	return { ...bounds, height: bounds.height - 1 };
+}
+
 function computeVirtualDisplayBounds() {
 	const displays = screen.getAllDisplays();
 	const x = Math.min(...displays.map(d => d.bounds.x));
@@ -609,7 +615,6 @@ const createWindow = () => {
 	let inputFeedback = {};
 	let primaryDisplay = screen.getPrimaryDisplay();
 	let virtualDisplayBounds = computeVirtualDisplayBounds();
-	let isMultiMonitor = screen.getAllDisplays().length > 1;
 	let systemMousePosition = null;
 	const buildOverlayPayload = () => {
 		const workAreaContainerBounds = {
@@ -805,10 +810,9 @@ const createWindow = () => {
 		return changed;
 	});
 
-	// Set up the screen overlay window.
-	const fullscreen = process.platform !== 'darwin' && !isMultiMonitor;
+	// Set up the screen overlay window. Sized to the displays, never `fullscreen`: Windows
+	// treats a full-screen window as a full-screen app and holds back notifications.
 	screenOverlayWindow = new BrowserWindow({
-		fullscreen,
 		x: virtualDisplayBounds.x,
 		y: virtualDisplayBounds.y,
 		width: virtualDisplayBounds.width,
@@ -832,6 +836,8 @@ const createWindow = () => {
 			preload: path.join(app.getAppPath(), 'src/preload-screen-overlay.js'),
 		},
 	});
+	// Windows fits a new window into the work area; set the bounds again to cover the taskbar.
+	screenOverlayWindow.setBounds(overlayBounds(virtualDisplayBounds));
 	screenOverlayWindow.setIgnoreMouseEvents(true);
 	screenOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
 
@@ -854,12 +860,7 @@ const createWindow = () => {
 		event.preventDefault();
 		screenOverlayWindow.setSkipTaskbar(true);
 		screenOverlayWindow.setClosable(false);
-		if (!isMultiMonitor && process.platform !== 'darwin') {
-			screenOverlayWindow.setFullScreen(true);
-		} else {
-			screenOverlayWindow.setFullScreen(false);
-			screenOverlayWindow.setBounds(virtualDisplayBounds);
-		}
+		screenOverlayWindow.setBounds(overlayBounds(virtualDisplayBounds));
 		screenOverlayWindow.setIgnoreMouseEvents(true);
 		// "screen-saver" is the highest level; it should show above the taskbar.
 		screenOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -874,15 +875,7 @@ const createWindow = () => {
 	function updateDisplayConfiguration() {
 		primaryDisplay = screen.getPrimaryDisplay();
 		virtualDisplayBounds = computeVirtualDisplayBounds();
-		isMultiMonitor = screen.getAllDisplays().length > 1;
-		if (screenOverlayWindow) {
-			if (!isMultiMonitor && process.platform !== 'darwin') {
-				// Keep fullscreen on single-monitor (non-macOS) to ensure the overlay covers the taskbar.
-			} else {
-				screenOverlayWindow.setFullScreen(false);
-				screenOverlayWindow.setBounds(virtualDisplayBounds);
-			}
-		}
+		screenOverlayWindow?.setBounds(overlayBounds(virtualDisplayBounds));
 		updateDwellClickingAndHUD();
 		appWindow?.webContents.send('virtualDisplayBoundsChanged', virtualDisplayBounds);
 	}
