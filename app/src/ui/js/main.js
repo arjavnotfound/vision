@@ -552,6 +552,8 @@ async function boot() {
 		if (!st.get("onboardingComplete")) st.set("onboardingComplete", true);
 		showStart();
 	} else if (!isPreview && !st.get("onboardingComplete")) {
+		// Same hands-free resume as the Start screen: onboarding tells a new user to close their eyes to start.
+		if (st.has("closeEyesToToggle") && !st.get("closeEyesToToggle")) st.set("closeEyesToToggle", true);
 		openOnboarding({
 			layer, engine,
 			onFinish: () => st.set("onboardingComplete", true),

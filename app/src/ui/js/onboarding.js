@@ -98,7 +98,7 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 				h("div", { class: "hero-mark" }, markSvg(96)),
 				h("h1", { class: "hero__title" }, "Tune it to ", h("em", {}, "your face.")),
 				h("p", { class: "hero__lede" }, "A one-minute calibration learns your centre, how far you like to turn, and how clearly you wink, open your mouth and raise your brows."),
-				h("p", { class: "prose" }, ["Tracking starts paused. Press ", f9(), " to start moving the cursor with your head."]),
+				h("p", { class: "prose" }, ["Tracking starts paused. Close both eyes for 2 seconds to start moving the cursor with your head. A helper can also press ", f9(), "."]),
 			));
 			foot.append(
 				h("button", { class: "btn", "data-dwell": true, onclick: () => show(1) }, "Back"),
