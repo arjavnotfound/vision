@@ -11,7 +11,6 @@ from livekit.agents import (
     JobContext,
     TurnHandlingOptions,
     cli,
-    inference,
     llm,
     room_io,
 )
@@ -105,9 +104,6 @@ class Assistant(Agent):
         )
 
         super().__init__(
-            # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-            # See all available models at https://docs.livekit.io/agents/models/llm/
-            # llm=inference.LLM(model="google/gemma-4-31b-it"),
             # Tests pass a text LLM via llm_override: the Live model cannot run
             # text-only eval turns (generate_reply is unsupported on 3.1 Live).
             llm=llm_override
@@ -122,14 +118,6 @@ class Assistant(Agent):
                     sliding_window=genai_types.SlidingWindow(),
                 ),
             ),
-            # To use a realtime model instead of a voice pipeline, replace the LLM
-            # with a RealtimeModel and remove the STT/TTS from the AgentSession
-            # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/)
-            # 1. Install livekit-agents[openai]
-            # 2. Set OPENAI_API_KEY in .env.local
-            # 3. Add `from livekit.plugins import openai` to the top of this file
-            # 4. Replace the llm argument with:
-            #     llm=openai.realtime.RealtimeModel(voice="marin")
             instructions=AGENT_INSTRUCTIONS + self.voice_settings.language_rule,
             tools=[
                 *self.browser_tools.tools,
@@ -160,35 +148,12 @@ async def my_agent(ctx: JobContext):
     browser = BrowserManager(headless=False)
     ctx.add_shutdown_callback(browser.close)
 
-    # Gemini realtime handles the voice input and output for this session.
+    # Gemini realtime handles the voice input and output and decides when a turn ends.
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
-        # stt=inference.STT(model="deepgram/nova-3", language="en"),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        # tts=inference.TTS(
-        #   model="fishaudio/s2.1-pro", voice="fa4c9eb3dccc4806b382b40d61c6b10a"
-        # ),
         turn_handling=TurnHandlingOptions(
-            # The LiveKit turn detector determines when the user is done speaking and the agent should respond.
-            # TurnDetector is an end-of-turn model that listens to the user's audio directly, combining
-            # semantic understanding with acoustic cues (intonation, pitch, rhythm) for state-of-the-art accuracy.
-            # AgentSession supplies the required VAD automatically.
-            # See more at https://docs.livekit.io/agents/build/turns
-            turn_detection=inference.TurnDetector(),
-            # Adaptive interruptions use the turn detector to tell a real interruption from a
-            # backchannel like "mhm" or "right", so the agent keeps talking through the latter.
-            interruption={"mode": "adaptive"},
-            # allow the LLM to generate a response while waiting for the end of turn
-            # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
+            # Start the reply while the end of the turn is still being confirmed.
             preemptive_generation={"enabled": True},
         ),
-        # Expressive mode injects the TTS provider's markup guide into the LLM prompt, so the model
-        # emits inline delivery tags (emotion, pacing, non-verbal sounds) that the TTS renders and
-        # the transcript never shows. Requires a TTS model that supports markup, such as the Fish
-        # Audio model above.
-        # expressive=True,
     )
 
     async def on_tool_action(event: dict) -> None:
