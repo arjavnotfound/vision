@@ -27,7 +27,6 @@ function createTray({ getWindow, toggleTracking, sendCommand, talk }) {
 		...(talk ? [{ label: talk.label ? `Talk to VISION (${talk.label})` : 'Talk to VISION', click: talk.activate }] : []),
 		{ label: 'Pause / resume tracking (F9)', click: toggleTracking },
 		{ label: 'Calibrate…', click: () => sendCommand('calibrate') },
-		{ label: 'Back to Start (next person)', click: () => sendCommand('reset') },
 		{ type: 'separator' },
 		// Quitting also stops the voice assistant (will-quit stops the agent).
 		{ label: 'Quit VISION', role: 'quit' },

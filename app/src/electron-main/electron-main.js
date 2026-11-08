@@ -1334,7 +1334,7 @@ function showAppWindow() {
 	if (appWindow) raiseWindow(appWindow);
 }
 
-const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'reset', 'remap', 'show', 'controls']);
+const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls']);
 async function handleBusCommand(cmd, value) {
 	if (cmd === 'quit') {
 		mouseSafety.releaseAllMouseButtons('voice-quit');
@@ -1370,7 +1370,7 @@ async function handleBusCommand(cmd, value) {
 	if (!appWindow) {
 		throw new Error('VISION window is not open');
 	}
-	if (['recalibrate', 'reset', 'show', 'controls', 'remap'].includes(cmd)) {
+	if (['recalibrate', 'show', 'controls', 'remap'].includes(cmd)) {
 		showAppWindow();
 	}
 	// The UI answers with what it did, so the assistant never claims a change that did not happen.

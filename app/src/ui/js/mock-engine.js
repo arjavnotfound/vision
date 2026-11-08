@@ -38,8 +38,8 @@ const DEFAULT_SETTINGS = {
 	mouthThresholdLow: 0.15,
 	browThresholdHigh: 0.28,
 	browThresholdLow: 0.24,
-	profiles: JSON.stringify([{ name: "Arjav", values: {} }, { name: "Expo visitor", values: {} }, { name: "Default", values: {} }]),
-	activeProfile: "Arjav",
+	profiles: JSON.stringify([{ name: "Default", values: {} }, { name: "Evening", values: {} }]),
+	activeProfile: "Default",
 	onboardingComplete: true,
 	uiTheme: "ember",
 };

@@ -303,9 +303,6 @@ async function boot() {
 	let startScreen = null;
 	let tryIt = null;
 	let busState = null;
-	const baseline = isKiosk ? { ...st.getAll() } : null;
-	const BASELINE_KEYS = ["clickingMode", "mouthTiltScroll", "eyebrowRaiseOpensKeyboard", "headTrackingSensitivityX", "headTrackingSensitivityY",
-		"eyeThresholdHigh", "eyeThresholdLow", "mouthThresholdHigh", "mouthThresholdLow", "browThresholdHigh", "browThresholdLow"];
 	function closeLayers() {
 		afterCalibration = null;
 		calibration?.close?.(false);
@@ -319,13 +316,6 @@ async function boot() {
 	function showStart() {
 		afterCalibration = null;
 		closeLayers();
-		// Next person: start from the same settings every time (calibration adjusts them).
-		if (baseline) {
-			for (const key of BASELINE_KEYS) {
-				if (key in baseline && st.has(key) && st.get(key) !== baseline[key]) st.set(key, baseline[key]);
-			}
-		}
-		saveControlMap(null);
 		// Hands-free resume: while paused the cursor cannot reach the orb, so closing both
 		// eyes for 2 s (an existing setting) must be able to resume tracking.
 		if (st.has("closeEyesToToggle") && !st.get("closeEyesToToggle")) st.set("closeEyesToToggle", true);
@@ -385,10 +375,6 @@ async function boot() {
 			startCalibration(null, { adaptive: true });
 			return { done: "calibrating" };
 		}
-		if (cmd === "reset") {
-			showStart();
-			return { done: "start screen" };
-		}
 		if (cmd === "speed") {
 			const factor = value === "faster" ? 1.25 : value === "slower" ? 0.8 : NaN;
 			if (!Number.isFinite(factor)) return { done: "none", error: "say faster or slower" };
@@ -443,7 +429,6 @@ async function boot() {
 			window.electronAPI?.replyBusCommand?.(command.id, result);
 			return;
 		}
-		if (command === "reset") showStart();
 		if (command === "calibrate") startCalibration();
 		if (command === "settings") document.getElementById("settings-btn").click();
 		if (command === "about") document.getElementById("about-btn").click();

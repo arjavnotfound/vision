@@ -236,7 +236,7 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 			];
 		},
 		Data: () => [
-			KIOSK ? section("SETTINGS FILE", h("p", { class: "prose" }, "Your settings are saved automatically. To reset them for the next person, talk to the orb and say “back to start”.")) : null,
+			KIOSK ? section("SETTINGS FILE", h("p", { class: "prose" }, "Your settings are saved automatically.")) : null,
 			KIOSK ? null : section("SETTINGS FILE", h("div", { class: "row-grid" },
 				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
 				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),

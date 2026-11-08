@@ -149,7 +149,6 @@ class DesktopTools:
             self.change_cursor_speed,
             self.change_click_mode,
             self.move_control,
-            self.back_to_start,
             self.change_voice,
             self.change_language,
             self.quit_vision,
@@ -490,11 +489,6 @@ class DesktopTools:
         return await self._vision(
             "remap", {"action": action_key, "to": to_key}, label=f"{action} to {to}"
         )
-
-    @function_tool()
-    async def back_to_start(self, context: RunContext) -> str:
-        """Go back to VISION's Start screen for the next person (settings reset, recalibrate)."""
-        return await self._vision("reset", label="back to start")
 
     @function_tool()
     async def change_voice(self, context: RunContext, voice: str) -> str:

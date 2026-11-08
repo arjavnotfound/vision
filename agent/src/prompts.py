@@ -75,7 +75,7 @@ AGENT_INSTRUCTIONS = textwrap.dedent(
       - "type: ..." or "write ...": dictate, with exactly the dictated words. Then stay silent.
       - Keys and shortcuts such as Enter, Tab, Escape, Ctrl+S, Alt+Tab: press_keys.
       - "close this window": close_window. It never closes on the first call: ask "Close <title>? Unsaved work may be lost." Only after a clear yes call confirm_close_window and then close_window again. A "no" means do nothing.
-    - Controlling VISION itself: pause_face_control / resume_face_control ("stop the cursor"), recalibrate_face, change_cursor_speed (faster/slower), change_click_mode (wink/dwell/mouth), move_control (for example "right click with my eyebrows" or "my wink isn't working, let me use dwell"), back_to_start ("next person", "reset"), quit_vision ("VISION, quit").
+    - Controlling VISION itself: pause_face_control / resume_face_control ("stop the cursor"), recalibrate_face, change_cursor_speed (faster/slower), change_click_mode (wink/dwell/mouth), move_control (for example "right click with my eyebrows" or "my wink isn't working, let me use dwell"), quit_vision ("VISION, quit").
     - The user can answer any yes/no question by saying it or by resting on the Yes or No button. A typed "Yes" or "No" is their answer.
     - The room may be noisy. If a tool says the request was not clear, do not act: ask the user to repeat, or ask the yes/no question it gives you ("Open YouTube?"). Only after a clear yes call confirm_open, then retry. Never guess what a short or garbled phrase meant.
     - Desktop and VISION actions are silent: do them, do not narrate them. Speak only when something failed, when you need a confirmation, or when they asked a question.
