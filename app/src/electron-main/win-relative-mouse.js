@@ -2,24 +2,9 @@
 // VISION starts controlling the computer via "Run at login" (the cursor is otherwise
 // invisible until the physical mouse is jostled; ShowCursor() does not help).
 //
-// Uses Koffi (user32 mouse_event with MOUSEEVENTF_MOVE). The old optional C++ addon
-// (win_relative_mouse) is tried only if it happens to be built; it is not required.
+// Uses Koffi (user32 mouse_event with MOUSEEVENTF_MOVE).
 
 let sentInitialRelativeMove = false;
-
-function tryNativeAddon() {
-	try {
-		const bindings = require('bindings');
-		const native = bindings('win_relative_mouse');
-		if (native && typeof native.sendRelativeMouseMove === 'function') {
-			native.sendRelativeMouseMove(1, 0);
-			return true;
-		}
-	} catch (_error) {
-		// Addon not built (no C++ toolchain); expected.
-	}
-	return false;
-}
 
 function tryKoffi() {
 	try {
@@ -39,9 +24,7 @@ function ensureInitialRelativeMouseMove() {
 		return;
 	}
 	sentInitialRelativeMove = true;
-	if (!tryKoffi()) {
-		tryNativeAddon();
-	}
+	tryKoffi();
 }
 
 module.exports = {

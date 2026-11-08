@@ -10,7 +10,6 @@ files:
   - package.json
   - src/**/*
   - images/**/*
-  - "!**/*.cc"
 
 extraResources:
   - from: ../console/out
