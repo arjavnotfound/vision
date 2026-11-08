@@ -2382,7 +2382,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 							showToast(t("openCameraSettings.errors.sharedHeading", { defaultValue: "Failed to open camera settings:" }) + "\n" + error.name + ": " + error.message);
 						}
 					},
-					description: t("settings.openCameraSettings.description", { defaultValue: "Opens the system settings dialog for the selected camera, to adjust properties like auto-focus and auto-exposure." }),
+					description: t("settings.openCameraSettings.description", { defaultValue: "Opens the Windows camera settings, to adjust properties like brightness and contrast." }),
 				},
 				// TODO: try moving this to the corner of the camera view, so it's clearer it applies only to the camera view
 				{

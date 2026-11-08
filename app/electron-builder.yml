@@ -27,7 +27,6 @@ extraResources:
 # Native code must stay outside the asar archive.
 asarUnpack:
   - node_modules/koffi/**
-  - node_modules/ffmpeg-static/**
 
 win:
   icon: icon.ico

@@ -1,7 +1,7 @@
 // Privacy: VISION sends no telemetry or crash reports. The installed app checks GitHub
 // Releases for updates (see startAutoUpdates); the Store build and dev runs never do.
 const path = require('path');
-const { app, globalShortcut, BrowserWindow, ipcMain } = require('electron');
+const { app, globalShortcut, BrowserWindow, ipcMain, shell } = require('electron');
 const fs = require('fs/promises');
 
 // Used as the registry key name for run-at-login on Windows.
@@ -1078,95 +1078,15 @@ app.on('activate', () => {
 	// }
 });
 
-ipcMain.handle('openCameraSettings', async (_event, cameraDeviceName) => {
-	console.log("Requested to open camera settings for device:", cameraDeviceName);
-	const { spawn } = require('child_process');
-	const pathToFfmpeg = require('ffmpeg-static');
-	console.log("Path to ffmpeg:", pathToFfmpeg);
-
-	const run = (program, args) => {
-		return new Promise((resolve, reject) => {
-			const proc = spawn(program, args);
-			let stdout = '';
-			let stderr = '';
-			proc.stdout.on('data', d => stdout += d);
-			proc.stderr.on('data', d => stderr += d);
-			proc.on('error', reject);
-			proc.on('close', code => {
-				resolve({ code, stdout, stderr });
-			});
-		});
-	};
-
-	let listDevicesResult;
+// Windows Settings > Camera: brightness, contrast and other properties for each camera.
+// It is an ordinary window, so it works with the head cursor. The device name is unused.
+ipcMain.handle('openCameraSettings', async () => {
 	try {
-		listDevicesResult = await run(pathToFfmpeg, [
-			'-list_devices', 'true', '-f', 'dshow', '-i', 'dummy', '-hide_banner'
-		]);
-	} catch (err) {
-		return { error: `Error listing devices: ${err.message}` };
+		await shell.openExternal('ms-settings:camera');
+		return {};
+	} catch (error) {
+		return { error: `Could not open camera settings: ${error.message}` };
 	}
-
-	console.log(`Device list output: ${listDevicesResult.stderr}`);
-
-	if (listDevicesResult.stderr.includes("Unrecognized option 'list_devices'")) {
-		return { error: `Can't show camera settings on this platform.` };
-	}
-
-	const videoDeviceRegex = /\[dshow @ [^\]]+\] "([^"]+)" \(video\)/g;
-	let match;
-	let deviceFound = false;
-
-	while ((match = videoDeviceRegex.exec(listDevicesResult.stderr)) !== null) {
-		const deviceName = match[1];
-		console.log(`Found video device: ${deviceName}`);
-		if (
-			deviceName === cameraDeviceName ||
-			deviceName === cameraDeviceName.replace(/\s\(.*\)$/, '')
-		) {
-			deviceFound = true;
-			cameraDeviceName = deviceName;
-			break;
-		}
-	}
-
-	if (!deviceFound) {
-		console.error(`Camera device "${cameraDeviceName}" not found in device list.`);
-		return { error: `Camera device "${cameraDeviceName}" not found in device list.` };
-	}
-
-	console.log(`Opening settings dialog for camera device: ${cameraDeviceName}`);
-
-	try {
-		const result = await run(pathToFfmpeg, [
-			'-f', 'dshow',
-			'-show_video_device_dialog', 'true',
-			'-i', `video=${cameraDeviceName}`
-		]);
-		console.log(`Command output: ${result.stderr}`);
-		const dshowRegex = /\[dshow @ [^\]]+\] (.*)(Input #[\d+], dshow, .*)/g;
-		// const relevantOutput = result.stderr.split('\n').filter(line => line.startsWith('[dshow @'));
-		if (result.code !== 0) {
-			if (result.stderr.includes('requested filter does not have a property page to show')) {
-				// or shorter: "No settings found for this camera source."
-				return { error: `The camera settings dialog is not available for this camera.` };
-			}
-			// return { error: `ffmpeg exited with code ${result.code}\n\n${result.stderr}` };
-			// ffmpeg actually returns code 1 even after successfully showing the dialog.
-			// check for actual arbitrary errors in the output via dshowRegex
-			const match = dshowRegex.exec(result.stderr);
-			if (match) {
-				return { error: match[1] };
-			}
-		}
-		// TODO: could fall back to opening ms-settings:privacy-webcam on Windows 10 and 11
-		// There's also a way to link to the settings for a specific camera in Windows 11:
-		// https://learn.microsoft.com/en-us/windows/apps/develop/camera/launch-camera-settings
-	} catch (err) {
-		console.error(`Error opening camera settings: ${err.message}`);
-		return { error: `Error opening camera settings: ${err.message}` };
-	}
-	return { success: true };
 });
 
 ipcMain.handle('openOnScreenKeyboard', async () => {

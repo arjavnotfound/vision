@@ -16,7 +16,6 @@ and in the installed app's `resources` folder.
 | 1€ Filter (`OneEuroFilter.js`), Géry Casiez et al. | BSD-3-Clause |
 | stats.js, mrdoob | MIT |
 | Koffi, Niels Martignène | MIT |
-| FFmpeg, via ffmpeg-static (used only to open the camera's property page) | GPL-3.0-or-later; FFmpeg source: https://ffmpeg.org/download.html |
 
 ## Voice assistant
 
