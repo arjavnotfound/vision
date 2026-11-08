@@ -919,6 +919,12 @@ app.on('ready', async () => {
 		}
 		activeSettings = {};
 	}
+	if (firstRun && app.isPackaged && !args.preview) {
+		// A new install is often set up for someone who cannot press F9 or start the app:
+		// track from launch and start with Windows. Saved choices are never touched.
+		deserializeSettings({ globalSettings: { startEnabled: true, runAtLogin: true } });
+		await saveSettings().catch((error) => console.error("Could not save first-run settings:", error));
+	}
 	if (args.preview) {
 		// --preview: mocked engine, no camera, no overlay, no mouse control. For design QA.
 		updateMenu();
