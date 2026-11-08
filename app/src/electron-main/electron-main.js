@@ -965,7 +965,6 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 	// See https://github.com/electron/electron/issues/40615
 	if (!additionalData) {
 		// I would move this into `handleSecondInstance` and use `logToCLI`, but it won't work because `additionalData` is null.
-		// logToCLI(`Command line arguments were not received by the already-running application. They are meant to be passed via additionalData, however due to a bug in Electron, additionalData === ${additionalData}. See https://github.com/electron/electron/issues/40615`);
 		console.log(`second-instance: additionalData === ${additionalData}. See https://github.com/electron/electron/issues/40615`);
 		return;
 	}
@@ -973,34 +972,7 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 	function deliverOutputToCLI(output) {
 		console.log("second-instance: Outputting to CLI:", output);
 
-		// Basic implementation
-		// fs.writeFile(additionalData.tempFilePath, output)
-		// 	.then(() => {
-		// 		console.log("second-instance: Wrote output to", additionalData.tempFilePath);
-		// 	}, (error) => {
-		// 		console.error(`second-instance: Failed to write output to ${additionalData.tempFilePath}:`, error);
-		// 	});
-
-		// Write the file in chunks to test for race conditions.
-		// const stream = require('fs').createWriteStream(additionalData.tempFilePath);
-		// setTimeout(() => {
-		// 	stream.write(output.slice(0, Math.floor(output.length / 2)), 'utf8', () => {
-		// 		console.log("second-instance: Wrote first chunk to", additionalData.tempFilePath);
-		// 		setTimeout(() => {
-		// 			stream.write(output.slice(Math.floor(output.length / 2)), 'utf8', () => {
-		// 				console.log("second-instance: Wrote second chunk to", additionalData.tempFilePath);
-		// 				stream.end();
-		// 			});
-		// 		}, 2000); // Delay before writing the second chunk
-		// 	});
-		// }, 2000); // Delay before writing the first chunk
-		// stream.on('error', (error) => {
-		// 	console.error(`second-instance: Failed to write output to ${additionalData.tempFilePath}:`, error);
-		// });
-
 		// Rename the file after fully writing it to avoid race conditions.
-		// Can use setTimeout to test the file polling behavior and timeout error message.
-		// setTimeout(() => {
 		const tempTempFilePath = additionalData.tempFilePath + ".tmp";
 		fs.writeFile(tempTempFilePath, output)
 			.then(() => {
@@ -1014,7 +986,6 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 			}, (error) => {
 				console.error(`second-instance: Failed to write output to ${tempTempFilePath}:`, error);
 			});
-		// }, 20000);
 	}
 
 	// `deliverOutputToCLI` has to be called exactly once.
@@ -1025,7 +996,6 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 	let output = "";
 	function logToCLI(message) {
 		output += message + "\n";
-		// console.log(message);
 	}
 	function handleSecondInstance() {
 		const argv = additionalData.arguments;
@@ -1045,10 +1015,6 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 
 		const args = parser.parse_args(argv);
 		console.log("second-instance: parsed args:", args);
-		// if (args.profile) {
-		// 	const filePath = path.resolve(workingDirectory, args.profile[0]);
-		// 	console.log("second-instance: Opening settings profile:", filePath);
-		// }
 		if (args.start || args.stop) {
 			if (!!args.start === !!args.stop) {
 				logToCLI("Exactly one of --start or --stop must be provided.");
@@ -1079,8 +1045,7 @@ app.on("second-instance", (_event, uselessCorruptedArgv, workingDirectory, addit
 			logToCLI(getVersion());
 			return;
 		}
-		// logToCLI("No arguments recognized.");
-		logToCLI("Happy birthday!"); // just in case
+		logToCLI("No arguments recognized.");
 	}
 
 	handleSecondInstance();
