@@ -225,7 +225,7 @@ export function openTryIt({ layer, plan, onDone }) {
 		clearTimeout(stepTimer);
 		clearTimeout(deadline);
 		screen.remove();
-		speak("You're all set. VISION is yours. Say VISION, back to start, when you are finished.");
+		speak("You're all set. VISION is yours.");
 		onDone?.();
 	}
 
