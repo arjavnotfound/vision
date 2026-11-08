@@ -76,12 +76,19 @@ export function FloatingOrb({
   // Electron: widen the window for the hint while resting. Ignore once the strip
   // is opening, so the hover-out during the morph can't shrink it back.
   const lastHover = useRef(false);
+  const surfaceRef = useRef(model.surface);
+  surfaceRef.current = model.surface;
   useEffect(() => {
     if (forceHint || hover === lastHover.current) return;
     lastHover.current = hover;
-    if (model.surface !== 'orb') return;
-    getElectron()?.setMode?.(hover ? 'orb-hint' : 'orb');
+    if (model.surface === 'orb' && hover) getElectron()?.setMode?.('orb-hint');
   }, [hover, forceHint, model.surface]);
+  // Shrink only after the hint has faded out; shrinking first clips the pill mid-fade.
+  const shrinkAfterHint = () => {
+    if (!forceHint && !lastHover.current && surfaceRef.current === 'orb') {
+      getElectron()?.setMode?.('orb');
+    }
+  };
 
   // Ember chip under the orb on every action, for ~1.5s.
   const [chipText, setChipText] = useState<string | null>(null);
@@ -107,7 +114,7 @@ export function FloatingOrb({
     <div className="orb-anchor pointer-events-none fixed bottom-3 flex flex-col items-end gap-3">
       {/* Hint pill (resting + dwelling only) */}
       <div className="flex h-[34px] items-end">
-        <AnimatePresence>
+        <AnimatePresence onExitComplete={shrinkAfterHint}>
           {showHint && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
