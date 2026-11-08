@@ -2,21 +2,25 @@
 Report how VISION's windows sit next to another app. Run it while VISION is running.
 
   powershell -ExecutionPolicy Bypass -File scripts\qa\probe-windows.ps1 -Out report.txt `
-    [-Edge] [-Points "768,432;768,736"] [-Seconds 30]
+    [-Edge [-Url <page>] [-FullScreen]] [-Points "768,432;768,736"] [-Seconds 30]
 
 Writes, with timestamps:
   - every visible top-level VISION window: title, rect and extended style flags
     (TOPMOST, TRANSPARENT = click-through, LAYERED, NOACTIVATE);
   - for each point, the window that a click there would hit (WindowFromPoint);
+  - what Windows thinks of the screen (SHQueryUserNotificationState: BUSY means "a
+    full-screen app is running", which silences notifications);
   - every change of the foreground window during -Seconds.
--Edge opens Microsoft Edge with a throwaway profile in front first, and closes it at the
-end. Never probe with Notepad: it restores the owner's own tabs into the screen.
+-Edge opens Microsoft Edge with a throwaway profile in front first (at -Url, full screen
+with -FullScreen), and closes it at the end. Never probe with Notepad: it restores the owner's own tabs into the screen.
 #>
 param(
 	[Parameter(Mandatory = $true)][string]$Out,
 	[string]$Points = "",
 	[int]$Seconds = 30,
-	[switch]$Edge
+	[switch]$Edge,
+	[string]$Url = "about:blank",
+	[switch]$FullScreen
 )
 
 Add-Type @"
@@ -38,6 +42,7 @@ public static class VisionProbe {
 	[DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
 	[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
 	[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+	[DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
 }
 "@
 [void][VisionProbe]::SetProcessDPIAware()
@@ -65,7 +70,8 @@ $edgeProfile = $null
 if ($Edge) {
 	$edgeProfile = Join-Path $env:TEMP ("vision-probe-edge-" + [guid]::NewGuid())
 	$edgeExe = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
-	Start-Process $edgeExe "--user-data-dir=`"$edgeProfile`" --no-first-run --new-window about:blank"
+	$fs = if ($FullScreen) { " --start-fullscreen" } else { "" }
+	Start-Process $edgeExe "--user-data-dir=`"$edgeProfile`" --no-first-run --new-window$fs `"$Url`""
 	Start-Sleep -Seconds 3
 	Log ("edge in front; foreground: " + (Describe ([VisionProbe]::GetForegroundWindow())))
 }
@@ -82,6 +88,10 @@ foreach ($h in $windows) {
 	$ex = [VisionProbe]::GetWindowLong($h, -20)
 	Log ("window {0} rect=({1},{2})-({3},{4}) ex=0x{5:X} {6}" -f (Describe $h), $r.L, $r.T, $r.R, $r.B, $ex, (Flags $ex))
 }
+
+$quns = 0; [void][VisionProbe]::SHQueryUserNotificationState([ref]$quns)
+$qunsNames = @{ 1 = "NOT_PRESENT (screen saver/locked)"; 2 = "BUSY (full-screen app)"; 3 = "RUNNING_D3D_FULL_SCREEN"; 4 = "PRESENTATION_MODE"; 5 = "ACCEPTS_NOTIFICATIONS"; 6 = "QUIET_TIME"; 7 = "APP" }
+Log ("notification state: {0} {1}" -f $quns, $qunsNames[$quns])
 
 foreach ($pair in ($Points -split ";" | Where-Object { $_ })) {
 	$x, $y = $pair -split ","

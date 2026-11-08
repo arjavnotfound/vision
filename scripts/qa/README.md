@@ -32,8 +32,10 @@ How VISION's windows behave next to another app. Start VISION first, then:
 
 It writes each VISION window's rect and style flags (TOPMOST, click-through, NOACTIVATE),
 which window a click at each point would hit, and every foreground change during the
-watch. `-Edge` puts a Microsoft Edge window with a throwaway profile in front and closes it
-at the end. Do not probe with Notepad: it restores the owner's own tabs into screenshots.
+watch, plus Windows' notification state (`BUSY` = it thinks a full-screen app is
+running). `-Edge` puts a Microsoft Edge window with a throwaway profile in front and closes
+it at the end; `-Url <page>` and `-FullScreen` open it on a page and in full screen.
+Do not probe with Notepad: it restores the owner's own tabs into screenshots.
 
 For a live run that never moves the real mouse, start the app with
 `VISION_FAKE_INPUT=<log>`, `VISION_USER_DATA_DIR=<temp dir>` and `--synthetic-face`, as
