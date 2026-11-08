@@ -1,30 +1,11 @@
-
-// Note: Don't require any third-party (or own) modules until after squirrel events are handled.
-// If anything goes wrong, it's very bad for it to go wrong during installation and uninstallation!
 // Privacy: VISION sends no telemetry or crash reports. The installed app checks GitHub
 // Releases for updates (see startAutoUpdates); the Store build and dev runs never do.
 const path = require('path');
 const { app, globalShortcut, BrowserWindow, ipcMain } = require('electron');
-
-
 const fs = require('fs/promises');
-const { handleStartupEvent } = require('./squirrel-update.js');
 
-// TODO: is there any merit to app.quit when there are no windows open?
-
-// Needed for run-at-login on Windows. This is used as the registry key name.
-// Needs to be set early since `setLoginItemSettings` is used in the `--squirrel-uninstall` handler.
+// Used as the registry key name for run-at-login on Windows.
 app.setAppUserModelId("io.github.arjavnotfound.vision");
-
-// Handle installing/uninstalling shortcuts and the CLI's PATH modification on Windows.
-if (process.platform === 'win32') {
-	const possibleSquirrelEventFlag = process.argv[1];
-	if (handleStartupEvent(possibleSquirrelEventFlag)) {
-		return;
-	}
-}
-
-// From this point on, third party modules can be required now without risking interfering with the installer.
 
 const { getVersion } = require('./version.js');
 // The upstream auto-updater (which queried another project's GitHub releases) was removed.
@@ -495,26 +476,10 @@ function deserializeSettings(settings) {
 		}
 		if (settings.globalSettings.runAtLogin !== undefined) {
 			if (app.isPackaged) {
-				if (process.platform === 'win32') {
-					// Handle Squirrel installer on Windows.
-					// It places the app in a subdirectory, with a version number, but Update.exe can be used to launch the app.
-					const appFolder = path.dirname(process.execPath);
-					const updateExe = path.resolve(appFolder, '..', 'Update.exe');
-					const exeName = path.basename(process.execPath);
-
-					app.setLoginItemSettings({
-						openAtLogin: activeSettings.runAtLogin,
-						path: updateExe,
-						args: [
-							'--processStart', `"${exeName}"`,
-							// '--process-start-args', '"--hidden"',
-						]
-					});
-				} else {
-					app.setLoginItemSettings({
-						openAtLogin: activeSettings.runAtLogin,
-					});
-				}
+				// The NSIS install has a fixed path, so the default (this executable) is right.
+				app.setLoginItemSettings({
+					openAtLogin: activeSettings.runAtLogin,
+				});
 			} else {
 				// console.log("Ignoring runAtLogin setting because the app is not packaged.");
 				// Could maybe try to pass it arguments to run the app in development mode, but it might not be worth it.

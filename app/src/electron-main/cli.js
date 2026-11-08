@@ -89,34 +89,4 @@ parser.add_argument("--exit-after-screenshot", { help: SUPPRESS, action: "store_
 // QA: replace face-mesh output with a scripted synthetic face (tracking stays paused).
 parser.add_argument("--synthetic-face", { help: SUPPRESS, action: "store_true" });
 
-// Squirrel.Windows passes "--squirrel-firstrun" when the app is first run after being installed.
-// This could be used to show a "Thanks for installing" message or similar, but it needs to at least be handled so that it doesn't cause an error.
-// We can hide it from the help since it's not a useful option.
-parser.add_argument("--squirrel-firstrun", {
-	help: SUPPRESS,
-	action: "store_true",
-});
-
-// Other Squirrel.Windows event arguments are currently handled separately in squirrel-update.js, but could make use of the argparse CLI, alternatively.
-
-// parser.add_argument("--squirrel-uninstall", {
-// 	help: SUPPRESS,
-// 	action: "store_true",
-// });
-
-// parser.add_argument("--squirrel-install", {
-// 	help: SUPPRESS,
-// 	action: "store_true",
-// });
-
-// parser.add_argument("--squirrel-updated", {
-// 	help: SUPPRESS,
-// 	action: "store_true",
-// });
-
-// parser.add_argument("--squirrel-obsolete", {
-// 	help: SUPPRESS,
-// 	action: "store_true",
-// });
-
 module.exports.parser = parser;
