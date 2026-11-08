@@ -52,3 +52,7 @@ test-results/
 .DS_Store
 Thumbs.db
 [Dd]esktop.ini
+
+# Test and benchmark run outputs
+scripts/qa/last-run.json
+scripts/bench/results.jsonl
