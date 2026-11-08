@@ -47,6 +47,8 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "CLICK"), h("span", { class: "feature__name" }, "Face gestures"), h("span", { class: "feature__text" }, "Wink, open your mouth, or dwell. You choose what feels easy.")),
 					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "STOP"), h("span", { class: "feature__name" }, "Always in control"), h("span", { class: "feature__text" }, ["Close both eyes for 2 seconds to pause. A helper can press ", f9(), " or move the mouse."])),
 				),
+		
+				h("p", { class: "prose" }, ["Tracking starts paused. Close both eyes for 2 seconds to start the cursor, then rest it on a button to choose. A helper can also press ", f9(), "."]),
 			));
 			foot.append(h("span", { class: "label" }, "STEP 1 OF 3"), h("div", { class: "session__spacer" }),
 				h("button", { class: "btn btn--ember btn--wide", "data-dwell": true, onclick: () => show(1) }, "Get started"));
@@ -67,7 +69,7 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 			const frameCheck = check("Face centred in the guide");
 			body.replaceChildren(vfPanel, h("div", { class: "screen__side" },
 				h("div", { class: "instruction" }, "Let VISION see you."),
-				h("div", { class: "instruction__sub" }, "Sit about an arm's length from the screen, face the camera, and fit your face inside the guide."),
+				h("div", { class: "instruction__sub" }, "Sit about an arm's length from the screen, face the camera, and fit your face inside the guide. Rest the cursor on a button to choose."),
 				h("div", { class: "measure-list" }, camCheck.row, faceCheck.row, lightCheck.row, frameCheck.row),
 				status,
 			));
@@ -98,7 +100,7 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 				h("div", { class: "hero-mark" }, markSvg(96)),
 				h("h1", { class: "hero__title" }, "Tune it to ", h("em", {}, "your face.")),
 				h("p", { class: "hero__lede" }, "A one-minute calibration learns your centre, how far you like to turn, and how clearly you wink, open your mouth and raise your brows."),
-				h("p", { class: "prose" }, ["Tracking starts paused. Close both eyes for 2 seconds to start moving the cursor with your head. A helper can also press ", f9(), "."]),
+				h("p", { class: "prose" }, ["Rest the cursor on a button to choose. If the cursor is paused, close both eyes for 2 seconds to start it. A helper can also press ", f9(), "."]),
 			));
 			foot.append(
 				h("button", { class: "btn", "data-dwell": true, onclick: () => show(1) }, "Back"),
