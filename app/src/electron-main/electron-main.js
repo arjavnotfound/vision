@@ -659,6 +659,7 @@ const createWindow = () => {
 			isEnabled: enabled && !isManualTakeback,
 			isManualTakeback,
 			clickingMode: activeSettings.clickingMode,
+			closeEyesToToggle: Boolean(activeSettings.closeEyesToToggle),
 			dwellDrag: Boolean(activeSettings.dwellDrag),
 			dwellTime: activeSettings.dwellTime,
 			inputFeedback: summarizeInputFeedback(inputFeedback),

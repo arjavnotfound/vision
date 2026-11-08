@@ -260,7 +260,9 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 		} else if (state?.status === "paused" && pausedMessage) {
 			message.hidden = false;
 			setText(word, "PAUSED");
-			setText(text, "Your mouse is yours again. Press F9 to resume.");
+			setText(text, state.gestures?.sleep?.enabled
+				? "Close both eyes for 2 seconds to resume. A helper can press F9."
+				: "Your mouse is yours again. Press F9 to resume.");
 		} else {
 			message.hidden = true;
 		}

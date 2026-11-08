@@ -290,7 +290,7 @@ export function openAbout(layer, { version }) {
 				h("div", { style: { "font-size": "24px", "font-weight": "600" } }, "VISION Face Control"),
 				h("div", { class: "label" }, `VERSION ${version || "DEV"} · APERTURE`))),
 		h("p", { class: "prose" }, "Control your computer with your head. VISION reads your face through the webcam: head movement moves the cursor, and winks, an open mouth, raised brows or a steady dwell click for you. It is built for people who cannot use their hands."),
-		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "F9 pauses at any time. Moving the physical mouse takes over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
+		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "Closing both eyes for 2 seconds pauses or resumes tracking (Settings, on after setup). A helper can press F9 at any time, or move the physical mouse to take over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
 		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "camera frames stay on this computer and are never saved. The voice assistant sends your microphone audio online only while it is listening."),
 		h("div", { class: "credits" }, "Open-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
 	);

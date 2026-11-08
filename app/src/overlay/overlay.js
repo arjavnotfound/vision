@@ -99,7 +99,8 @@ electronAPI.onOverlayUpdate((_event, data) => {
 	if (systemMousePosition) {
 		view.moveTo(systemMousePosition.x, systemMousePosition.y);
 	}
-	view.setMode(isManualTakeback ? "takeover" : !isEnabled ? "paused" : inputFeedback?.headNotFound ? "noface" : "tracking");
+	view.setMode(isManualTakeback ? "takeover" : !isEnabled ? "paused" : inputFeedback?.headNotFound ? "noface" : "tracking",
+		data.closeEyesToToggle ? "PAUSED · CLOSE EYES 2S" : "PAUSED · F9");
 
 	// If the main process released the button (pause, F9, manual takeover, ...),
 	// drop our local drag state too. Small grace period for the press round-trip.

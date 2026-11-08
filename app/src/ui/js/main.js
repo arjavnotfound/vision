@@ -512,7 +512,7 @@ async function boot() {
 		setText(pauseLabel, state.paused ? "RESUME" : "PAUSE");
 		const resume = isKiosk
 			? "CLOSE YOUR EYES 2 S OR SAY “RESUME” TO RESUME"
-			: st.get("closeEyesToToggle") ? "F9 OR CLOSE EYES 2S TO RESUME" : "PRESS F9 TO RESUME";
+			: st.get("closeEyesToToggle") ? "CLOSE EYES 2S TO RESUME · OR F9" : "PRESS F9 TO RESUME";
 		setText(hint, state.paused ? resume : state.clickingMode === "dwell" ? "DWELL CLICK IS ON EVERYWHERE" : "REST ON ANY CONTROL TO PRESS IT");
 		drawMark(state, now);
 		viewfinder.update(state, engine.getFrame());

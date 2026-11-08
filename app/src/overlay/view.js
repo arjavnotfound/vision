@@ -75,8 +75,8 @@ export function createOverlayView(root = document.body) {
 			cursor.classList.add("is-snapping");
 			if (label) showTag(label, { ember: true, ms: label === "DRAG" ? 0 : CLICK_LABEL_MS });
 		},
-		/** mode: "tracking" | "paused" | "takeover" | "noface" */
-		setMode(next) {
+		/** mode: "tracking" | "paused" | "takeover" | "noface"; pausedTag: label shown on pause */
+		setMode(next, pausedTag = "PAUSED · F9") {
 			if (next === mode) return;
 			const previous = mode;
 			mode = next;
@@ -85,7 +85,7 @@ export function createOverlayView(root = document.body) {
 			clearTimeout(quietTimer);
 			cursor.classList.remove("is-quiet");
 			if (next === "paused") {
-				showTag("PAUSED · F9", { ms: PAUSE_LABEL_MS });
+				showTag(pausedTag, { ms: PAUSE_LABEL_MS });
 				quietTimer = setTimeout(() => cursor.classList.add("is-quiet"), PAUSE_LABEL_MS);
 			} else if (next === "takeover") {
 				showTag("MOUSE", { ms: 0 });

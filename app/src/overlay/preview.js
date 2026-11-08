@@ -35,7 +35,7 @@ switch (state) {
 		setTimeout(() => document.getAnimations().forEach((a) => a.finish()), 30);
 		break;
 	case "paused":
-		view.setMode("paused");
+		view.setMode("paused", "PAUSED · CLOSE EYES 2S");
 		break;
 	case "no-face":
 		view.setMode("noface");

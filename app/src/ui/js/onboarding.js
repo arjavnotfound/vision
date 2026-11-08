@@ -45,7 +45,7 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 				h("div", { class: "feature-row" },
 					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "MOVE"), h("span", { class: "feature__name" }, "Head pointing"), h("span", { class: "feature__text" }, "Small head movements steer the cursor across every screen.")),
 					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "CLICK"), h("span", { class: "feature__name" }, "Face gestures"), h("span", { class: "feature__text" }, "Wink, open your mouth, or dwell. You choose what feels easy.")),
-					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "STOP"), h("span", { class: "feature__name" }, "Always in control"), h("span", { class: "feature__text" }, ["Press ", f9(), " or move the mouse to take over instantly."])),
+					h("div", { class: "feature" }, h("span", { class: "label label--ember" }, "STOP"), h("span", { class: "feature__name" }, "Always in control"), h("span", { class: "feature__text" }, ["Close both eyes for 2 seconds to pause. A helper can press ", f9(), " or move the mouse."])),
 				),
 			));
 			foot.append(h("span", { class: "label" }, "STEP 1 OF 3"), h("div", { class: "session__spacer" }),
