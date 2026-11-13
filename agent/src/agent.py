@@ -133,11 +133,12 @@ class Assistant(Agent):
 
 # Production mode (`start`): keep ONE job process warm, so the first command after
 # a wake is not slow (dev mode had 0: 'no warmed process available'), and never
-# report the worker as full - Face Control's tracking can push CPU past the default
-# 70 % threshold, which would stop voice jobs being dispatched.
+# report the worker as full: it serves one user, and Face Control's tracking can push
+# CPU past any threshold (a CPU-sampling glitch once read 1035 % and marked it unavailable).
+# A constant load also stops the default load monitor's 0.5 s CPU sampling thread.
 # Health server on loopback only, any free port: no Windows Firewall prompt.
 server = AgentServer(
-    num_idle_processes=1, load_threshold=10.0, host="127.0.0.1", port=0
+    num_idle_processes=1, load_fnc=lambda: 0.0, host="127.0.0.1", port=0
 )
 
 
