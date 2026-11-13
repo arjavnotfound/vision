@@ -154,7 +154,10 @@ async def my_agent(ctx: JobContext):
 
     # Gemini realtime handles the voice input and output and decides when a turn ends.
     session = AgentSession(
+        # Gemini Live detects turns and barge-in itself: no local VAD or turn model.
+        vad=None,
         turn_handling=TurnHandlingOptions(
+            turn_detection="realtime_llm",
             # Start the reply while the end of the turn is still being confirmed.
             preemptive_generation={"enabled": True},
         ),
