@@ -1,3 +1,7 @@
+# isort: off
+import lazy_native  # noqa: F401  (before livekit: defers its local model load)
+
+# isort: on
 import contextlib
 import json
 import logging
