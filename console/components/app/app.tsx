@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { LogLevel, TokenSource } from 'livekit-client';
 import { useSession } from '@livekit/components-react';
 import type { AppConfig } from '@/app-config';
@@ -24,21 +24,36 @@ interface AppProps {
 }
 
 export function App({ appConfig, searchProvider }: AppProps) {
+  // useSession fetches a token on mount to warm the connection. No voice work happens
+  // before the user activates voice, so that fetch is refused until start() is called.
+  const voiceWanted = useRef(false);
   const tokenSource = useMemo(() => {
     if (typeof process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT === 'string') {
       return getSandboxTokenSource(appConfig);
     }
     // The VISION app mints the LiveKit token in its main process (no web server).
     return TokenSource.custom(async (options) => {
+      // Rejecting (not a pending promise) frees the token source's fetch lock for start().
+      if (!voiceWanted.current) throw new Error('Voice is not active yet.');
       const getConnectionDetails = getElectron()?.getConnectionDetails;
       if (!getConnectionDetails) throw new Error('Voice needs the VISION app.');
       return getConnectionDetails({ agentName: options.agentName });
     });
   }, [appConfig]);
 
-  const session = useSession(
+  const lkSession = useSession(
     tokenSource,
     appConfig.agentName ? { agentName: appConfig.agentName } : undefined
+  );
+  const session = useMemo(
+    () => ({
+      ...lkSession,
+      start: (...args: Parameters<typeof lkSession.start>) => {
+        voiceWanted.current = true;
+        return lkSession.start(...args);
+      },
+    }),
+    [lkSession]
   );
 
   const isElectron = useIsElectron();
