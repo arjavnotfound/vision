@@ -5,8 +5,8 @@ import type { Room } from 'livekit-client';
 import { type OverlayMode, getElectron } from '@/lib/electron';
 import { visionAudio } from '@/lib/vision-audio';
 
-/** Pill → orb after this long with nothing happening. The session stays alive. */
-export const COLLAPSE_AFTER_MS = 8_000;
+/** Follow-up window: after VISION answers, keep listening this long without the wake word. */
+export const COLLAPSE_AFTER_MS = 6_000;
 /** End the LiveKit session after this long with no interaction at all. */
 export const END_SESSION_AFTER_MS = 90_000;
 /** After the strip collapses, the voice session closes this long later (short-lived sessions). */
