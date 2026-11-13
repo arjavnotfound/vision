@@ -1,0 +1,2 @@
+sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 (int8), Apache-2.0, from
+https://github.com/k2-fsa/sherpa-onnx/releases/tag/kws-models

@@ -39,6 +39,7 @@
     "electron-window-state": "^5.0.3",
     "koffi": "^3.3.7",
     "livekit-server-sdk": "^2.13.3",
+    "sherpa-onnx-node": "^2.0.1",
     "vision-hft": "file:../core"
   },
   "devDependencies": {

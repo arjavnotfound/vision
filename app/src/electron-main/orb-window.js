@@ -7,6 +7,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { createWakeHost } = require('./wake-host.js');
 
 const SCHEME = 'app';
 const PARTITION = 'persist:assistant';
@@ -84,7 +85,7 @@ function getBoundsForMode(mode) {
 	return { x, y, ...size };
 }
 
-function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, hidden = false }) {
+function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, wakeModelDir, hidden = false }) {
 	let win = null;
 	let mode = 'orb';
 	let marker = false; // the small full-screen marker is showing
@@ -277,6 +278,28 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		console.log('[VISION] Voice session token requested');
 		return getConnectionDetails({ agentName: typeof options?.agentName === 'string' ? options.agentName : undefined });
 	});
+	// Wake word: the orb page streams mic audio here; the spotter runs in a utility process.
+	const wake = wakeModelDir
+		? createWakeHost({
+			modelDir: wakeModelDir,
+			onHeard: (heard) => {
+				if (!win) return;
+				console.log(`[VISION] Wake word: ${heard.keyword}${heard.ok ? '' : ' (rejected: part of a longer word)'}`);
+				if (heard.ok && !win.isVisible()) win.showInactive();
+				win.webContents.send('vision-wake', heard);
+			},
+		})
+		: null;
+	let wakeAudioSeen = false;
+	ipcMain.on('vision-wake-audio', (event, samples) => {
+		if (!fromOrb(event)) return;
+		if (!wakeAudioSeen) {
+			wakeAudioSeen = true;
+			console.log(`[VISION] Wake word mic streaming (${Object.prototype.toString.call(samples)} ${samples?.length})`);
+		}
+		wake?.audio(samples);
+	});
+	ipcMain.on('vision-wake-sensitivity', (event, value) => fromOrb(event) && wake?.setSensitivity(value));
 	// Heartbeat: Face Control treats a silent assistant as voice off.
 	const heartbeat = setInterval(() => onVoiceState({ ...voiceState }), 4000);
 	heartbeat.unref();
@@ -301,6 +324,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 			clearInterval(heartbeat);
 			clearInterval(fullScreenPoll);
 			clearInterval(pointerPoll);
+			wake?.stop();
 			if (hotkey) globalShortcut.unregister(hotkey);
 			win?.destroy();
 		},

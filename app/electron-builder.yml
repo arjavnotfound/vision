@@ -19,6 +19,8 @@ extraResources:
     filter: ["**/*.py"]
   - from: ../build/agent-runtime
     to: agent-runtime
+  - from: models/kws
+    to: kws
   - from: ../LICENSE
     to: LICENSE.txt
   - from: ../THIRD_PARTY_NOTICES.md
@@ -27,6 +29,8 @@ extraResources:
 # Native code must stay outside the asar archive.
 asarUnpack:
   - node_modules/koffi/**
+  - node_modules/sherpa-onnx-node/**
+  - node_modules/sherpa-onnx-win-x64/**
 
 win:
   icon: icon.ico

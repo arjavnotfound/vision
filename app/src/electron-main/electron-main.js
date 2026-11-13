@@ -1398,6 +1398,7 @@ function startAssistant(busReady) {
 		consoleUrl: process.env.VISION_CONSOLE_URL,
 		getConnectionDetails: (options) => createConnectionDetails(voiceKeys, options),
 		onVoiceState: setAssistantState,
+		wakeModelDir: app.isPackaged ? path.join(process.resourcesPath, 'kws') : path.join(appPath, 'models', 'kws'),
 		hidden: process.env.VISION_QUIET === '1',
 	});
 

@@ -35,6 +35,8 @@ and in the installed app's `resources` folder.
 | Electron | MIT |
 | electron-builder, electron-updater | MIT |
 | electron-window-state | MIT |
+| sherpa-onnx (sherpa-onnx-node), ONNX Runtime | Apache-2.0 / MIT |
+| Keyword model sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 (`app/models/kws`) | Apache-2.0 |
 | Next.js, React | MIT |
 | Tailwind CSS, Motion, Lucide icons | MIT / MIT / ISC |
 | Geist, Geist Mono, Doto fonts | SIL Open Font License 1.1 |
