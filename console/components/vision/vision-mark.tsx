@@ -51,6 +51,7 @@ const INNER = 0.48; // ×R (24 / 50)
 const INNER_SMALL = 0.42; // thicker band below 64px
 const GAP_HALF = 0.16; // ×R (16-wide gap → half-width 8 / 50) at the resting gap value
 const REST_G = 0.62;
+const IDLE_FRAME_MS = 100;
 
 const BASE_G: Record<MarkState, number> = {
   idle: 0.62,
@@ -168,6 +169,17 @@ function VisionMarkImpl({
         still: frozen,
         size: S,
       } = live.current;
+      // Resting and settled: the slow idle breath reads the same at 10 fps, and the
+      // transparent always-on-top window then costs a sixth of the redraws.
+      const s0 = sim.current;
+      const calm =
+        (st === 'idle' || st === 'offline') &&
+        !frozen &&
+        !s0.flash &&
+        !s0.shake &&
+        !s0.ripple &&
+        Math.abs(s0.gv) < 0.01;
+      if (calm && nowMs - last < IDLE_FRAME_MS) return;
       const dt = Math.min(0.05, (nowMs - last) / 1000);
       last = nowMs;
       const t = frozen ? 1.2 : nowMs / 1000;
