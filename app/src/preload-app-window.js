@@ -4,6 +4,10 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Kept from preload time: main reports it on load, before the page has subscribed.
+let windowShown = true;
+ipcRenderer.on('windowShown', (_event, shown) => { windowShown = shown; });
+
 
 contextBridge.exposeInMainWorld("electronAPI", {
 	moveMouse: (x, y) => {
@@ -64,6 +68,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	onWindowShown: (callback) => {
 		const listener = (_event, shown) => { callback(shown); };
 		ipcRenderer.on('windowShown', listener);
+		callback(windowShown);
 		return () => { ipcRenderer.removeListener('windowShown', listener); };
 	},
 

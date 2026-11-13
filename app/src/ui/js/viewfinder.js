@@ -82,12 +82,13 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 	);
 
 	let stream = null;
+	let shown = true;
 	function syncStream() {
 		const next = engine.getVideoStream();
 		if (next !== stream) {
 			stream = next;
 			video.srcObject = next;
-			if (next) {
+			if (next && shown) {
 				video.play().catch(() => { });
 			}
 		}
@@ -298,8 +299,9 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 		update,
 		toast,
 		/** Off screen: stop decoding the preview video (the engine has its own). */
-		setShown(shown) {
-			if (shown) video.play().catch(() => { });
+		setShown(on) {
+			shown = on;
+			if (on) video.play().catch(() => { });
 			else video.pause();
 		},
 		destroy() {
