@@ -13,6 +13,12 @@ export interface VoiceConfig {
   keyFields: { name: string; label: string; secret: boolean }[];
 }
 
+/** A keyword the local spotter heard. ok: it started after a pause (the second check). */
+export interface WakeHeard {
+  keyword: 'vision' | 'hey_vision' | 'stop' | 'cancel';
+  ok: boolean;
+}
+
 export interface ElectronAPI {
   isElectron: true;
   setMode?: (mode: OverlayMode) => void;
@@ -30,6 +36,10 @@ export interface ElectronAPI {
     participantName: string;
     participantToken: string;
   }>;
+  /** Wake word: 16 kHz mono mic audio for the local spotter (never leaves the PC). */
+  sendWakeAudio?: (samples: Float32Array) => void;
+  setWakeSensitivity?: (sensitivity: 'relaxed' | 'normal' | 'strict') => void;
+  onWake?: (callback: (heard: WakeHeard) => void) => () => void;
   getVoiceConfig?: () => Promise<VoiceConfig>;
   setVoiceConfig?: (
     change: Partial<Pick<VoiceConfig, 'voice' | 'language'>>

@@ -8,6 +8,7 @@ import {
   DWELL_MAX_MS,
   DWELL_MIN_MS,
   type ThemeName,
+  type WakeSensitivity,
   updateSettings,
   useSettings,
 } from '@/lib/settings';
@@ -300,6 +301,24 @@ export function SettingsView() {
             </DwellTarget>
           </div>
         </SettingRow>
+        <div className="border-rule border-b py-4">
+          <p className="text-bone mb-1 text-[16px]">Wake word</p>
+          <p className="text-bone-2 mb-3 text-[14px]">
+            {settings.wakeSensitivity === 'strict'
+              ? 'Say "Hey Vision". Heard on this computer only.'
+              : 'Say "Vision". Heard on this computer only.'}
+          </p>
+          <Segmented<WakeSensitivity>
+            label="Wake word"
+            value={settings.wakeSensitivity}
+            onChange={(wakeSensitivity) => updateSettings({ wakeSensitivity })}
+            options={[
+              { value: 'relaxed', label: 'Relaxed' },
+              { value: 'normal', label: 'Normal' },
+              { value: 'strict', label: 'Strict' },
+            ]}
+          />
+        </div>
         <SettingRow
           title="Talk hotkey"
           hint={hotkeyLabel ? 'Works from any app.' : 'Every talk hotkey is taken by another app.'}

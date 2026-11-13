@@ -9,13 +9,17 @@ import {
   useVoiceAssistant,
 } from '@livekit/components-react';
 import { useActivationHotkey } from '@/hooks/useActivationHotkey';
-import { OFFLINE_MESSAGE, useAssistantController } from '@/hooks/useAssistantController';
+import {
+  ECHO_TAIL_MS,
+  OFFLINE_MESSAGE,
+  useAssistantController,
+} from '@/hooks/useAssistantController';
 import { useAudioLevel } from '@/hooks/useAudioLevel';
 import { useConversationTranscript } from '@/hooks/useConversationTranscript';
 import { useVisionActions } from '@/hooks/useVisionActions';
-import { useWakeWord } from '@/hooks/useWakeWord';
-import { getElectron } from '@/lib/electron';
-import { settingsStore, updateSettings } from '@/lib/settings';
+import { useWakeSpotter } from '@/hooks/useWakeSpotter';
+import { type WakeHeard, getElectron } from '@/lib/electron';
+import { settingsStore, updateSettings, useSettings } from '@/lib/settings';
 import type { ApertureState } from './aperture-core';
 import {
   type ConnectionState,
@@ -26,6 +30,8 @@ import {
 import { VisionShell } from './vision-shell';
 
 const READY_STATES = new Set(['listening', 'thinking', 'speaking', 'idle']);
+/** "Stop" or "cancel" counts only this soon after "Vision". */
+const STOP_WINDOW_MS = 2_500;
 
 /** Builds the VisionModel from the live LiveKit session and renders the shell. */
 export function LiveVision({ searchProvider }: { searchProvider: string }) {
@@ -86,11 +92,35 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   }, [startVoice, showConsole]);
 
   const hotkeyLabel = useActivationHotkey(activate);
-  useWakeWord({
-    onWakeWord: activate,
-    // Off for good: Web Speech fails in Electron. T06 replaces this hook.
-    enabled: false,
-  });
+  // Wake word. While VISION speaks (and its echo tail) a wake is ignored, so its own voice
+  // never wakes it; "Vision, stop" / "Vision, cancel" still work then.
+  const { wakeSensitivity } = useSettings();
+  const speakingUntil = useRef(0);
+  useEffect(() => {
+    if (agent.state === 'speaking') speakingUntil.current = Number.POSITIVE_INFINITY;
+    else if (speakingUntil.current === Number.POSITIVE_INFINITY)
+      speakingUntil.current = Date.now() + ECHO_TAIL_MS;
+  }, [agent.state]);
+  const lastVisionHeard = useRef(0);
+  const { endSession } = controller;
+  const onWakeHeard = useCallback(
+    (heard: WakeHeard) => {
+      const now = Date.now();
+      if (heard.keyword === 'stop' || heard.keyword === 'cancel') {
+        if (now - lastVisionHeard.current < STOP_WINDOW_MS) {
+          console.log(`[VISION] Wake word: ${heard.keyword}`);
+          endSession();
+        }
+        return;
+      }
+      lastVisionHeard.current = now;
+      if (!heard.ok || now < speakingUntil.current) return;
+      console.log('[VISION] Wake word heard');
+      activate();
+    },
+    [activate, endSession]
+  );
+  useWakeSpotter({ sensitivity: wakeSensitivity, onHeard: onWakeHeard });
 
   // First run: show onboarding in the console.
   const openConsole = controller.openConsole;

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 
 export type ThemeName = 'ember' | 'paper';
 export type CaptionSize = 'M' | 'L' | 'XL';
+export type WakeSensitivity = 'relaxed' | 'normal' | 'strict';
 
 export interface VisionSettings {
   theme: ThemeName;
@@ -11,7 +12,8 @@ export interface VisionSettings {
   dwellMs: number;
   captionSize: CaptionSize;
   reducedMotion: boolean;
-  wakeWord: boolean;
+  /** "Vision" wake word. Strict needs "Hey Vision". */
+  wakeSensitivity: WakeSensitivity;
   onboarded: boolean;
 }
 
@@ -21,7 +23,7 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   dwellMs: 900,
   captionSize: 'L',
   reducedMotion: false,
-  wakeWord: false,
+  wakeSensitivity: 'normal',
   onboarded: false,
 };
 
@@ -45,7 +47,10 @@ function sanitize(raw: unknown): VisionSettings {
     dwellMs: clampDwell(Number(value.dwellMs ?? DEFAULT_SETTINGS.dwellMs)),
     captionSize: value.captionSize === 'M' || value.captionSize === 'XL' ? value.captionSize : 'L',
     reducedMotion: value.reducedMotion === true,
-    wakeWord: value.wakeWord === true,
+    wakeSensitivity:
+      value.wakeSensitivity === 'relaxed' || value.wakeSensitivity === 'strict'
+        ? value.wakeSensitivity
+        : 'normal',
     onboarded: value.onboarded === true,
   };
 }
