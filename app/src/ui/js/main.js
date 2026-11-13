@@ -493,6 +493,11 @@ async function boot() {
 	// (which also runs tracking) mostly free. The camera video itself plays at full rate.
 	const UI_FRAME_MS = 1000 / 30;
 	let lastUiFrame = 0;
+	let windowShown = true;
+	window.electronAPI?.onWindowShown?.((shown) => {
+		windowShown = shown;
+		viewfinder.setShown(shown);
+	});
 	function frameLoop(now) {
 		requestAnimationFrame(frameLoop);
 		if (now - lastUiFrame < UI_FRAME_MS - 2) {
@@ -501,6 +506,7 @@ async function boot() {
 		lastUiFrame = now;
 		const state = engine.getState();
 		latestState = state;
+		if (!windowShown) return; // nothing to draw for; tracking runs in the engine's own loop
 		if (state.status !== lastStatus) {
 			lastStatus = state.status;
 			pill.dataset.status = state.status;

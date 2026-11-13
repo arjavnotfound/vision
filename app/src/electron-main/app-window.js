@@ -70,6 +70,11 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	} else if (maximize) {
 		win.maximize();
 	}
+	// With backgroundThrottling off the page always reports itself visible, so tell it
+	// when the window is off screen: it stops drawing, tracking keeps running.
+	const sendShown = () => win.webContents.send('windowShown', win.isVisible() && !win.isMinimized());
+	for (const event of ['show', 'hide', 'minimize', 'restore']) win.on(event, sendShown);
+	win.webContents.on('did-finish-load', sendShown);
 	win.loadFile(NEW_UI_PAGE, Object.keys(query).length ? { query } : undefined);
 	win._visionWindowState = state;
 	return win;

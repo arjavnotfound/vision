@@ -297,6 +297,11 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 	return {
 		update,
 		toast,
+		/** Off screen: stop decoding the preview video (the engine has its own). */
+		setShown(shown) {
+			if (shown) video.play().catch(() => { });
+			else video.pause();
+		},
 		destroy() {
 			clearTimeout(toastTimer);
 			resizeObserver.disconnect();

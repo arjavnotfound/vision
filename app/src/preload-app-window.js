@@ -60,6 +60,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// QA hooks (only answered when the app runs with the fake input driver).
 	qa: (command) => ipcRenderer.invoke('qa', command),
 
+	// true while the face window is on screen (not hidden or minimised).
+	onWindowShown: (callback) => {
+		const listener = (_event, shown) => { callback(shown); };
+		ipcRenderer.on('windowShown', listener);
+		return () => { ipcRenderer.removeListener('windowShown', listener); };
+	},
+
 	onUiCommand: (callback) => {
 		const listener = (_event, command) => { callback(command); };
 		ipcRenderer.on('uiCommand', listener);
