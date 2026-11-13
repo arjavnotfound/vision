@@ -3708,7 +3708,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 		if (s.mirror) {
 			ctx.translate(canvas.width, 0);
 			ctx.scale(-1, 1);
-			ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+			// Display only (the frame was already read above); nothing shows this canvas headless.
+			if (!headless) ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
 		}
 
 		const timestamp = performance.now();
