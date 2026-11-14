@@ -218,8 +218,9 @@ class BrowserTools:
     ) -> dict[str, str]:
         """Open web search results in the agent-controlled browser.
 
-        Use this only when the user needs a general internet search and did not name a
-        website, service, or domain. If the user names a destination, open its official
+        Use this only for fresh or online information (news, weather, prices, scores)
+        when the user did not name a website, service, or domain. Never for the time or
+        date (current_time), math or facts you already know. If the user names a destination, open its official
         URL directly with open_url instead. Read or inspect the resulting page before
         answering the user.
 

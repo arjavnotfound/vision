@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from livekit.agents import RunContext, function_tool
@@ -26,6 +27,11 @@ from voice_settings import VOICES
 
 DRAG_AUTO_RELEASE_SECONDS = 20.0
 APP_WINDOW_WAIT_SECONDS = 4.0
+
+
+def local_time_text(now: datetime | None = None) -> str:
+    now = now or datetime.now().astimezone()
+    return now.strftime(f"%A %d %B %Y, %H:%M local time ({now.tzname()}, UTC%z)")
 
 
 class DesktopTools:
@@ -131,6 +137,7 @@ class DesktopTools:
     @property
     def tools(self) -> list:
         return [
+            self.current_time,
             self.click_here,
             self.start_drag,
             self.drop,
@@ -153,6 +160,14 @@ class DesktopTools:
             self.change_language,
             self.quit_vision,
         ]
+
+    # ------------------------------------------------------------ answers
+
+    @function_tool()
+    async def current_time(self, context: RunContext) -> str:
+        """The local date, time, weekday and time zone on this computer. Use it for any
+        question about the time, today's date or day. Opens nothing."""
+        return local_time_text()
 
     # ------------------------------------------------------------ voice mouse
 
