@@ -13,8 +13,9 @@ const RATE = 16_000;
 export const PREROLL_S = 0.8;
 
 // One worklet does both jobs on the same samples, so positions match exactly:
-// - it sends 20 ms chunks to the spotter, each with the sample count at its end (100 ms
-//   chunks measured 80 ms later at p90);
+// - it sends 40 ms chunks to the spotter, each with the sample count at its end (100 ms
+//   chunks woke 50 ms later at p90; 20 ms ones 30 ms sooner but cost the wake process
+//   about 1 % of a core more);
 // - its output is the voice session's mic: normally the live input, but after a rewind
 //   it plays from the ring buffer, then catches up by dropping quiet 8 ms blocks until
 //   it is live again. Speech is never dropped.
@@ -25,7 +26,7 @@ const SLACK = BLOCK * 2;
 class WakeTap extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.chunk = new Float32Array(320); this.n = 0;
+    this.chunk = new Float32Array(640); this.n = 0;
     this.ring = new Float32Array(RING); this.write = 0; this.read = 0;
     this.floor = 0.01;
     this.port.onmessage = ({ data }) => {
