@@ -233,10 +233,12 @@ async def my_agent(ctx: JobContext):
     @session.on("conversation_item_added")
     def _on_item(ev) -> None:
         item = getattr(ev, "item", None)
-        if getattr(item, "role", None) == "user":
-            text = getattr(item, "text_content", None) or ""
-            if text:
-                _heard(text)
+        role = getattr(item, "role", None)
+        text = getattr(item, "text_content", None) or ""
+        if role == "user" and text:
+            _heard(text)
+        elif role == "assistant" and text:
+            logger.info("VISION said: %s", text.strip()[:200])
 
     # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
