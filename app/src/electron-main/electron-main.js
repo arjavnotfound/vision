@@ -1396,6 +1396,8 @@ function startAssistant(busReady) {
 	audioDuck = createAudioDuck({
 		file: path.join(app.getPath('userData'), 'audio-duck.json'),
 		ownPids: () => app.getAppMetrics().map((metric) => metric.pid),
+		// QA runs: only the test's own silent player is lowered, never the owner's apps.
+		onlyPids: process.env.VISION_DUCK_ONLY_PIDS ? process.env.VISION_DUCK_ONLY_PIDS.split(',').map(Number) : null,
 	});
 	orb = createOrbWindow({
 		preloadPath: path.join(appPath, 'src/preload-orb.js'),

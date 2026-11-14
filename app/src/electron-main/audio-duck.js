@@ -117,9 +117,10 @@ const near = (a, b) => Math.abs(a - b) < 0.005;
 /**
  * file: where the original levels are kept while ducked.
  * ownPids(): VISION's own processes (its voice and sounds stay at full level).
+ * onlyPids: tests duck only these processes (their own silent players), never real apps.
  * listSessions: for tests.
  */
-function createAudioDuck({ file, ownPids, log = console.log, listSessions = sessions }) {
+function createAudioDuck({ file, ownPids, onlyPids = null, log = console.log, listSessions = sessions }) {
 	let ducked = null;
 
 	function restore() {
@@ -152,7 +153,7 @@ function createAudioDuck({ file, ownPids, log = console.log, listSessions = sess
 		const started = Date.now();
 		const { list, release } = listSessions();
 		try {
-			const others = list.filter((s) => !own.has(s.pid) && s.pid !== 0 && s.level > 0);
+			const others = list.filter((s) => !own.has(s.pid) && s.pid !== 0 && s.level > 0 && (!onlyPids || onlyPids.includes(s.pid)));
 			const entries = others.map((s) => ({ id: s.id, level: s.level, ducked: s.level * DUCKED }));
 			// Saved first: a crash after this point is undone on the next start.
 			fs.writeFileSync(file, JSON.stringify(entries));

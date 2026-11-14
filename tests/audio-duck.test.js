@@ -28,6 +28,12 @@ describe('audio ducking', () => {
 		assert.deepEqual(audio.state.map((s) => s.level), [0.8, 1, 1]);
 	});
 
+	it('touches only the listed processes in QA runs', () => {
+		const audio = fakeAudio([[10, 1], [20, 1]]);
+		createAudioDuck({ file: tmp(), ownPids: () => [], onlyPids: [20], log: quiet, listSessions: audio.listSessions }).set(true);
+		assert.deepEqual(audio.state.map((s) => s.level), [1, 0.25]);
+	});
+
 	it('restores on the next start after a crash while ducked', () => {
 		const file = tmp();
 		const audio = fakeAudio([[10, 0.6]]);
