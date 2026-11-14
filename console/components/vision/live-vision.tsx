@@ -100,6 +100,9 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
 
   // No voice keys yet (first run of an installed build): open Settings to add them.
   const { activate: startVoice, openConsole: showConsole } = controller;
+  // Once keys are known to exist, activation skips the check (a round trip to main that
+  // delayed the wake sound); keys are never removed while VISION runs.
+  const hasKeys = useRef(false);
   // started: runs right after the connect sound (the wake latency log).
   const activate = useCallback(
     (started?: () => void) => {
@@ -108,8 +111,9 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
         started?.();
       };
       const getVoiceConfig = getElectron()?.getVoiceConfig;
-      if (!getVoiceConfig) return go();
+      if (!getVoiceConfig || hasKeys.current) return go();
       void getVoiceConfig().then((config) => {
+        if (config?.hasKeys) hasKeys.current = true;
         if (config && !config.hasKeys) {
           setConsoleTab('settings');
           showConsole();
@@ -120,6 +124,14 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     },
     [startVoice, showConsole]
   );
+  useEffect(() => {
+    void getElectron()
+      ?.getVoiceConfig?.()
+      .then((config) => {
+        if (config?.hasKeys) hasKeys.current = true;
+      })
+      .catch(() => undefined);
+  }, []);
 
   const activateNow = useCallback(() => activate(), [activate]);
   const hotkeyLabel = useActivationHotkey(activateNow);
