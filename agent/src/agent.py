@@ -5,6 +5,7 @@ import lazy_native  # noqa: F401  (before livekit: defers its local model load)
 import contextlib
 import json
 import logging
+import os
 
 from dotenv import load_dotenv
 from google.genai import types as genai_types
@@ -151,7 +152,8 @@ async def my_agent(ctx: JobContext):
         "room": ctx.room.name,
     }
 
-    browser = BrowserManager(headless=False)
+    # QA runs on the owner's laptop set this so no test ever shows a browser window.
+    browser = BrowserManager(headless=os.getenv("VISION_QA_HEADLESS_BROWSER") == "1")
     ctx.add_shutdown_callback(browser.close)
 
     # Gemini realtime handles the voice input and output and decides when a turn ends.
