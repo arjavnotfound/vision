@@ -19,13 +19,14 @@ from livekit.agents import (
     room_io,
 )
 from livekit.agents.beta.tools import EndCallTool
-from livekit.plugins import ai_coustics, google
+from livekit.plugins import ai_coustics
 
 from browser import BrowserManager
 from desktop_tools import DesktopTools
 from intent_guard import IntentGuard
 from prompts import AGENT_INSTRUCTIONS
 from tools import ActionCallback, BrowserTools
+from voice_model import FallbackRealtimeModel, voice_models
 from voice_settings import load_voice_settings
 
 load_dotenv(".env.local")
@@ -109,10 +110,10 @@ class Assistant(Agent):
 
         super().__init__(
             # Tests pass a text LLM via llm_override: the Live model cannot run
-            # text-only eval turns (generate_reply is unsupported on 3.1 Live).
+            # text-only eval turns (generate_reply is unsupported on the 3.x Live models).
             llm=llm_override
-            or google.beta.realtime.RealtimeModel(
-                model="gemini-3.1-flash-live-preview",
+            or FallbackRealtimeModel(
+                voice_models(),
                 voice=self.voice_settings.voice,
                 **language_kwargs,
                 tool_response_scheduling=genai_types.FunctionResponseScheduling.WHEN_IDLE,
