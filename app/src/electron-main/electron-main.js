@@ -201,6 +201,7 @@ if (secondInstanceOnlyArgs.some(arg => args[arg])) {
 const assistantEnabled = process.env.VISION_NO_ASSISTANT !== '1' && !args.preview;
 const { agentLogFile } = require('./logs.js').installFileLogging(path.join(app.getPath('appData'), 'VISION', 'logs'));
 const { createOrbWindow, registerConsoleScheme } = require('./orb-window.js');
+const { createAudioDuck } = require('./audio-duck.js');
 if (assistantEnabled) {
 	// A fresh secret per run for the localhost bus (a pre-set one is kept for scripted checks).
 	process.env.VISION_BUS_TOKEN ||= require('crypto').randomBytes(16).toString('hex');
@@ -1231,6 +1232,8 @@ function setAssistantState({ connected, live }) {
 	if (live !== wasLive) {
 		console.log(`[VISION] Voice ${live ? 'on: mouth gestures paused' : 'off'}`);
 	}
+	// Other apps go quieter while VISION listens and speaks.
+	audioDuck?.set(Boolean(live));
 	sendBusState();
 }
 
@@ -1390,6 +1393,10 @@ function startAssistant(busReady) {
 		return voiceConfig();
 	});
 
+	audioDuck = createAudioDuck({
+		file: path.join(app.getPath('userData'), 'audio-duck.json'),
+		ownPids: () => app.getAppMetrics().map((metric) => metric.pid),
+	});
 	orb = createOrbWindow({
 		preloadPath: path.join(appPath, 'src/preload-orb.js'),
 		iconPath: path.join(__dirname, '../../images/vision/vision.ico'),
@@ -1422,6 +1429,7 @@ function startAssistant(busReady) {
 }
 
 let voiceSettings = null;
+let audioDuck = null;
 
 /** Voice / language change from Settings or by voice. Applies to the next voice session. */
 function applyVoiceSettings(change) {
@@ -1432,6 +1440,7 @@ function applyVoiceSettings(change) {
 }
 
 app.on('will-quit', () => {
+	audioDuck?.restore();
 	agentSupervisor?.stop();
 	orb?.destroy();
 });
