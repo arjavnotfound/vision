@@ -295,7 +295,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		if (!fromOrb(event)) return;
 		if (!wakeAudioSeen) {
 			wakeAudioSeen = true;
-			console.log(`[VISION] Wake word mic streaming (${Object.prototype.toString.call(samples)} ${samples?.length})`);
+			console.log('[VISION] Wake word mic streaming');
 		}
 		wake?.audio(samples);
 	});
