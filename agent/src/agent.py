@@ -211,6 +211,7 @@ async def my_agent(ctx: JobContext):
         if not text or text == last_heard["text"]:
             return
         last_heard["text"] = text
+        logger.info("VISION heard: %s", text[:200])
         assistant.intent.note_user(text)
 
     # Noise guard: remember what the user actually said (final transcripts).
