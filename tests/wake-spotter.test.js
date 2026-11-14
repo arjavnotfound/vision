@@ -8,6 +8,7 @@ const { createWakeSpotter, RATE } = require('../app/src/electron-main/wake-spott
 const modelDir = path.join(__dirname, '../app/models/kws');
 const fixture = (name) => readWave(path.join(__dirname, 'fixtures/wake', name)).samples;
 
+// The silence is digital zeros, as from a muted mic.
 function hear(name, sensitivity = 'normal') {
 	const spotter = createWakeSpotter({ modelDir, sensitivity });
 	const audio = new Float32Array(3 * RATE + fixture(name).length);
@@ -21,6 +22,11 @@ const woke = (heard) => heard.some((h) => (h.keyword === 'vision' || h.keyword =
 describe('wake spotter', () => {
 	it('wakes on "Vision" after a pause', () => assert.ok(woke(hear('vision.wav'))));
 	it('rejects "television" in the second check', () => assert.ok(!woke(hear('television.wav'))));
+	it('rejects the name "Vishnu" in the names check', () => {
+		const heard = hear('vishnu.wav');
+		assert.ok(heard.some((h) => h.keyword === 'vision' && !h.ok), 'the first spotter hears "vision"');
+		assert.ok(!woke(heard));
+	});
 	it('rejects "my vision is blurry"', () => assert.ok(!woke(hear('my-vision-is-blurry.wav'))));
 	it('hears "stop" right after "Vision"', () => {
 		const heard = hear('vision-stop.wav');
