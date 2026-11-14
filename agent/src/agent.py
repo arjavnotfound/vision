@@ -206,6 +206,13 @@ async def my_agent(ctx: JobContext):
             f" error={str(error).splitlines()[0][:200]}" if error else "",
         )
 
+    # Which tools each turn used (shows whether a request opened a browser).
+    @session.on("function_tools_executed")
+    def _on_tools(ev) -> None:
+        logger.info(
+            "VISION tools: %s", ", ".join(c.name for c in ev.function_calls) or "-"
+        )
+
     # Every user turn passes here once.
     last_heard = {"text": ""}
 
