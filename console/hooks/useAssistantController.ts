@@ -22,9 +22,8 @@ function speakOffline() {
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
     if (!synth) return;
     synth.cancel();
-    synth.speak(
-      new SpeechSynthesisUtterance('No internet. Voice is off. Face control still works.')
-    );
+    // Not "No internet": the cause can also be the agent or the voice model.
+    synth.speak(new SpeechSynthesisUtterance(OFFLINE_MESSAGE));
   } catch {
     // no speech engine: the caption still says it
   }
@@ -190,6 +189,7 @@ export function useAssistantController({
   }, [isConnected, isBusy, lastInteraction, end]);
 
   const reportOffline = useCallback(() => {
+    console.warn('[VISION] Voice is offline');
     setIsStarting(false);
     setIsOffline(true);
     visionAudio.playTing('notice');

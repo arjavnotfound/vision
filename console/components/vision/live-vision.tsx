@@ -198,13 +198,23 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     };
   }, [openConsole]);
 
-  // A failed agent ends the session and shows the error state once.
+  // A failed agent (for example every voice model unreachable) ends the session and
+  // says voice is offline, like a session that never starts.
   useEffect(() => {
     if (isConnected && agent.state === 'failed') {
       setFailurePulse((n) => n + 1);
-      void session.end();
+      reportOffline();
     }
-  }, [agent.state, isConnected, session]);
+  }, [agent.state, isConnected, reportOffline]);
+
+  // The agent could not reach any voice model: same offline state as a failed start.
+  const { voiceOffline } = vision;
+  const offlineSeen = useRef(0);
+  useEffect(() => {
+    if (voiceOffline === offlineSeen.current) return;
+    offlineSeen.current = voiceOffline;
+    reportOffline();
+  }, [voiceOffline, reportOffline]);
 
   // Quick Commands sent before the agent has joined are queued until it is ready.
   const pending = useRef<string | null>(null);

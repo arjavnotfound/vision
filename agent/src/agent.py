@@ -2,6 +2,7 @@
 import lazy_native  # noqa: F401  (before livekit: defers its local model load)
 
 # isort: on
+import asyncio
 import contextlib
 import json
 import logging
@@ -188,6 +189,8 @@ async def my_agent(ctx: JobContext):
 
     # One clear log line per voice session problem / end (sessions are short-lived: the
     # overlay closes each one after the command; the next wake opens a fresh one).
+    pending_events: set[asyncio.Future] = set()
+
     @session.on("error")
     def _on_error(ev) -> None:
         err = getattr(ev, "error", ev)
@@ -196,6 +199,11 @@ async def my_agent(ctx: JobContext):
             getattr(err, "recoverable", "?"),
             str(err).splitlines()[0][:200],
         )
+        if getattr(err, "recoverable", True) is False:
+            # The session is over (no voice model reachable): the app shows "Voice is offline".
+            task = asyncio.ensure_future(on_tool_action({"type": "voice_offline"}))
+            pending_events.add(task)
+            task.add_done_callback(pending_events.discard)
 
     @session.on("close")
     def _on_close(ev) -> None:

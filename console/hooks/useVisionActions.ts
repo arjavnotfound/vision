@@ -18,6 +18,8 @@ export interface VisionActionsState {
   /** A pending yes/no question from a tool (closing a window, a consequential click). */
   confirm: PendingConfirm | null;
   clearConfirm: () => void;
+  /** Increments when the agent reports that voice failed (no voice model reachable). */
+  voiceOffline: number;
 }
 
 const CONFIRM_TIMEOUT_MS = 30_000;
@@ -34,6 +36,7 @@ export function useVisionActions(): VisionActionsState {
   const chipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [voiceOffline, setVoiceOffline] = useState(0);
 
   useEffect(() => {
     if (!room) return;
@@ -49,6 +52,10 @@ export function useVisionActions(): VisionActionsState {
       try {
         raw = JSON.parse(new TextDecoder().decode(payload));
       } catch {
+        return;
+      }
+      if ((raw as { type?: unknown } | null)?.type === 'voice_offline') {
+        setVoiceOffline((n) => n + 1);
         return;
       }
       const question = confirmFromEvent(raw);
@@ -92,5 +99,5 @@ export function useVisionActions(): VisionActionsState {
 
   // The feed is newest-first, so the chip always reflects the latest action.
   const chip = chipVisible ? (activity[0] ?? null) : null;
-  return { activity, actionPulse, errorPulse, chip, confirm, clearConfirm };
+  return { activity, actionPulse, errorPulse, chip, confirm, clearConfirm, voiceOffline };
 }
