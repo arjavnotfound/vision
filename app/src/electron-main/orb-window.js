@@ -291,13 +291,16 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		})
 		: null;
 	let wakeAudioSeen = false;
-	ipcMain.on('vision-wake-audio', (event, samples) => {
+	ipcMain.on('vision-wake-audio', (event, samples, end) => {
 		if (!fromOrb(event)) return;
 		if (!wakeAudioSeen) {
 			wakeAudioSeen = true;
 			console.log('[VISION] Wake word mic streaming');
 		}
-		wake?.audio(samples);
+		wake?.audio(samples, end);
+	});
+	ipcMain.on('vision-wake-sound', (event, ms) => {
+		if (fromOrb(event) && Number.isFinite(ms)) console.log(`[VISION] Wake sound ${Math.round(ms)} ms after the spotter's chunk`);
 	});
 	ipcMain.on('vision-wake-sensitivity', (event, value) => fromOrb(event) && wake?.setSensitivity(value));
 	// Heartbeat: Face Control treats a silent assistant as voice off.

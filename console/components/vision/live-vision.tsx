@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LocalAudioTrack, Track } from 'livekit-client';
 import {
   useAgent,
   useLocalParticipant,
@@ -55,7 +56,28 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     chipRunning ||
     Boolean(vision.confirm);
 
-  const start = useCallback(() => session.start(), [session]);
+  // The wake capture is also the session's mic (pre-roll, one capture): published here
+  // instead of LiveKit opening the mic again. Without it, LiveKit opens the mic itself.
+  const onWakeHeardRef = useRef<(heard: WakeHeard) => void>(() => undefined);
+  const { wakeSensitivity } = useSettings();
+  const wakeMic = useWakeSpotter({
+    sensitivity: wakeSensitivity,
+    onHeard: useCallback((heard: WakeHeard) => onWakeHeardRef.current(heard), []),
+  });
+  const { room } = session;
+  const start = useCallback(async () => {
+    const mediaTrack = wakeMic.takeTrack();
+    if (!mediaTrack) return session.start();
+    const track = new LocalAudioTrack(mediaTrack, undefined, true);
+    // Like LiveKit's own mic: audio from before the agent joins is sent to it on join.
+    track.startPreConnectBuffer();
+    const started = session.start({ tracks: { microphone: { enabled: false } } });
+    const published = room.localParticipant.publishTrack(track, {
+      source: Track.Source.Microphone,
+      preConnectBuffer: true,
+    });
+    await Promise.all([started, published]);
+  }, [session, room, wakeMic]);
   const end = useCallback(() => session.end(), [session]);
 
   const controller = useAssistantController({
@@ -78,29 +100,41 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
 
   // No voice keys yet (first run of an installed build): open Settings to add them.
   const { activate: startVoice, openConsole: showConsole } = controller;
-  const activate = useCallback(() => {
-    const getVoiceConfig = getElectron()?.getVoiceConfig;
-    if (!getVoiceConfig) return startVoice();
-    void getVoiceConfig().then((config) => {
-      if (config && !config.hasKeys) {
-        setConsoleTab('settings');
-        showConsole();
-      } else {
+  // started: runs right after the connect sound (the wake latency log).
+  const activate = useCallback(
+    (started?: () => void) => {
+      const go = () => {
         startVoice();
-      }
-    }, startVoice);
-  }, [startVoice, showConsole]);
+        started?.();
+      };
+      const getVoiceConfig = getElectron()?.getVoiceConfig;
+      if (!getVoiceConfig) return go();
+      void getVoiceConfig().then((config) => {
+        if (config && !config.hasKeys) {
+          setConsoleTab('settings');
+          showConsole();
+        } else {
+          go();
+        }
+      }, go);
+    },
+    [startVoice, showConsole]
+  );
 
-  const hotkeyLabel = useActivationHotkey(activate);
+  const activateNow = useCallback(() => activate(), [activate]);
+  const hotkeyLabel = useActivationHotkey(activateNow);
   // Wake word. While VISION speaks (and its echo tail) a wake is ignored, so its own voice
   // never wakes it; "Vision, stop" / "Vision, cancel" still work then.
-  const { wakeSensitivity } = useSettings();
   const speakingUntil = useRef(0);
   useEffect(() => {
-    if (agent.state === 'speaking') speakingUntil.current = Number.POSITIVE_INFINITY;
-    else if (speakingUntil.current === Number.POSITIVE_INFINITY)
+    if (agent.state === 'speaking') {
+      speakingUntil.current = Number.POSITIVE_INFINITY;
+      // The mic is held off while VISION speaks: any pre-roll backlog is stale now.
+      wakeMic.live();
+    } else if (speakingUntil.current === Number.POSITIVE_INFINITY)
       speakingUntil.current = Date.now() + ECHO_TAIL_MS;
-  }, [agent.state]);
+  }, [agent.state, wakeMic]);
+  const micLive = isConnected && controller.surface !== 'orb';
   const lastVisionHeard = useRef(0);
   const { endSession } = controller;
   const onWakeHeard = useCallback(
@@ -116,11 +150,19 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       lastVisionHeard.current = now;
       if (!heard.ok || now < speakingUntil.current) return;
       console.log('[VISION] Wake word heard');
-      activate();
+      // A mic that is already live sent these words; otherwise replay from the wake word.
+      const end = heard.end;
+      if (!micLive && end !== undefined) wakeMic.rewind(end);
+      activate(() => {
+        if (end === undefined) return;
+        getElectron()?.reportWakeSound?.(((wakeMic.position() - end) / 16_000) * 1000);
+      });
     },
-    [activate, endSession]
+    [activate, endSession, micLive, wakeMic]
   );
-  useWakeSpotter({ sensitivity: wakeSensitivity, onHeard: onWakeHeard });
+  useEffect(() => {
+    onWakeHeardRef.current = onWakeHeard;
+  }, [onWakeHeard]);
 
   // First run: show onboarding in the console.
   const openConsole = controller.openConsole;
@@ -246,7 +288,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     showOnboarding,
     consoleTab,
     actions: {
-      activate,
+      activate: activateNow,
       collapse: controller.collapse,
       openConsole: controller.openConsole,
       closeConsole: controller.closeConsole,

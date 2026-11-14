@@ -39,7 +39,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	/** Tell Face Control whether the mic is live (it pauses mouth gestures meanwhile). */
 	setVoiceState: (state) => ipcRenderer.send('vision-voice-state', state),
 	/** Wake word: 16 kHz mono mic audio for the local spotter (it never leaves the PC). */
-	sendWakeAudio: (samples) => ipcRenderer.send('vision-wake-audio', samples),
+	sendWakeAudio: (samples, end) => ipcRenderer.send('vision-wake-audio', samples, end),
+	/** ms from the end of the chunk the wake word was heard in to the connect sound (main.log). */
+	reportWakeSound: (ms) => ipcRenderer.send('vision-wake-sound', ms),
 	setWakeSensitivity: (sensitivity) => ipcRenderer.send('vision-wake-sensitivity', sensitivity),
 	onWake: (callback) => {
 		const listener = (_event, heard) => callback(heard);

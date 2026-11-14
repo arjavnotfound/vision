@@ -14,7 +14,7 @@ function createWakeHost({ modelDir, onHeard }) {
 	function start() {
 		child = utilityProcess.fork(path.join(__dirname, 'wake-process.js'), [], { serviceName: 'VISION wake word' });
 		child.on('message', (message) => {
-			if (message?.type === 'heard') onHeard({ keyword: message.keyword, ok: Boolean(message.ok) });
+			if (message?.type === 'heard') onHeard({ keyword: message.keyword, ok: Boolean(message.ok), end: message.end });
 			else if (message?.type === 'ready') {
 				restarts = 0;
 				console.log(`[VISION] Wake word listening (${message.sensitivity})`);
@@ -33,8 +33,11 @@ function createWakeHost({ modelDir, onHeard }) {
 
 	start();
 	return {
-		audio(samples) {
-			if (child && samples instanceof Float32Array && samples.length <= 16000) child.postMessage({ type: 'audio', samples });
+		/** end: the page's mic sample count after this chunk, echoed back with a hit (pre-roll). */
+		audio(samples, end) {
+			if (child && samples instanceof Float32Array && samples.length <= 16000) {
+				child.postMessage({ type: 'audio', samples, end: Number.isFinite(end) ? end : undefined });
+			}
 		},
 		setSensitivity(next) {
 			if (!SENSITIVITIES.has(next) || next === sensitivity) return;

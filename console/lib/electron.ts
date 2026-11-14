@@ -17,6 +17,8 @@ export interface VoiceConfig {
 export interface WakeHeard {
   keyword: 'vision' | 'hey_vision' | 'stop' | 'cancel';
   ok: boolean;
+  /** Mic sample count (from sendWakeAudio) at the end of the chunk it was heard in. */
+  end?: number;
 }
 
 export interface ElectronAPI {
@@ -37,7 +39,8 @@ export interface ElectronAPI {
     participantToken: string;
   }>;
   /** Wake word: 16 kHz mono mic audio for the local spotter (never leaves the PC). */
-  sendWakeAudio?: (samples: Float32Array) => void;
+  sendWakeAudio?: (samples: Float32Array, end: number) => void;
+  reportWakeSound?: (ms: number) => void;
   setWakeSensitivity?: (sensitivity: 'relaxed' | 'normal' | 'strict') => void;
   onWake?: (callback: (heard: WakeHeard) => void) => () => void;
   getVoiceConfig?: () => Promise<VoiceConfig>;
