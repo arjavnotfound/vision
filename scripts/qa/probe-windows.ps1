@@ -2,7 +2,7 @@
 Report how VISION's windows sit next to another app. Run it while VISION is running.
 
   powershell -ExecutionPolicy Bypass -File scripts\qa\probe-windows.ps1 -Out report.txt `
-    [-Edge [-Url <page>] [-FullScreen]] [-Points "768,432;768,736"] [-Seconds 30]
+    [-Edge | -Chrome [-Url <page>] [-FullScreen]] [-Points "768,432;768,736"] [-Seconds 30]
 
 Writes, with timestamps:
   - every visible top-level VISION window: title, rect and extended style flags
@@ -11,14 +11,15 @@ Writes, with timestamps:
   - what Windows thinks of the screen (SHQueryUserNotificationState: BUSY means "a
     full-screen app is running", which silences notifications);
   - every change of the foreground window during -Seconds.
--Edge opens Microsoft Edge with a throwaway profile in front first (at -Url, full screen
-with -FullScreen), and closes it at the end. Never probe with Notepad: it restores the owner's own tabs into the screen.
+-Edge (or -Chrome, Google Chrome) opens the browser with a throwaway profile in front first
+(at -Url, full screen with -FullScreen), and closes it at the end. Never probe with Notepad: it restores the owner's own tabs into the screen.
 #>
 param(
 	[Parameter(Mandatory = $true)][string]$Out,
 	[string]$Points = "",
 	[int]$Seconds = 30,
 	[switch]$Edge,
+	[switch]$Chrome,
 	[string]$Url = "about:blank",
 	[switch]$FullScreen
 )
@@ -67,13 +68,14 @@ function Flags([int]$ex) {
 }
 
 $edgeProfile = $null
-if ($Edge) {
-	$edgeProfile = Join-Path $env:TEMP ("vision-probe-edge-" + [guid]::NewGuid())
-	$edgeExe = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+$browserName = if ($Chrome) { "chrome" } else { "msedge" }
+if ($Edge -or $Chrome) {
+	$edgeProfile = Join-Path $env:TEMP ("vision-probe-$browserName-" + [guid]::NewGuid())
+	$edgeExe = if ($Chrome) { "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" } else { "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe" }
 	$fs = if ($FullScreen) { " --start-fullscreen" } else { "" }
-	Start-Process $edgeExe "--user-data-dir=`"$edgeProfile`" --no-first-run --new-window$fs `"$Url`""
+	Start-Process $edgeExe "--user-data-dir=`"$edgeProfile`" --no-first-run --no-default-browser-check --autoplay-policy=no-user-gesture-required --new-window$fs `"$Url`""
 	Start-Sleep -Seconds 3
-	Log ("edge in front; foreground: " + (Describe ([VisionProbe]::GetForegroundWindow())))
+	Log ("$browserName in front; foreground: " + (Describe ([VisionProbe]::GetForegroundWindow())))
 }
 
 $visionPids = @(Get-Process -Name electron, VISION -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
@@ -109,12 +111,12 @@ while ((Get-Date) -lt $end) {
 }
 
 if ($edgeProfile) {
-	Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
+	Get-CimInstance Win32_Process -Filter "Name='$browserName.exe'" |
 		Where-Object { $_.CommandLine -like "*$edgeProfile*" } |
 		ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 	Start-Sleep -Seconds 1
 	Remove-Item -Recurse -Force $edgeProfile -ErrorAction SilentlyContinue
-	Log "edge closed"
+	Log "$browserName closed"
 }
 Log "done"
 $lines | Set-Content -Encoding utf8 $Out
