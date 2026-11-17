@@ -50,6 +50,8 @@ uv('pip', 'install', '--python', python, '-r', requirements);
 // Not needed at runtime.
 fs.rmSync(path.join(out, 'Lib', 'site-packages', 'pip'), { recursive: true, force: true });
 
-const check = execFileSync(python, ['-E', '-s', '-c', 'import livekit.agents, livekit.plugins.google, playwright, dotenv; print("ok")'], { encoding: 'utf8' }).trim();
+// Also generates comtypes' UI Automation wrapper now, so click by name needs no write
+// into the installed runtime later.
+const check = execFileSync(python, ['-E', '-s', '-c', 'import livekit.agents, livekit.plugins.google, playwright, dotenv, comtypes.client; comtypes.client.GetModule("UIAutomationCore.dll"); print("ok")'], { encoding: 'utf8' }).trim();
 if (check !== 'ok') throw new Error(`runtime self-check failed: ${check}`);
 console.log(`Agent runtime ready: ${out}`);

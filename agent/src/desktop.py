@@ -596,8 +596,11 @@ def _uia():
     sys.coinit_flags = (
         0  # COINIT_MULTITHREADED, so an element can be invoked from a helper thread
     )
-    import comtypes
-    import comtypes.client
+    try:
+        import comtypes
+        import comtypes.client
+    except ImportError as exc:
+        raise DesktopError("Click by name is not installed in this build.") from exc
 
     comtypes.CoInitializeEx(0)
     comtypes.client.GetModule("UIAutomationCore.dll")
