@@ -1,4 +1,5 @@
-// The voice assistant's orb / strip / console window (was a second Electron app).
+// The island window: VISION's small surface at the top (or bottom) centre of the screen,
+// plus the console for settings. It was a second Electron app.
 // It shows the console (Next.js static export), served from app://console/ in its own
 // session, so its microphone permission never touches Face Control's camera session.
 
@@ -13,18 +14,19 @@ const SCHEME = 'app';
 const PARTITION = 'persist:assistant';
 
 // The renderer draws each surface centred inside a window of exactly this size.
+// The island hangs from the screen edge, so a head pointer pushed against the edge
+// lands on it. Everything outside its visible shape passes clicks through.
 const MODE_BOUNDS = {
-	// Orb column: [hint 34] 12 [orb 68] 12 [chip 32] + margins.
-	orb: { width: 112, height: 182 },
-	// Orb + its hover hint label. Bottom-anchored, so the disc does not move.
-	'orb-hint': { width: 380, height: 182 },
-	strip: { width: 640, height: 182 },
+	// Resting pill (about 130x34, wider for a status line) and the one-time wake hint.
+	island: { width: 520, height: 150 },
+	// Listening, acting, the yes/no card and the menu.
+	'island-open': { width: 640, height: 440 },
 	console: { width: 1200, height: 780 },
 };
-const BOTTOM_MARGIN = 12;
-// Over a full-screen app the resting orb shrinks to this scale at the right edge, away
-// from the video controls at the bottom centre, and ignores the mouse.
-const MARKER_SCALE = 0.4;
+// Over a full-screen app the resting island becomes an 8 px line at the top edge. The
+// window is a little larger than the line: the hit test treats a whole-window element
+// as padding.
+const SLIVER = { width: 180, height: 12 };
 const FULLSCREEN_POLL_MS = 1000;
 const POINTER_POLL_MS = 50;
 
@@ -72,24 +74,30 @@ function resolveConsoleFile(root, urlPath) {
 	return file.startsWith(path.resolve(root) + path.sep) ? file : null;
 }
 
-function getBoundsForMode(mode) {
-	const { workArea } = screen.getPrimaryDisplay();
-	const size = MODE_BOUNDS[mode] || MODE_BOUNDS.orb;
-	// The console is centred. The orb/strip windows are RIGHT-anchored where the resting
-	// orb window's right edge sits, so the strip grows to the left and the mark stays put.
-	const orbRight = workArea.x + workArea.width / 2 + MODE_BOUNDS.orb.width / 2;
-	const x = Math.round(mode === 'console' ? workArea.x + (workArea.width - size.width) / 2 : orbRight - size.width);
-	const y = mode === 'console'
-		? Math.round(workArea.y + (workArea.height - size.height) / 2)
-		: Math.round(workArea.y + workArea.height - size.height - BOTTOM_MARGIN);
-	return { x, y, ...size };
+/** edge: 'top' | 'bottom'. The island windows are centred and touch that edge. */
+function getBoundsForMode(mode, edge = 'top', display = screen.getPrimaryDisplay()) {
+	const { workArea } = display;
+	const size = MODE_BOUNDS[mode] || MODE_BOUNDS.island;
+	const x = Math.round(workArea.x + (workArea.width - size.width) / 2);
+	let y;
+	if (mode === 'console') y = workArea.y + (workArea.height - size.height) / 2;
+	else y = edge === 'bottom' ? workArea.y + workArea.height - size.height : workArea.y;
+	return { x, y: Math.round(y), ...size };
 }
 
-function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, wakeModelDir, hidden = false }) {
+/** Always the very top of the screen: a full-screen video keeps its controls at the bottom. */
+function getSliverBounds(display = screen.getPrimaryDisplay()) {
+	const { bounds } = display;
+	return { x: Math.round(bounds.x + (bounds.width - SLIVER.width) / 2), y: bounds.y, ...SLIVER };
+}
+
+function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getConnectionDetails, onVoiceState, onShowFace, onTogglePause, wakeModelDir, hidden = false }) {
 	let win = null;
-	let mode = 'orb';
-	let marker = false; // the small full-screen marker is showing
+	let mode = 'island';
+	let edge = 'top';
+	let sliver = false; // the full-screen line is showing
 	let fullScreenApp = false;
+	let faceStatus = null;
 	const isFullScreenApp = createFullScreenProbe();
 	let hotkey = null;
 	let hotkeyLabel = ''; // empty until a candidate registers
@@ -112,7 +120,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	function activate() {
 		if (!win) return;
 		if (!win.isVisible()) win.showInactive();
-		// The renderer opens the strip, which also brings the orb back from the marker.
+		// The renderer opens the island, which also brings it back from the sliver.
 		win.webContents.send('vision-activate');
 	}
 
@@ -132,14 +140,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		}
 	}
 
-	function markerBounds() {
-		const { bounds } = screen.getPrimaryDisplay();
-		const width = Math.round(MODE_BOUNDS.orb.width * MARKER_SCALE);
-		const height = Math.round(MODE_BOUNDS.orb.height * MARKER_SCALE);
-		return { x: bounds.x + bounds.width - width - 8, y: Math.round(bounds.y + (bounds.height - height) / 2), width, height };
-	}
-
-	// Only the visible disc or strip takes the mouse; the transparent rest passes clicks on.
+	// Only the island's visible shape takes the mouse; the transparent rest passes clicks on.
 	let passing = null;
 	let pointerAt = null; // window-relative cursor position of the last poll inside the window
 	// The pointer must arrive from outside: one already resting where the orb appears
@@ -154,7 +155,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		if (!pass && pointerAt) win.webContents.sendInputEvent({ type: 'mouseMove', x: pointerAt.x, y: pointerAt.y });
 	}
 	function pollPointer() {
-		if (!win || marker || !win.isVisible()) return;
+		if (!win || !win.isVisible()) return;
 		const p = screen.getCursorScreenPoint();
 		const b = win.getBounds();
 		const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
@@ -170,14 +171,13 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 
 	function layout() {
 		if (!win) return;
-		const wantMarker = fullScreenApp && (mode === 'orb' || mode === 'orb-hint');
-		if (wantMarker !== marker) {
-			marker = wantMarker;
-			win.webContents.setZoomFactor(marker ? MARKER_SCALE : 1);
-			win.setOpacity(marker ? 0.6 : 1);
+		const wantSliver = fullScreenApp && mode === 'island';
+		if (wantSliver !== sliver) {
+			sliver = wantSliver;
 			passThrough(true);
+			win.webContents.send('vision-fullscreen', sliver);
 		}
-		win.setBounds(marker ? markerBounds() : getBoundsForMode(mode), false);
+		win.setBounds(sliver ? getSliverBounds() : getBoundsForMode(mode, edge), false);
 	}
 
 	function applyMode(next) {
@@ -206,7 +206,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	}
 
 	win = new BrowserWindow({
-		...getBoundsForMode('orb'),
+		...getBoundsForMode('island'),
 		frame: false,
 		transparent: true,
 		alwaysOnTop: true,
@@ -241,15 +241,18 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	win.webContents.once('did-finish-load', () => {
 		if (win && !hidden) win.showInactive();
 	});
-	// Chromium remembers zoom per origin; the marker's zoom must not outlive the marker.
-	win.webContents.on('did-finish-load', () => win?.webContents.setZoomFactor(marker ? MARKER_SCALE : 1));
+	// A reloaded page starts from scratch: tell it again what it can't ask for.
+	win.webContents.on('did-finish-load', () => {
+		win?.webContents.send('vision-fullscreen', sliver);
+		if (faceStatus) win?.webContents.send('vision-face-status', faceStatus);
+	});
 	// A crashed or frozen renderer would leave a dead orb that only a hand could fix.
 	win.webContents.on('render-process-gone', (_event, details) => {
-		console.error('[VISION] Orb renderer gone:', details.reason, '- reloading');
+		console.error('[VISION] Island renderer gone:', details.reason, '- reloading');
 		if (details.reason !== 'clean-exit') setTimeout(() => win?.webContents.reload(), 500);
 	});
 	win.on('unresponsive', () => {
-		console.error('[VISION] Orb renderer unresponsive - reloading');
+		console.error('[VISION] Island renderer unresponsive - reloading');
 		win?.webContents.forcefullyCrashRenderer();
 	});
 	win.on('closed', () => {
@@ -261,7 +264,14 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 
 	const fromOrb = (event) => win && event.sender === win.webContents;
 	ipcMain.on('vision-mode', (event, next) => fromOrb(event) && applyMode(next));
-	ipcMain.on('vision-hit', (event, over) => fromOrb(event) && !marker && passThrough(!over));
+	ipcMain.on('vision-hit', (event, over) => fromOrb(event) && passThrough(!over));
+	ipcMain.on('vision-edge', (event, next) => {
+		if (!fromOrb(event) || (next !== 'top' && next !== 'bottom') || next === edge) return;
+		edge = next;
+		layout();
+	});
+	ipcMain.on('vision-show-face', (event) => fromOrb(event) && onShowFace?.());
+	ipcMain.on('vision-toggle-pause', (event) => fromOrb(event) && onTogglePause?.());
 	ipcMain.on('vision-keyboard', (event, wanted) => {
 		if (!fromOrb(event)) return;
 		win.setFocusable(Boolean(wanted));
@@ -310,7 +320,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		const now = isFullScreenApp();
 		if (now === fullScreenApp) return;
 		fullScreenApp = now;
-		console.log(`[VISION] Full-screen app ${now ? 'in front: orb shrinks to a marker' : 'gone'}`);
+		console.log(`[VISION] Full-screen app ${now ? 'in front: the island becomes a line at the top' : 'gone'}`);
 		layout();
 	}, FULLSCREEN_POLL_MS);
 	fullScreenPoll.unref();
@@ -322,6 +332,11 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		show: () => win?.showInactive(),
 		hide: () => win?.hide(),
 		getHotkeyLabel: () => hotkeyLabel,
+		/** { tracking, seen, eyesResume } from Face Control. */
+		setFaceStatus: (status) => {
+			faceStatus = status;
+			win?.webContents.send('vision-face-status', status);
+		},
 		getWindow: () => win,
 		destroy: () => {
 			clearInterval(heartbeat);
@@ -334,4 +349,4 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	};
 }
 
-module.exports = { createOrbWindow, registerConsoleScheme, resolveConsoleFile };
+module.exports = { createOrbWindow, registerConsoleScheme, resolveConsoleFile, getBoundsForMode, getSliverBounds };

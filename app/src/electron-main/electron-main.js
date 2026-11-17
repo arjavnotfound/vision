@@ -661,8 +661,22 @@ const createWindow = () => {
 		},
 		minIntervalMs: 16,
 	});
+	// The island shows whether tracking is on, paused, or can't see the face.
+	let faceStatusSent = '';
+	const sendFaceStatus = () => {
+		const status = {
+			tracking: Boolean(enabled),
+			seen: !inputFeedback?.headNotFound,
+			eyesResume: Boolean(activeSettings.closeEyesToToggle),
+		};
+		const key = JSON.stringify(status);
+		if (key === faceStatusSent || !orb) return;
+		faceStatusSent = key;
+		orb.setFaceStatus(status);
+	};
 	const updateDwellClickingAndHUD = () => {
 		overlaySync.request(buildOverlayPayload);
+		sendFaceStatus();
 	};
 
 	let monitorMousePositionTid = null;
@@ -1407,6 +1421,13 @@ function startAssistant(busReady) {
 		consoleUrl: process.env.VISION_CONSOLE_URL,
 		getConnectionDetails: (options) => createConnectionDetails(voiceKeys, options),
 		onVoiceState: setAssistantState,
+		// Face control window on/off from the island menu.
+		onShowFace: () => {
+			if (!appWindow) return;
+			if (appWindow.isVisible() && !appWindow.isMinimized()) appWindow.hide();
+			else showAppWindow();
+		},
+		onTogglePause: () => handleBusCommand('toggle-pause').catch((error) => console.error('[VISION] Pause from the island failed:', error.message)),
 		wakeModelDir: app.isPackaged ? path.join(process.resourcesPath, 'kws') : path.join(appPath, 'models', 'kws'),
 		hidden: process.env.VISION_QUIET === '1',
 	});

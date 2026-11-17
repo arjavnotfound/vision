@@ -1,8 +1,8 @@
-// Preload for the voice assistant window (orb / strip / console).
+// Preload for the island window (the island and the console).
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Hit regions: the window is click-through except over a visible element (the disc, the
-// strip, the console panel). Full-window wrappers and the page itself are padding. Main
+// Hit regions: the window is click-through except over a visible element (the island,
+// its cards, the console panel). Full-window wrappers and the page itself are padding. Main
 // sends the cursor position while it is inside the window: VISION's head pointer moves
 // with SetCursorPos, which Electron's forwarded mouse events never see.
 ipcRenderer.on('vision-pointer', (_event, x, y) => {
@@ -23,8 +23,26 @@ window.addEventListener('focusout', (event) => {
 
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
-	/** 'orb' | 'orb-hint' | 'strip' | 'console': resizes the window. */
+	/** 'island' | 'island-open' | 'console': resizes the window. */
 	setMode: (mode) => ipcRenderer.send('vision-mode', mode),
+	/** 'top' | 'bottom': which screen edge the island hangs from. */
+	setEdge: (edge) => ipcRenderer.send('vision-edge', edge),
+	/** Show Face Control's window (without taking focus). */
+	showFace: () => ipcRenderer.send('vision-show-face'),
+	/** Pause or resume face control. */
+	togglePause: () => ipcRenderer.send('vision-toggle-pause'),
+	/** true while a full-screen app is in front and the island is a line at the top. */
+	onFullScreen: (callback) => {
+		const listener = (_event, on) => callback(Boolean(on));
+		ipcRenderer.on('vision-fullscreen', listener);
+		return () => ipcRenderer.removeListener('vision-fullscreen', listener);
+	},
+	/** { tracking, seen, eyesResume } whenever it changes. */
+	onFaceStatus: (callback) => {
+		const listener = (_event, status) => callback(status);
+		ipcRenderer.on('vision-face-status', listener);
+		return () => ipcRenderer.removeListener('vision-face-status', listener);
+	},
 	/** Subscribe to the global talk hotkey. Returns an unsubscribe function. */
 	onActivate: (callback) => {
 		const listener = () => callback();
