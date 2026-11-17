@@ -22,10 +22,10 @@ const VISION = '▁VI S ION';
 const HEY = '▁HE Y';
 // "#threshold" (default 0.25) and ":boost" (default 1). A higher boost measured worse in
 // noise and music (T06a eval), so only the threshold is lowered.
+// No "strict": it heard only "Hey Vision" and lost plain "Vision" in music (T06a).
 const WAKE = {
 	relaxed: [`${VISION} :1.5 #0.08 @vision`, `${HEY} ${VISION} :1.5 #0.08 @hey_vision`],
 	normal: [`${VISION} #0.12 @vision`, `${HEY} ${VISION} #0.12 @hey_vision`],
-	strict: [`${HEY} ${VISION} @hey_vision`],
 };
 // Acted on only right after a wake word ("Vision, stop").
 const COMMANDS = ['▁ST O P @stop', '▁CAN CE L @cancel'];

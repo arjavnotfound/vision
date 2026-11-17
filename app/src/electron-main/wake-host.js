@@ -3,7 +3,7 @@
 const { utilityProcess } = require('electron');
 const path = require('path');
 
-const SENSITIVITIES = new Set(['relaxed', 'normal', 'strict']);
+const SENSITIVITIES = new Set(['relaxed', 'normal']);
 
 function createWakeHost({ modelDir, onHeard }) {
 	let child = null;

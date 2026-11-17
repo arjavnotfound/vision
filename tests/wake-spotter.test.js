@@ -33,5 +33,5 @@ describe('wake spotter', () => {
 		assert.ok(woke(heard));
 		assert.ok(heard.some((h) => h.keyword === 'stop'));
 	});
-	it('needs "Hey Vision" when strict', () => assert.ok(!woke(hear('vision.wav', 'strict'))));
+	it('treats a saved "strict" as normal: plain "Vision" still wakes', () => assert.ok(woke(hear('vision.wav', 'strict'))));
 });
