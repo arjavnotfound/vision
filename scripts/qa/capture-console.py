@@ -26,7 +26,7 @@ BASE = f"http://localhost:{PORT}"
 STATES = ["idle", "listening", "thinking", "speaking", "acting", "error", "offline"]
 TABS = ["home", "assistant", "activity", "settings"]
 LINE_TONES = ["idle", "accent", "warn", "dim"]
-ISLAND_VIEWS = ["wake", "listening", "understood", "acting", "confirm", "speaking", "offline", "menu"]
+ISLAND_VIEWS = ["wake", "listening", "understood", "acting", "confirm", "help", "speaking", "offline", "menu"]
 
 
 def jobs(theme: str) -> list[tuple[str, str, int, int]]:
@@ -74,7 +74,7 @@ def main() -> int:
     try:
         wait_for_server(180)
         with sync_playwright() as p:
-            browser = p.chromium.launch(channel="chrome")
+            browser = p.chromium.launch(channel="chrome", headless=True)
             for name, query, width, height in jobs(args.theme):
                 page = browser.new_page(viewport={"width": width, "height": height})
                 hotkey = f"&hotkey={urllib.parse.quote(args.hotkey)}" if args.hotkey else ""
