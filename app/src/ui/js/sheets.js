@@ -296,7 +296,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 	function soundsSection(sounds) {
 		const save = () => voice.setSounds({ soundsOn: sounds.on, soundVolume: sounds.volume });
 		return section("SOUNDS", h("div", { class: "row-grid" },
-			toggleRow({ label: "Sounds", tech: "when VISION hears you, listens, is done or has a problem", get: () => sounds.on, set: (on) => { sounds.on = on; save(); } }),
+			toggleRow({ label: "Sounds", tech: "a short sound at each step", get: () => sounds.on, set: (on) => { sounds.on = on; save(); } }),
 			stepRow("Sound volume", "VISION's voice has its own volume", {
 				get: () => sounds.volume, set: (v) => { sounds.volume = v; save(); },
 				min: 10, max: 100, step: 10, format: (v) => `${v}%`,

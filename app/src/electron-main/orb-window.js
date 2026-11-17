@@ -242,6 +242,12 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	win.webContents.once('did-finish-load', () => {
 		if (win && !hidden) win.showInactive();
 	});
+	// QA runs stay silent: the cue sounds still play (and log) but reach no speaker.
+	if (process.env.VISION_QA_SILENT === '1') win.webContents.setAudioMuted(true);
+	win.webContents.on('console-message', (event, _level, legacyMessage) => {
+		const message = event?.message ?? legacyMessage;
+		if (typeof message === 'string' && message.startsWith('[VISION] sound ')) console.log(message);
+	});
 	// A reloaded page starts from scratch: tell it again what it can't ask for.
 	win.webContents.on('did-finish-load', () => {
 		win?.webContents.send('vision-fullscreen', sliver);
