@@ -384,3 +384,19 @@ async def test_show_face_control_asks_vision_to_show_its_window():
     )
     await tools.show_face_control(None)
     assert sent == [("show", None)]
+
+
+@pytest.mark.asyncio
+async def test_retry_camera_asks_vision_to_open_the_camera_again():
+    sent = []
+
+    class Bus:
+        async def send_command(self, cmd, value=None):
+            sent.append((cmd, value))
+            return {"ok": True, "done": "retrying camera"}
+
+    tools = DesktopTools(
+        guard=ActionGuard(clock=FakeClock()), backend=FakeDesktop(), bus=Bus()
+    )
+    await tools.retry_camera(None)
+    assert sent == [("retry-camera", None)]

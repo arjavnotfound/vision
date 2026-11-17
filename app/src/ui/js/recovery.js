@@ -20,17 +20,17 @@ export function cameraProblem(error) {
 		case "NotReadableError":
 		case "TrackStartError":
 		case "AbortError":
-			return "Another app is using the camera. Close it, and VISION will start again by itself.";
+			return "Another app is using the camera. Close that app. VISION tries again every few seconds, or say “Vision, try the camera”.";
 		case "NotAllowedError":
 		case "SecurityError":
 		case "PermissionDeniedError":
-			return "Camera access is turned off in Windows settings. Ask a helper to turn on camera access for desktop apps. VISION keeps trying.";
+			return "Camera access is turned off in Windows settings. Ask a helper to turn on camera access for desktop apps. VISION tries again every few seconds.";
 		case "NotFoundError":
 		case "DevicesNotFoundError":
 		case "OverconstrainedError":
-			return "No camera found. Plug the camera in, and VISION will start again by itself.";
+			return "No camera found. Plug the camera in. VISION tries again every few seconds, or say “Vision, try the camera”.";
 		default:
-			return "The camera stopped working. VISION keeps trying.";
+			return "The camera stopped working. VISION tries again every few seconds, or say “Vision, try the camera”.";
 	}
 }
 

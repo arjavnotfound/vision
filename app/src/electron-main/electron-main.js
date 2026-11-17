@@ -1262,7 +1262,7 @@ function showAppWindow() {
 	showWindowInactive(appWindow);
 }
 
-const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls']);
+const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls', 'retry-camera']);
 async function handleBusCommand(cmd, value) {
 	if (cmd === 'quit') {
 		// A misheard "quit" must not end the session: the face window asks first.

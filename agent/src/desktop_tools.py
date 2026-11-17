@@ -155,6 +155,7 @@ class DesktopTools:
             self.resume_face_control,
             self.recalibrate_face,
             self.show_face_control,
+            self.retry_camera,
             self.change_cursor_speed,
             self.change_click_mode,
             self.move_control,
@@ -485,6 +486,12 @@ class DesktopTools:
         """Bring back VISION's face control window when it is hidden or minimised
         ("show face control", "where is VISION", "open VISION")."""
         return await self._vision("show", label="show face control")
+
+    @function_tool()
+    async def retry_camera(self, context: RunContext) -> str:
+        """Try to open the camera again now ("try the camera", "the camera is not
+        working"). VISION also retries by itself every few seconds."""
+        return await self._vision("retry-camera", label="try the camera")
 
     @function_tool()
     async def change_cursor_speed(self, context: RunContext, direction: str) -> str:

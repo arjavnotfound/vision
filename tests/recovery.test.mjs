@@ -54,7 +54,7 @@ describe("recovery", () => {
 	it("names each camera cause in plain words", () => {
 		assert.match(cameraProblem({ name: "NotAllowedError" }), /turned off in Windows settings/);
 		assert.match(cameraProblem({ name: "NotFoundError" }), /No camera found/);
-		assert.match(cameraProblem(null), /keeps trying/);
+		assert.match(cameraProblem(null), /tries again every few seconds, or say “Vision, try the camera”/);
 	});
 
 	it("an ended track or a camera stuck starting counts as lost", () => {
