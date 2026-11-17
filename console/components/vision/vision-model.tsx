@@ -45,6 +45,8 @@ export interface VisionModel {
   consoleTab: ConsoleTab;
   /** Face control's state (null until Face Control reports it). */
   face: FaceStatus | null;
+  /** Voice keys are missing: voice can't start until a helper adds them. */
+  voiceOff?: boolean;
   /** A full-screen app is in front: the resting island is a line at the top. */
   fullScreen: boolean;
   /** Date.now() of the last wake / hotkey / Talk (the wake-heard flash). */

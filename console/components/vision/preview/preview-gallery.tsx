@@ -68,6 +68,7 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
   const faceParam = params.get('face');
   // Preview runs outside Electron: show a talk hotkey only when the caller passes the registered one.
   const hotkey = params.get('hotkey') ?? '';
+  const voiceOff = params.get('nokeys') === '1';
   const mic = useMockLevel(true, 0.4);
   const out = useMockLevel(true, 2.1);
   const [pulse, setPulse] = useState(0);
@@ -98,9 +99,10 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
         actions: ACTIONS,
       }),
       hotkeyLabel: hotkey,
+      voiceOff,
       ...(surface === 'island' ? islandMock(view, now, faceParam) : {}),
     }),
-    [surface, state, tab, mic, out, pulse, now, hotkey, view, faceParam]
+    [surface, state, tab, mic, out, pulse, now, hotkey, view, faceParam, voiceOff]
   );
 
   return (

@@ -35,6 +35,7 @@ def jobs(theme: str) -> list[tuple[str, str, int, int]]:
     out += [("island-unseen", "surface=island&anchor=1&view=resting&face=unseen", 520, 150)]
     out += [("island-paused", "surface=island&anchor=1&view=resting&face=paused", 520, 150)]
     out += [("island-fullscreen-line", "surface=island&anchor=1&view=sliver", 520, 60)]
+    out += [("island-menu-no-voice-keys", "surface=island&anchor=1&view=menu&nokeys=1", 640, 440)]
     out += [(f"island-{v}", f"surface=island&anchor=1&view={v}", 640, 440) for v in ISLAND_VIEWS]
     out += [(f"island-line-{t}", f"surface=island&anchor=1&view=sliver&tone={t}", 520, 60) for t in LINE_TONES]
     out += [(f"console-{s}", f"surface=console&state={s}", 1200, 780) for s in STATES]

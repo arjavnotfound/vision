@@ -67,7 +67,7 @@ export interface ElectronAPI {
   ) => Promise<Pick<VoiceConfig, 'voice' | 'language'>>;
   saveVoiceKeys?: (keys: Record<string, string>) => Promise<VoiceConfig>;
   onVoiceConfigChanged?: (
-    callback: (config: Pick<VoiceConfig, 'voice' | 'language'>) => void
+    callback: (config: Partial<Pick<VoiceConfig, 'voice' | 'language' | 'hasKeys'>>) => void
   ) => () => void;
 }
 

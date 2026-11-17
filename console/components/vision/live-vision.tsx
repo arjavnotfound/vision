@@ -133,13 +133,22 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     },
     [startVoice]
   );
+  // No keys: the island says "Voice is off", never "Say Vision".
+  const [voiceOff, setVoiceOff] = useState(false);
   useEffect(() => {
     void getElectron()
       ?.getVoiceConfig?.()
       .then((config) => {
         if (config?.hasKeys) hasKeys.current = true;
+        setVoiceOff(Boolean(config && !config.hasKeys));
       })
       .catch(() => undefined);
+    return getElectron()?.onVoiceConfigChanged?.((config) => {
+      if (config.hasKeys) {
+        hasKeys.current = true;
+        setVoiceOff(false);
+      }
+    });
   }, []);
 
   const activateNow = useCallback(() => activate(), [activate]);
@@ -323,6 +332,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     showOnboarding,
     consoleTab,
     face,
+    voiceOff,
     fullScreen,
     activatedAt: controller.activatedAt,
     actions: {

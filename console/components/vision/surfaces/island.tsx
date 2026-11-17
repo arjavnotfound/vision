@@ -410,11 +410,15 @@ export function Island({
                   : 'Face control is on'}
             </p>
             <p className="text-bone-2 text-[14px]">
-              Say “Vision” to talk{hotkey ? ` · or ${hotkey}` : ''}
+              {model.voiceOff
+                ? 'Voice is off · a helper adds its keys in Settings'
+                : `Say “Vision” to talk${hotkey ? ` · or ${hotkey}` : ''}`}
             </p>
             {model.fullScreen && (
               <p className="text-bone-3 text-[13px]">
-                In full screen VISION waits as a thin line at the top. Rest on it or say “Vision”.
+                {model.voiceOff
+                  ? 'In full screen, VISION is a thin line at the top. Rest on it.'
+                  : 'In full screen, VISION is a thin line at the top. Rest on it or say “Vision”.'}
               </p>
             )}
           </Row>
@@ -492,7 +496,7 @@ export function Island({
       return (
         <div className="grid grid-cols-4 gap-3">
           <BigTarget
-            label="Talk"
+            label={model.voiceOff ? 'Voice is off' : 'Talk'}
             icon={<Mic className={icon} strokeWidth={1.8} />}
             className="h-[92px]"
             onHover={touchMenu}

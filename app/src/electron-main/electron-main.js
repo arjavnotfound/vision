@@ -1462,6 +1462,8 @@ function startAssistant(busReady) {
 		sendBusState();
 		console.log('[VISION] Voice keys saved; starting the voice agent');
 		busReady.then(() => agentSupervisor.restart());
+		// The island stops saying "Voice is off" once keys exist.
+		orb?.getWindow()?.webContents.send('vision-voice-config-changed', { hasKeys: true });
 		return voiceConfig();
 	});
 
