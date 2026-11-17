@@ -2007,7 +2007,8 @@ svg {
 }
 .recovery-banner {
 	position: fixed;
-	top: 88px;
+	/* Above the paused/live badge, clear of every screen's heading. */
+	bottom: 76px;
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 50;
@@ -2071,4 +2072,57 @@ svg {
 
 .controls-map__choice {
 	min-width: 132px;
+}
+/* Calibration refused to save (no face in view). */
+.instruction__sub.is-warning {
+	color: var(--warn);
+}
+
+/* Paused or live: always visible, above every screen. */
+.cursor-state {
+	position: fixed;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: 18px;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 16px;
+	border: 1px solid var(--ok);
+	border-radius: 999px;
+	background: var(--ink-2);
+	color: var(--bone);
+	font-size: 15px;
+	pointer-events: none;
+}
+.cursor-state[data-paused="true"] {
+	border-color: var(--warn);
+}
+.cursor-state__dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--ok);
+}
+.cursor-state[data-paused="true"] .cursor-state__dot {
+	background: var(--warn);
+}
+.cursor-state__how {
+	color: var(--bone-2);
+}
+.cursor-state:empty,
+.cursor-state[hidden] {
+	display: none;
+}
+
+/* Settings > Voice when the keys are missing. */
+.keys-missing {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 16px;
+	border: 1px solid var(--warn);
+	border-radius: 14px;
+	font-size: 16px;
 }

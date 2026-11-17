@@ -27,7 +27,8 @@ const sceneName = params.get("scene") || "tracking";
 const isKiosk = params.has("kiosk") && !isPreview;
 // First run only: the Start screen, calibration and try-it.
 const showStartScreen = isKiosk && params.has("start");
-if (params.has("quiet")) setSpeechMuted(true);
+// Preview screenshots and QA runs stay silent; spoken lines still go to the log.
+if (params.has("quiet") || params.has("preview")) setSpeechMuted(true);
 
 const ENGINE_ROOT = "../../node_modules/vision-hft";
 const ENGINE_SCRIPTS = [
@@ -172,18 +173,27 @@ async function boot() {
 	const hint = document.getElementById("session-hint");
 	pauseBtn.addEventListener("click", () => engine.togglePaused());
 
+	// Every way to quit (title bar, tray, voice) lands here: a dwell-safe Quit / Cancel.
+	let quitDialog = null;
+	function confirmQuit() {
+		if (quitDialog?.isOpen()) return;
+		const dialog = openConfirm(layer, {
+			title: "Quit VISION?",
+			text: "Head control and voice stop, and any held mouse button is released. To keep tracking without this window, choose Hide. Say “Vision, show face control” to bring it back.",
+			confirmLabel: "Quit",
+			danger: true,
+			onConfirm: () => host.windowControl("quit"),
+			secondary: { label: "Hide", onClick: () => host.windowControl("hide") },
+		});
+		quitDialog = { isOpen: () => dialog.box.isConnected };
+		speak("Quit VISION? Rest on Quit to quit, or on Cancel to keep it running.");
+	}
+
 	for (const btn of document.querySelectorAll("[data-window]")) {
 		btn.addEventListener("click", () => {
 			const action = btn.dataset.window;
 			if (action === "close") {
-				openConfirm(layer, {
-					title: "Quit VISION?",
-					text: "Head control stops and any held mouse button is released. You can also hide VISION to the tray and keep tracking.",
-					confirmLabel: "Quit",
-					danger: true,
-					onConfirm: () => host.windowControl("quit"),
-					secondary: { label: "Hide to tray", onClick: () => host.windowControl("hide") },
-				});
+				confirmQuit();
 			} else {
 				host.windowControl(action);
 			}
@@ -461,6 +471,7 @@ async function boot() {
 			return;
 		}
 		if (command === "calibrate") startCalibration();
+		if (command === "quit") confirmQuit();
 		if (command === "settings") showSettings("Pointer");
 		if (command === "settings-voice") showSettings("Voice");
 		if (command === "about") showSettings("About");
@@ -516,6 +527,35 @@ async function boot() {
 		windowShown = shown;
 		viewfinder.setShown(shown);
 	});
+	// Paused or live, always on screen (above onboarding and calibration) and said aloud
+	// when it changes, so the close-eyes toggle never leaves the user guessing.
+	const cursorState = h("div", { class: "cursor-state", role: "status", "aria-live": "polite" });
+	document.body.append(cursorState);
+	let lastPaused = null;
+	function showCursorState(state) {
+		const noCamera = state.status === "camera-error";
+		const paused = Boolean(state.paused);
+		const key = `${paused}${noCamera}`;
+		if (key === lastPaused) return;
+		const first = lastPaused === null;
+		const pauseChanged = !first && lastPaused.startsWith(String(!paused));
+		lastPaused = key;
+		cursorState.dataset.paused = String(paused || noCamera);
+		if (noCamera) {
+			cursorState.replaceChildren(h("span", { class: "cursor-state__dot" }), h("b", {}, "CURSOR STOPPED"), h("span", { class: "cursor-state__how" }, "Waiting for the camera"));
+			return;
+		}
+		cursorState.replaceChildren(
+			h("span", { class: "cursor-state__dot" }),
+			h("b", {}, paused ? "CURSOR PAUSED" : "CURSOR LIVE"),
+			h("span", { class: "cursor-state__how" }, st.get("closeEyesToToggle")
+				? (paused ? "Close both eyes for 2 seconds to start it" : "Close both eyes for 2 seconds to pause")
+				: (paused ? "Say “Vision, resume”" : "Say “Vision, pause”")),
+		);
+		// Calibration pauses the cursor by itself; that is not news to the user.
+		if (pauseChanged && !calibration) speak(paused ? "Cursor paused. Close both eyes for 2 seconds to start it again." : "Cursor live. It follows your head now.");
+	}
+
 	function frameLoop(now) {
 		requestAnimationFrame(frameLoop);
 		if (now - lastUiFrame < UI_FRAME_MS - 2) {
@@ -524,6 +564,9 @@ async function boot() {
 		lastUiFrame = now;
 		const state = engine.getState();
 		latestState = state;
+		showCursorState(state);
+		// The main view has its own status pill; the badge is for screens drawn over it.
+		cursorState.hidden = !layer.childElementCount;
 		if (!windowShown) return; // nothing to draw for; tracking runs in the engine's own loop
 		if (state.status !== lastStatus) {
 			lastStatus = state.status;
@@ -545,7 +588,7 @@ async function boot() {
 	requestAnimationFrame(frameLoop);
 
 	// ---- recovery: face lost / camera lost, without a restart
-	if (!isPreview) {
+	{
 		const recovery = createRecoveryMonitor();
 		const banner = h("div", { class: "recovery-banner", role: "alert", hidden: true });
 		document.body.append(banner);
@@ -553,8 +596,11 @@ async function boot() {
 			const state = engine.getState();
 			const track = engine.getVideoStream?.()?.getVideoTracks?.()[0];
 			for (const action of recovery.step(state, performance.now(), { trackEnded: track?.readyState === "ended" })) {
+				// Preview screenshots show the banner only: no buttons, no camera.
+				if (isPreview && (action.type === "release" || action.type === "retryCamera")) continue;
 				if (action.type === "release") window.electronAPI?.releaseButtons?.("face-lost");
-				if (action.type === "speak" && isKiosk && !calibration) speak(action.text);
+				// Camera problems are always spoken: the user may not be able to read the banner.
+				if (action.type === "speak" && (action.camera || (isKiosk && !calibration))) speak(action.text);
 				if (action.type === "retryCamera") {
 					try {
 						engine.useCamera();
@@ -580,7 +626,8 @@ async function boot() {
 		openOnboarding({
 			layer, engine,
 			onFinish: () => st.set("onboardingComplete", true),
-			onCalibrate: () => startCalibration(),
+			// Adaptive calibration reads each step aloud, like the rest of the first run.
+			onCalibrate: () => startCalibration(null, { adaptive: true }),
 		});
 	}
 
@@ -605,12 +652,14 @@ async function applyPreviewScene({ layer, engine, profiles, controls, dwell, sta
 	if (view === "calib-range") startCalibration({ step: "range", data: { ...calibData, pose: { yaw: -22, pitch: 8, roll: 3 }, dirs: ["LEFT", "RIGHT", "UP"] } });
 	if (view === "calib-gestures") startCalibration({ step: "gestures", data: { ...calibData, taskIndex: 2 } });
 	if (view === "calib-done") startCalibration({ step: "done", data: calibData });
+	// ?view=calib-done&scene=no-face&accept=1: Accept with no face in view is refused.
+	if (params.get("accept")) [...layer.querySelectorAll("button")].find((b) => /^(Accept|Apply)/.test(b.textContent))?.click();
 	if (view.startsWith("onboarding")) {
-		openOnboarding({ layer, engine, startAt: Number(view.split("-")[1] || 1) - 1 });
+		openOnboarding({ layer, engine, auto: false, startAt: Number(view.split("-")[1] || 1) - 1 });
 	}
 	// ?view=settings&tab=Voice: one screenshot per section.
 	const voice = {
-		getConfig: async () => ({ voice: "Aoede", language: "auto", hasKeys: true, voices: [{ name: "Aoede", style: "Breezy" }, { name: "Puck", style: "Upbeat" }, { name: "Charon", style: "Informative" }, { name: "Kore", style: "Firm" }, { name: "Fenrir", style: "Excitable" }, { name: "Leda", style: "Youthful" }, { name: "Orus", style: "Firm" }], keyFields: [] }),
+		getConfig: async () => ({ voice: "Aoede", language: "auto", hasKeys: !params.get("nokeys"), voices: [{ name: "Aoede", style: "Breezy" }, { name: "Puck", style: "Upbeat" }, { name: "Charon", style: "Informative" }, { name: "Kore", style: "Firm" }, { name: "Fenrir", style: "Excitable" }, { name: "Leda", style: "Youthful" }, { name: "Orus", style: "Firm" }], keyFields: [{ name: "LIVEKIT_URL", label: "LiveKit URL", hint: "starts with wss://, from cloud.livekit.io" }, { name: "LIVEKIT_API_KEY", label: "LiveKit API key", hint: "starts with API, same page" }, { name: "LIVEKIT_API_SECRET", label: "LiveKit API secret", hint: "same page", secret: true }, { name: "GOOGLE_API_KEY", label: "Gemini API key", hint: "from aistudio.google.com", secret: true }] }),
 		setConfig: async () => ({}), saveKeys: async () => ({}), getWake: async () => "normal", setWake: () => { },
 	};
 	if (view === "settings") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: params.get("tab") || "Pointer" });
