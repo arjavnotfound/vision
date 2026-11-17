@@ -20,10 +20,10 @@ const VOICES = [
 const LANGUAGES = ['auto', 'en', 'hi'];
 // What the Settings form asks for on first voice use.
 const VOICE_KEY_FIELDS = [
-	{ name: 'LIVEKIT_URL', label: 'LiveKit URL', secret: false },
-	{ name: 'LIVEKIT_API_KEY', label: 'LiveKit API key', secret: false },
-	{ name: 'LIVEKIT_API_SECRET', label: 'LiveKit API secret', secret: true },
-	{ name: 'GOOGLE_API_KEY', label: 'Gemini API key', secret: true },
+	{ name: 'LIVEKIT_URL', label: 'LiveKit URL', hint: 'starts with wss://, from cloud.livekit.io', secret: false },
+	{ name: 'LIVEKIT_API_KEY', label: 'LiveKit API key', hint: 'starts with API, same page', secret: false },
+	{ name: 'LIVEKIT_API_SECRET', label: 'LiveKit API secret', hint: 'same page', secret: true },
+	{ name: 'GOOGLE_API_KEY', label: 'Gemini API key', hint: 'from aistudio.google.com', secret: true },
 ];
 const DEFAULTS = { voice: 'Aoede', language: 'auto' };
 

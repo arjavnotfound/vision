@@ -58,7 +58,7 @@ export function openConfirm(layer, { title, text, confirmLabel, danger = false, 
 	);
 	if (cancel) scrim.addEventListener("click", close);
 	layer.append(scrim, box);
-	return { close };
+	return { close, box };
 }
 
 function section(title, ...children) {
@@ -267,6 +267,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 		Promise.all([voice.getConfig(), voice.getWake()]).then(([config, wake]) => {
 			if (!config) throw new Error("no voice config");
 			holder.replaceChildren(
+				config.hasKeys ? null : keyForm(config),
 				section("WAKE WORD", h("p", { class: "prose" }, "Say “Vision”. Heard on this computer only. Relaxed hears a quieter voice; Normal ignores more background talk."),
 					h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } },
 						choice({ label: "Relaxed", tech: "quiet voice, quiet room", checked: wake === "relaxed", onClick: () => { voice.setWake("relaxed"); render(); } }),
@@ -282,7 +283,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 					pageSize: 6,
 					render: (item) => choice({ label: item.label, tech: item.tech, checked: item.selected, onClick: () => voice.setConfig({ voice: item.value }).then(render, () => { }) }),
 				})),
-				keyForm(config),
+				config.hasKeys ? keyForm(config) : null,
 			);
 		}).catch(() => holder.replaceChildren(h("p", { class: "prose" }, "Voice settings are not available right now. Face control still works.")));
 		return [holder];
@@ -294,19 +295,24 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			type: field.secret ? "password" : "text", "aria-label": field.label, autocomplete: "off", spellcheck: "false",
 			style: { height: "56px", padding: "0 16px", "font-size": "16px", "border-radius": "12px", border: "1px solid var(--rule-strong)", background: "var(--ink-2)", color: "inherit" },
 		}));
-		const status = h("p", { class: "prose" }, config.hasKeys ? "Keys are saved, encrypted on this computer." : "Voice needs keys before it can start.");
+		// Missing keys: say plainly what is off and who fills this in. A helper types them once.
+		const status = config.hasKeys
+			? h("p", { class: "prose" }, "Keys are saved, encrypted on this computer.")
+			: h("div", { class: "keys-missing", role: "alert" },
+				h("b", {}, "Voice is off: it needs its keys."),
+				h("span", {}, "A helper types these in once. They stay encrypted on this computer. Face control works without them."));
 		const save = h("button", { class: "btn btn--ember btn--wide", "data-dwell": true }, "Save keys");
 		save.addEventListener("click", () => {
 			const keys = Object.fromEntries(fields.map((field, i) => [field.name, inputs[i].value.trim()]));
-			if (Object.values(keys).some((v) => !v)) {
-				setText(status, "Fill in every key first.");
-				return;
-			}
-			voice.saveKeys(keys).then(() => setText(status, "Keys saved. Voice is starting."),
-				(error) => setText(status, `Could not save the keys: ${error?.message ?? error}`));
+			const empty = fields.filter((field) => !keys[field.name]).map((field) => field.label);
+			const say = (text) => status.replaceChildren(h("span", {}, text));
+			if (empty.length) return say(`Still empty: ${empty.join(", ")}.`);
+			if (keys.LIVEKIT_URL && !/^(wss|https):\/\//i.test(keys.LIVEKIT_URL)) return say("The LiveKit URL should start with wss://");
+			voice.saveKeys(keys).then(() => say("Keys saved. Voice is starting."),
+				(error) => say(`Could not save the keys: ${error?.message ?? error}`));
 		});
 		const form = h("div", { style: { display: "flex", "flex-direction": "column", gap: "10px" } },
-			...fields.map((field, i) => h("label", { style: { display: "flex", "flex-direction": "column", gap: "6px" } }, h("span", { class: "label label--dim" }, field.label), inputs[i])),
+			...fields.map((field, i) => h("label", { style: { display: "flex", "flex-direction": "column", gap: "6px" } }, h("span", { class: "label label--dim" }, field.hint ? `${field.label} · ${field.hint}` : field.label), inputs[i])),
 			h("div", { class: "row-grid" }, onKeyboard ? h("button", { class: "btn", "data-dwell": true, onclick: () => onKeyboard() }, "Keyboard") : null, save));
 		if (config.hasKeys) {
 			form.hidden = true;
