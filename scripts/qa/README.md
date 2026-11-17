@@ -47,3 +47,11 @@ For a live run that never moves the real mouse, start the app with
 
 Face Control end to end with a scripted face and a logging mouse driver. Results go to
 `last-run.json` (not tracked).
+
+## sounds-e2e
+
+    node scripts/qa/sounds-e2e.js [evidence dir]
+
+The voice cue sounds, silently (island audio muted): the four files decode, Talk logs
+`[VISION] sound wake volume 60`, the Settings switch turns cues off, plus screenshots of
+Settings > Voice and About. To swap a sound, see `scripts/sounds/normalize-sounds.py`.
