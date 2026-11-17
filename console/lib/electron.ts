@@ -54,7 +54,12 @@ export interface ElectronAPI {
   /** Wake word: 16 kHz mono mic audio for the local spotter (never leaves the PC). */
   sendWakeAudio?: (samples: Float32Array, end: number) => void;
   reportWakeSound?: (ms: number) => void;
-  setWakeSensitivity?: (sensitivity: 'relaxed' | 'normal' | 'strict') => void;
+  setWakeSensitivity?: (sensitivity: 'relaxed' | 'normal') => void;
+  /** Open the one Settings view (in the face window). */
+  openSettings?: (section?: 'voice') => void;
+  getSettings?: () => Promise<MainSettings>;
+  migrateSettings?: (old: unknown) => Promise<MainSettings>;
+  onSettings?: (callback: (settings: MainSettings) => void) => () => void;
   onWake?: (callback: (heard: WakeHeard) => void) => () => void;
   getVoiceConfig?: () => Promise<VoiceConfig>;
   setVoiceConfig?: (
@@ -64,6 +69,14 @@ export interface ElectronAPI {
   onVoiceConfigChanged?: (
     callback: (config: Pick<VoiceConfig, 'voice' | 'language'>) => void
   ) => () => void;
+}
+
+/** The island's share of the one settings store (vision-settings.json). */
+export interface MainSettings {
+  dwellTime: number;
+  wakeSensitivity: 'relaxed' | 'normal';
+  islandEdge: 'top' | 'bottom';
+  migrated: boolean;
 }
 
 export function getElectron(): ElectronAPI | null {

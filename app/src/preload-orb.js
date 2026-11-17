@@ -29,6 +29,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	setEdge: (edge) => ipcRenderer.send('vision-edge', edge),
 	/** Show Face Control's window (without taking focus). */
 	showFace: () => ipcRenderer.send('vision-show-face'),
+	/** Open the one Settings view (in the face window). */
+	openSettings: (section) => ipcRenderer.send('vision-open-settings', section),
+	/** { dwellTime, wakeSensitivity, islandEdge, migrated } from the settings file. */
+	getSettings: () => ipcRenderer.invoke('vision-settings-get'),
+	/** Hand the old localStorage settings to main once; returns the merged settings. */
+	migrateSettings: (old) => ipcRenderer.invoke('vision-settings-migrate', old),
+	onSettings: (callback) => {
+		const listener = (_event, settings) => callback(settings);
+		ipcRenderer.on('vision-settings', listener);
+		return () => ipcRenderer.removeListener('vision-settings', listener);
+	},
 	/** Pause or resume face control. */
 	togglePause: () => ipcRenderer.send('vision-toggle-pause'),
 	/** true while a full-screen app is in front and the island is a line at the top. */

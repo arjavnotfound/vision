@@ -1,10 +1,11 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { type MainSettings, getElectron } from '@/lib/electron';
 
 export type ThemeName = 'ember' | 'paper';
 export type CaptionSize = 'M' | 'L' | 'XL';
-export type WakeSensitivity = 'relaxed' | 'normal' | 'strict';
+export type WakeSensitivity = 'relaxed' | 'normal';
 
 export interface VisionSettings {
   theme: ThemeName;
@@ -12,7 +13,7 @@ export interface VisionSettings {
   dwellMs: number;
   captionSize: CaptionSize;
   reducedMotion: boolean;
-  /** "Vision" wake word. Strict needs "Hey Vision". */
+  /** "Vision" wake word. From the settings file, like dwellMs and islandEdge. */
   wakeSensitivity: WakeSensitivity;
   onboarded: boolean;
   /** Which screen edge the island hangs from. */
@@ -22,7 +23,8 @@ export interface VisionSettings {
 export const DEFAULT_SETTINGS: VisionSettings = {
   theme: 'ember',
   dwellEnabled: true,
-  dwellMs: 900,
+  // One dwell time for every VISION surface (face window, overlay, island).
+  dwellMs: 800,
   captionSize: 'L',
   reducedMotion: false,
   wakeSensitivity: 'normal',
@@ -50,10 +52,8 @@ function sanitize(raw: unknown): VisionSettings {
     dwellMs: clampDwell(Number(value.dwellMs ?? DEFAULT_SETTINGS.dwellMs)),
     captionSize: value.captionSize === 'M' || value.captionSize === 'XL' ? value.captionSize : 'L',
     reducedMotion: value.reducedMotion === true,
-    wakeSensitivity:
-      value.wakeSensitivity === 'relaxed' || value.wakeSensitivity === 'strict'
-        ? value.wakeSensitivity
-        : 'normal',
+    // "strict" was removed (it locked people out in music): it reads as normal.
+    wakeSensitivity: value.wakeSensitivity === 'relaxed' ? 'relaxed' : 'normal',
     onboarded: value.onboarded === true,
     islandEdge: value.islandEdge === 'bottom' ? 'bottom' : 'top',
   };
@@ -73,6 +73,43 @@ class SettingsStore {
     } catch {
       // Storage can be unavailable (private mode, blocked site data): use defaults.
     }
+    this.loadMain();
+  }
+
+  // Dwell time, wake sensitivity and island edge live in the settings file; localStorage
+  // keeps only window state (onboarded). The old local values move over once.
+  private mainLoaded = false;
+  private loadMain() {
+    const electron = getElectron();
+    if (this.mainLoaded || !electron?.getSettings) return;
+    this.mainLoaded = true;
+    const apply = (main: MainSettings | null) => {
+      if (!main) return;
+      this.state = sanitize({
+        ...this.state,
+        dwellMs: main.dwellTime,
+        wakeSensitivity: main.wakeSensitivity,
+        islandEdge: main.islandEdge,
+      });
+      this.listeners.forEach((listener) => listener());
+    };
+    electron.onSettings?.(apply);
+    electron
+      .getSettings()
+      .then((main) => {
+        if (main && !main.migrated && electron.migrateSettings) {
+          let old: unknown = {};
+          try {
+            old = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}');
+          } catch {
+            old = {};
+          }
+          return electron.migrateSettings(old);
+        }
+        return main;
+      })
+      .then(apply)
+      .catch(() => undefined);
   }
 
   get = (): VisionSettings => {

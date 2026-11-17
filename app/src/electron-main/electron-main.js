@@ -217,6 +217,7 @@ const { createScrollHandler, createOverlaySync, summarizeInputFeedback } = requi
 const { ensureInitialRelativeMouseMove } = require('./win-relative-mouse.js');
 const { allowGestureButton, allowGestureScroll, isMouthClickMode } = require('./gesture-policy.js');
 const { createVisionBus } = require('./vision-bus.js');
+const { islandSettings, migrateIslandSettings, sanitizeGlobal } = require('./settings-migrate.js');
 const screen = require('electron').screen; // Note: can't be used until ready event
 
 // Link to the voice assistant (see vision-bus.js). `live`: the assistant's mic is open.
@@ -501,6 +502,7 @@ function deserializeSettings(settings) {
 				activeSettings[key] = settings.globalSettings[key];
 			}
 		}
+		sanitizeGlobal(activeSettings);
 		if (settings.globalSettings.runAtLogin !== undefined) {
 			if (app.isPackaged) {
 				// The NSIS install has a fixed path, so the default (this executable) is right.
@@ -766,6 +768,7 @@ const createWindow = () => {
 	ipcMain.on('setOptions', (_event, newOptions) => {
 		deserializeSettings(newOptions);
 		saveSettings();
+		sendIslandSettings();
 		if (activeSettings.clickingMode === 'off') {
 			mouseSafety.releaseAllMouseButtons('clicking-mode-off');
 		}
@@ -1384,14 +1387,34 @@ function startAssistant(busReady) {
 	sendBusState();
 
 	const fromOrb = (event) => orb?.getWindow()?.webContents === event.sender;
-	const voiceConfig = () => ({ ...voiceSettings.read(), hasKeys: hasVoiceKeys(voiceKeys), voices: VOICES, keyFields: VOICE_KEY_FIELDS });
-	ipcMain.handle('vision-voice-config', (event) => (fromOrb(event) ? voiceConfig() : null));
-	ipcMain.handle('vision-voice-config-set', (event, change) => {
+	const fromFace = (event) => appWindow?.webContents === event.sender;
+	// The island reads its dwell time, wake sensitivity and edge from the one settings store.
+	ipcMain.handle('vision-settings-get', (event) => (fromOrb(event) ? islandSettings(activeSettings) : null));
+	ipcMain.handle('vision-settings-migrate', async (event, old) => {
 		if (!fromOrb(event)) throw new Error('not allowed');
+		const patch = migrateIslandSettings(activeSettings, old && typeof old === 'object' ? old : {});
+		if (patch) {
+			console.log(`[VISION] Moved the island's settings into the settings file: ${Object.keys(patch).join(', ')}`);
+			deserializeSettings({ globalSettings: patch });
+			await saveSettings();
+			sendIslandSettings();
+		}
+		return islandSettings(activeSettings);
+	});
+	// Island menu > Settings: the one Settings view, in the face window.
+	ipcMain.on('vision-open-settings', (event, section) => {
+		if (!fromOrb(event) || !appWindow) return;
+		showAppWindow();
+		appWindow.webContents.send('uiCommand', section === 'voice' ? 'settings-voice' : 'settings');
+	});
+	const voiceConfig = () => ({ ...voiceSettings.read(), hasKeys: hasVoiceKeys(voiceKeys), voices: VOICES, keyFields: VOICE_KEY_FIELDS });
+	ipcMain.handle('vision-voice-config', (event) => (fromOrb(event) || fromFace(event) ? voiceConfig() : null));
+	ipcMain.handle('vision-voice-config-set', (event, change) => {
+		if (!fromOrb(event) && !fromFace(event)) throw new Error('not allowed');
 		return applyVoiceSettings(change);
 	});
 	ipcMain.handle('vision-voice-keys-save', (event, keys) => {
-		if (!fromOrb(event)) throw new Error('not allowed');
+		if (!fromOrb(event) && !fromFace(event)) throw new Error('not allowed');
 		const clean = {};
 		for (const { name } of VOICE_KEY_FIELDS) {
 			const value = String(keys?.[name] ?? '').trim();
@@ -1453,6 +1476,10 @@ function startAssistant(busReady) {
 
 let voiceSettings = null;
 let audioDuck = null;
+
+function sendIslandSettings() {
+	orb?.getWindow()?.webContents.send('vision-settings', islandSettings(activeSettings));
+}
 
 /** Voice / language change from Settings or by voice. Applies to the next voice session. */
 function applyVoiceSettings(change) {
