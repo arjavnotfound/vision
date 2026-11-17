@@ -8,9 +8,11 @@ import { getElectron } from '@/lib/electron';
 import {
   type FaceState,
   type IslandView,
+  type LineTone,
   currentSteps,
   faceState,
   islandView,
+  lineTone,
   windowModeFor,
 } from '@/lib/island';
 import { useSettings } from '@/lib/settings';
@@ -40,6 +42,13 @@ function pausedText(eyesResume: boolean) {
   // The spoken "Vision, resume" is not built yet: show the gesture that resumes.
   return eyesResume ? 'Paused · close your eyes 2 s to resume' : 'Paused · rest here to resume';
 }
+
+const LINE: Record<LineTone, string> = {
+  idle: 'bg-bone-3 opacity-80',
+  accent: 'bg-ember',
+  warn: 'bg-warn',
+  dim: 'bg-bone-3 opacity-35',
+};
 
 const DOT: Record<FaceState, string> = {
   tracking: 'bg-ok',
@@ -137,10 +146,13 @@ function EndTarget({
 export function Island({
   previewView,
   previewProgress,
+  previewTone,
 }: {
   /** Force a view (preview only). */
   previewView?: IslandView;
   previewProgress?: number;
+  /** Force the full-screen line's colour (preview only). */
+  previewTone?: LineTone;
 }) {
   const model = useVision();
   const { actions } = model;
@@ -225,6 +237,24 @@ export function Island({
     setMenu('menu');
   };
   const closeMenu = () => setMenu(null);
+
+  // A request whose steps have all finished goes back to exactly the resting island once
+  // VISION has nothing more to say (no Stop, no step list, the resting mark).
+  const working = steps.some((step) => step.status === 'running') || !steps.length;
+  const [finished, setFinished] = useState(false);
+  const hadSteps = steps.length > 0;
+  useEffect(() => {
+    if (hadSteps) setFinished(true);
+  }, [hadSteps]);
+  useEffect(() => {
+    if (!voiceOn) setFinished(false);
+  }, [voiceOn, model.activatedAt]);
+  const { collapse } = actions;
+  useEffect(() => {
+    if (previewView || !finished || hadSteps || view !== 'listening') return;
+    setFinished(false);
+    collapse();
+  }, [previewView, finished, hadSteps, view, collapse]);
   const run = (fn?: () => void) => () => {
     setMenu(null);
     fn?.();
@@ -276,13 +306,24 @@ export function Island({
       case 'acting':
         return (
           <Row
-            mark={<VisionMark size={44} state="acting" actionPulse={model.actionPulse} />}
-            end={<EndTarget label="Stop" stop onActivate={actions.endSession} />}
+            mark={
+              working ? (
+                <VisionMark size={44} state="acting" actionPulse={model.actionPulse} />
+              ) : (
+                <VisionMark size={44} state="idle" />
+              )
+            }
+            end={working ? <EndTarget label="Stop" stop onActivate={actions.endSession} /> : null}
           >
-            <p className="text-bone text-[20px] leading-tight font-medium">
-              {steps.some((s) => s.status === 'running') || !steps.length
-                ? 'Working on it'
-                : 'Done'}
+            <p className="text-bone flex items-center gap-2 text-[20px] leading-tight font-medium">
+              {working ? (
+                'Working on it'
+              ) : (
+                <>
+                  <Check className="text-ok size-5" strokeWidth={2.4} />
+                  Done
+                </>
+              )}
             </p>
             {model.userCaption && (
               <p className="text-bone-2 line-clamp-1 text-[14px]">“{model.userCaption}”</p>
@@ -302,6 +343,12 @@ export function Island({
             }
             end={<EndTarget label="Stop" stop onActivate={actions.endSession} />}
           >
+            <div className="flex items-center gap-3">
+              <p className="label-mono text-ember-text text-[12px] tracking-[0.18em] uppercase">
+                Speaking
+              </p>
+              <LevelMeter level={model.outputLevel} />
+            </div>
             <p className="text-bone line-clamp-3 text-[18px] leading-snug">{model.agentCaption}</p>
           </Row>
         );
@@ -453,6 +500,9 @@ export function Island({
   })();
 
   const resting = view === 'resting';
+  const tone =
+    previewTone ??
+    lineTone({ voiceOn, offline: Boolean(model.notice), face, uiState: model.uiState });
   const restingLabel =
     face === 'paused'
       ? pausedText(Boolean(model.face?.eyesResume))
@@ -473,7 +523,7 @@ export function Island({
           onActivate={openMenu}
           indicator="none"
           hitSize={0}
-          className={cn('bg-bone-3 pointer-events-auto h-2 w-[160px] opacity-80', 'rounded-b-full')}
+          className={cn('pointer-events-auto h-2 w-[160px] rounded-b-full', LINE[tone])}
         >
           <span className="sr-only">VISION</span>
         </DwellTarget>

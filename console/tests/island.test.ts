@@ -7,6 +7,7 @@ import {
   currentSteps,
   faceState,
   islandView,
+  lineTone,
   windowModeFor,
 } from '../lib/island.ts';
 
@@ -86,4 +87,13 @@ test('steps of the current request, then a short done window', () => {
   assert.equal(currentSteps(finished, now - 10_000, now + DONE_MS, now).length, 0);
   assert.equal(currentSteps(finished, now - 10_000, now + 1_000, now).length, 2);
   assert.equal(currentSteps(activity, now, now).length, 0);
+});
+
+test('full-screen line colour follows the state', () => {
+  const rest = { voiceOn: false, offline: false, face: 'tracking' as const, uiState: 'idle' };
+  assert.equal(lineTone(rest), 'idle');
+  assert.equal(lineTone({ ...rest, voiceOn: true, uiState: 'listening' }), 'accent');
+  assert.equal(lineTone({ ...rest, offline: true }), 'warn');
+  assert.equal(lineTone({ ...rest, face: 'unseen' }), 'warn');
+  assert.equal(lineTone({ ...rest, face: 'paused' }), 'dim');
 });

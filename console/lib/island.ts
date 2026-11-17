@@ -89,3 +89,20 @@ export function currentSteps<T extends StepLike>(
     return steps.slice(-3);
   return [];
 }
+
+/** The full-screen line's colour: neutral at rest, accent while voice works, warning
+ * when voice is offline or the face is lost, dim while paused. */
+export type LineTone = 'idle' | 'accent' | 'warn' | 'dim';
+
+export function lineTone(i: {
+  voiceOn: boolean;
+  offline: boolean;
+  face: FaceState;
+  uiState: string;
+}): LineTone {
+  if (i.offline || i.uiState === 'offline' || i.uiState === 'error') return 'warn';
+  if (i.voiceOn) return 'accent';
+  if (i.face === 'unseen') return 'warn';
+  if (i.face === 'paused') return 'dim';
+  return 'idle';
+}
