@@ -1,5 +1,8 @@
-// Gesture meters: one row per gesture, a 24-segment level bar with the threshold notch, and
-// the action the gesture is mapped to. While a gesture fires (and for 400 ms after the level
+// Gesture meters: one row per gesture (left wink, right wink, blink, mouth open, brow raise,
+// both eyes closed), a 24-segment level bar with the threshold marker, and the action the
+// gesture is mapped to. With `diagnostics: true` the row shows the live value instead of the
+// action and turns ember whenever the level passes the threshold marker.
+// While a gesture fires (and for 400 ms after the level
 // drops) the row gets an ember border and fill, its segments and action label turn ember.
 
 import { h, setText, clamp } from "./dom.js";
@@ -27,6 +30,15 @@ export const METERS = [
 		active: (g) => Boolean(g.rightEye?.active),
 	},
 	{
+		id: "blink",
+		name: "Blink",
+		// both eyes closing together: the more open eye decides
+		read: (g) => Math.max(g.leftEye?.ratio ?? NaN, g.rightEye?.ratio ?? NaN),
+		level: (ratio) => (0.35 - ratio) / 0.35,
+		notches: (t) => ({ enter: (0.35 - t.eye.low) / 0.35, exit: (0.35 - t.eye.high) / 0.35 }),
+		active: (g) => Boolean(g.leftEye?.active && g.rightEye?.active),
+	},
+	{
 		id: "mouth",
 		name: "Mouth open",
 		read: (g) => g.mouth?.ratio,
@@ -41,20 +53,32 @@ export const METERS = [
 		level: (ratio) => (ratio - 0.12) / 0.3,
 		notches: (t) => ({ enter: (t.brow.high - 0.12) / 0.3, exit: (t.brow.low - 0.12) / 0.3 }),
 		active: (g) => Boolean(g.brow?.raised),
-		hold: "HOLD 3S",
+		hold: "hold 3 s",
 	},
 	{
 		id: "sleep",
-		name: "Both eyes",
+		name: "Both eyes closed",
 		read: (g) => g.sleep?.progress,
 		level: (progress) => progress,
 		notches: () => ({ enter: 0.98, exit: null }),
 		active: (g) => (g.sleep?.progress ?? 0) > 0.05,
-		hold: "HOLD 2S",
+		hold: "hold 2 s",
 	},
 ];
 
-export function createMeters(container) {
+/** Level and threshold marker (both 0..1) per meter, or null when not measured. */
+export function meterLevels(gestures) {
+	const out = {};
+	for (const meter of METERS) {
+		const raw = gestures ? meter.read(gestures) : NaN;
+		out[meter.id] = Number.isFinite(raw) && gestures.thresholds
+			? { value: raw, level: clamp(meter.level(raw), 0, 1), threshold: clamp(meter.notches(gestures.thresholds).enter, 0, 1) }
+			: null;
+	}
+	return out;
+}
+
+export function createMeters(container, { diagnostics = false } = {}) {
 	const rows = new Map();
 	for (const meter of METERS) {
 		const segments = Array.from({ length: SEGMENTS }, () => h("i", { class: "meter__seg" }));
@@ -96,6 +120,12 @@ export function createMeters(container) {
 				row.exit.hidden = notches.exit === null;
 				if (notches.exit !== null) row.exit.style.left = `${clamp(notches.exit, 0, 1) * 100}%`;
 			}
+			if (diagnostics) {
+				setText(row.action, Number.isFinite(raw) ? raw.toFixed(2) : "–");
+				setFiring(row, level >= notches.enter);
+				paint(row, level);
+				continue;
+			}
 			const binding = g.bindings?.[meter.id] ?? "";
 			const label = binding === "OFF" ? "OFF" : meter.hold ? `${binding} · ${meter.hold}` : binding;
 			setText(row.action, label);
@@ -128,3 +158,5 @@ export function createMeters(container) {
 
 	return { update, fire };
 }
+
+export const mount = (el, ctx = {}) => createMeters(el, ctx);
