@@ -102,9 +102,12 @@ const PREVIEW_JOBS = [
 	{ name: 'onboarding-2-camera', query: { scene: 'framing', view: 'onboarding-2' } },
 	{ name: 'onboarding-3-calibrate', query: { scene: 'tracking', view: 'onboarding-3' } },
 	{ name: 'onboarding-1-welcome-paper', query: { scene: 'tracking', view: 'onboarding-1', theme: 'paper' } },
-	{ name: 'sheet-settings', query: { scene: 'tracking', view: 'settings' } },
+	{ name: 'settings-1-pointer', query: { scene: 'tracking', view: 'settings', tab: 'Pointer' } },
+	{ name: 'settings-2-clicking', query: { scene: 'tracking', view: 'settings', tab: 'Clicking' } },
+	{ name: 'settings-2b-close-eyes-confirm', query: { scene: 'tracking', view: 'settings', tab: 'Clicking', confirm: 'eyes' } },
+	{ name: 'settings-3-voice', query: { scene: 'tracking', view: 'settings', tab: 'Voice' } },
 	{ name: 'sheet-profiles', query: { scene: 'tracking', view: 'profiles' } },
-	{ name: 'sheet-about', query: { scene: 'tracking', view: 'about' } },
+	{ name: 'settings-4-about', query: { scene: 'tracking', view: 'about' } },
 	{ name: 'dialog-quit', query: { scene: 'tracking', view: 'confirm' } },
 	{ name: 'overlay-tracking', page: OVERLAY_PREVIEW_PAGE, query: { state: 'tracking' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-dwell', page: OVERLAY_PREVIEW_PAGE, query: { state: 'dwell' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
@@ -157,7 +160,10 @@ function createPreviewRunner({ args, preloadPath }) {
 				backgroundColor: '#0B0A09',
 				title: 'VISION · Preview',
 				icon: NEW_UI_ICON,
-				webPreferences: { preload: preloadPath, backgroundThrottling: false },
+				// QA screenshots come from capturePage: render offscreen, never on the desktop.
+				webPreferences: { preload: preloadPath, backgroundThrottling: false, offscreen: true },
+				show: false,
+				skipTaskbar: true,
 			});
 			const all = first(args.screenshot_all);
 			const single = first(args.screenshot);
