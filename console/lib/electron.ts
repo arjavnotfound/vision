@@ -2,7 +2,15 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type OverlayMode = 'orb' | 'orb-hint' | 'strip' | 'console';
+export type OverlayMode = 'island' | 'island-open' | 'console';
+
+/** Face control as Face Control reports it to the island. */
+export interface FaceStatus {
+  tracking: boolean;
+  seen: boolean;
+  /** Closing the eyes for 2 s pauses and resumes. */
+  eyesResume: boolean;
+}
 
 export type VoiceLanguage = 'auto' | 'en' | 'hi';
 export interface VoiceConfig {
@@ -24,6 +32,11 @@ export interface WakeHeard {
 export interface ElectronAPI {
   isElectron: true;
   setMode?: (mode: OverlayMode) => void;
+  setEdge?: (edge: 'top' | 'bottom') => void;
+  showFace?: () => void;
+  togglePause?: () => void;
+  onFullScreen?: (callback: (on: boolean) => void) => () => void;
+  onFaceStatus?: (callback: (status: FaceStatus) => void) => () => void;
   onActivate?: (callback: () => void) => () => void;
   getHotkey?: () => Promise<string>;
   hide?: () => void;

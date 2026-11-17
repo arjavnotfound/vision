@@ -332,6 +332,21 @@ export function SettingsView() {
       <section className="bg-ink-1 rounded-[18px] px-6 py-3 shadow-[inset_0_0_0_1px_var(--rule)]">
         <SectionLabel className="pt-3 pb-1">Display</SectionLabel>
         <div className="border-rule border-b py-4">
+          <p className="text-bone mb-1 text-[16px]">VISION’s place on screen</p>
+          <p className="text-bone-2 mb-3 text-[14px]">
+            Push the pointer against that edge to reach it.
+          </p>
+          <Segmented<'top' | 'bottom'>
+            label="VISION’s place on screen"
+            value={settings.islandEdge}
+            onChange={(islandEdge) => updateSettings({ islandEdge })}
+            options={[
+              { value: 'top', label: 'Top' },
+              { value: 'bottom', label: 'Bottom' },
+            ]}
+          />
+        </div>
+        <div className="border-rule border-b py-4">
           <p className="text-bone mb-3 text-[16px]">Theme</p>
           <Segmented<ThemeName>
             label="Theme"

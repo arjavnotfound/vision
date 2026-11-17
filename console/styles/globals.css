@@ -268,13 +268,3 @@ html.is-electron body {
   overflow: hidden !important;
   user-select: none;
 }
-
-/* Floating orb anchor: the orb's RIGHT edge is fixed, so the strip grows to the
-   left with the mark under the pointer. Browser: centred orb (68px).
-   Electron: the window itself is right-anchored at the orb, 22px padding. */
-.orb-anchor {
-  right: calc(50% - 34px);
-}
-html.is-electron .orb-anchor {
-  right: 22px;
-}

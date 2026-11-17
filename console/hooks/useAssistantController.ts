@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Room } from 'livekit-client';
-import { type OverlayMode, getElectron } from '@/lib/electron';
+import { getElectron } from '@/lib/electron';
 import { visionAudio } from '@/lib/vision-audio';
 
 /** Follow-up window: after VISION answers, keep listening this long without the wake word. */
@@ -29,11 +29,8 @@ function speakOffline() {
   }
 }
 
-export type Surface = Exclude<OverlayMode, 'orb-hint'>;
-
-const SURFACE_ORDER: Record<Surface, number> = { orb: 0, strip: 1, console: 2 };
-// Longer than the orb's 0.6s width spring, so the collapse is never clipped.
-const WINDOW_SHRINK_DELAY_MS = 680;
+/** orb: the island resting (no voice). strip: the island open for voice. */
+export type Surface = 'orb' | 'strip' | 'console';
 
 interface ControllerInput {
   room?: Room;
@@ -57,10 +54,11 @@ export interface AssistantController {
   isOffline: boolean;
   /** Report that the session could not get going (e.g. the agent never joined). */
   reportOffline: () => void;
+  /** Date.now() of the last activation (wake word, hotkey, Talk). */
+  activatedAt: number;
   activate: () => void;
   collapse: () => void;
   openConsole: () => void;
-  closeConsole: () => void;
   toggleMute: () => void;
   endSession: () => void;
   /** Reset the idle timers (call on any user interaction with the UI). */
@@ -100,6 +98,7 @@ export function useAssistantController({
   const [isStarting, setIsStarting] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [lastInteraction, setLastInteraction] = useState(() => Date.now());
+  const [activatedAt, setActivatedAt] = useState(0);
   const wasConnected = useRef(isConnected);
 
   const touch = useCallback(() => setLastInteraction(Date.now()), []);
@@ -108,22 +107,6 @@ export function useAssistantController({
   useEffect(() => {
     touch();
   }, [activitySignal, isBusy, touch]);
-
-  // Keep the Electron window bounds in sync with the surface. Growing happens at
-  // once; shrinking waits for the collapse morph so it is not clipped.
-  const previousSurface = useRef(surface);
-  useEffect(() => {
-    const electron = getElectron();
-    const grew = SURFACE_ORDER[surface] >= SURFACE_ORDER[previousSurface.current];
-    previousSurface.current = surface;
-    if (!electron?.setMode) return;
-    if (grew) {
-      electron.setMode(surface);
-      return;
-    }
-    const timer = setTimeout(() => electron.setMode?.(surface), WINDOW_SHRINK_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [surface]);
 
   // Half-duplex: mute the mic while VISION speaks, and a moment after (hall echo), so
   // on a PA system it never hears and answers its own voice.
@@ -199,6 +182,7 @@ export function useAssistantController({
 
   const activate = useCallback(() => {
     touch();
+    setActivatedAt(Date.now());
     visionAudio.playTing('connect');
     setUserMuted(false);
     setIsOffline(false);
@@ -228,11 +212,6 @@ export function useAssistantController({
     setSurface('console');
   }, [touch]);
 
-  const closeConsole = useCallback(() => {
-    touch();
-    setSurface('strip');
-  }, [touch]);
-
   const toggleMute = useCallback(() => {
     touch();
     setUserMuted((muted) => !muted);
@@ -250,10 +229,10 @@ export function useAssistantController({
     isStarting,
     isOffline,
     reportOffline,
+    activatedAt,
     activate,
     collapse,
     openConsole,
-    closeConsole,
     toggleMute,
     endSession,
     touch,

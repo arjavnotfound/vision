@@ -15,6 +15,8 @@ export interface VisionSettings {
   /** "Vision" wake word. Strict needs "Hey Vision". */
   wakeSensitivity: WakeSensitivity;
   onboarded: boolean;
+  /** Which screen edge the island hangs from. */
+  islandEdge: 'top' | 'bottom';
 }
 
 export const DEFAULT_SETTINGS: VisionSettings = {
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   reducedMotion: false,
   wakeSensitivity: 'normal',
   onboarded: false,
+  islandEdge: 'top',
 };
 
 export const DWELL_MIN_MS = 600;
@@ -52,6 +55,7 @@ function sanitize(raw: unknown): VisionSettings {
         ? value.wakeSensitivity
         : 'normal',
     onboarded: value.onboarded === true,
+    islandEdge: value.islandEdge === 'bottom' ? 'bottom' : 'top',
   };
 }
 

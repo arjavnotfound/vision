@@ -25,13 +25,16 @@ PORT = 3999
 BASE = f"http://localhost:{PORT}"
 STATES = ["idle", "listening", "thinking", "speaking", "acting", "error", "offline"]
 TABS = ["home", "assistant", "activity", "settings"]
+ISLAND_VIEWS = ["wake", "listening", "understood", "acting", "confirm", "speaking", "offline", "menu"]
 
 
 def jobs(theme: str) -> list[tuple[str, str, int, int]]:
     """(name, query, width, height) for every surface, as in the preview gallery."""
-    out = [("orb-hint", "surface=orb&anchor=1&hint=1", 380, 182)]
-    out += [(f"orb-{s}", f"surface=orb&anchor=1&state={s}", 380, 182) for s in STATES]
-    out += [(f"strip-{s}", f"surface=strip&state={s}", 640, 182) for s in STATES]
+    out = [("island-resting", "surface=island&anchor=1&view=resting", 520, 150)]
+    out += [("island-unseen", "surface=island&anchor=1&view=resting&face=unseen", 520, 150)]
+    out += [("island-paused", "surface=island&anchor=1&view=resting&face=paused", 520, 150)]
+    out += [("island-fullscreen-line", "surface=island&anchor=1&view=sliver", 520, 60)]
+    out += [(f"island-{v}", f"surface=island&anchor=1&view={v}", 640, 440) for v in ISLAND_VIEWS]
     out += [(f"console-{s}", f"surface=console&state={s}", 1200, 780) for s in STATES]
     out += [(f"console-tab-{t}", f"surface=console&tab={t}&state=speaking", 1200, 780) for t in TABS]
     out += [(f"onboarding-{n}", f"surface=onboarding&step={n}", 1200, 780) for n in range(3)]
@@ -42,7 +45,7 @@ def wait_for_server(timeout_s: float) -> None:
     end = time.time() + timeout_s
     while time.time() < end:
         try:
-            with urllib.request.urlopen(f"{BASE}/preview?surface=orb", timeout=60) as response:
+            with urllib.request.urlopen(f"{BASE}/preview?surface=island", timeout=60) as response:
                 if response.status == 200:
                     return
         except OSError:

@@ -11,7 +11,7 @@ throwaway profile):
 
 ## capture-console
 
-Every console surface (orb, strip, console states and tabs, onboarding) from the
+Every island state and console surface (console states and tabs, onboarding) from the
 `/preview` route, in a throwaway Google Chrome via Playwright. It starts `next dev` on
 port 3999 and stops it when done (first compile takes about a minute):
 

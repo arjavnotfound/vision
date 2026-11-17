@@ -78,6 +78,8 @@ export interface WakeMic {
   live: () => void;
   /** About how many samples the capture has taken so far (for the wake latency log). */
   position: () => number;
+  /** The live mic input (for a level meter), or undefined if the mic is not open. */
+  inputTrack: () => MediaStreamTrack | undefined;
 }
 
 /**
@@ -91,9 +93,11 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
   useEffect(() => {
     callback.current = onHeard;
   }, [onHeard]);
-  const tap = useRef<{ node: AudioWorkletNode; output: MediaStreamAudioDestinationNode }>(
-    undefined
-  );
+  const tap = useRef<{
+    node: AudioWorkletNode;
+    output: MediaStreamAudioDestinationNode;
+    input?: MediaStreamTrack;
+  }>(undefined);
   const lastChunk = useRef({ end: 0, at: 0 });
 
   useEffect(() => {
@@ -156,7 +160,7 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
           channelCountMode: 'explicit',
         });
         sessionContext.createMediaStreamSource(spotted.stream).connect(output);
-        tap.current = { node, output };
+        tap.current = { node, output, input: stream.getAudioTracks()[0] };
         // Unplugged mic: start again when a device comes back.
         stream.getAudioTracks()[0]?.addEventListener('ended', () => {
           teardown();
@@ -187,6 +191,7 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
       live: () => tap.current?.node.port.postMessage({ type: 'live' }),
       position: () =>
         lastChunk.current.end + ((performance.now() - lastChunk.current.at) * RATE) / 1000,
+      inputTrack: () => tap.current?.input,
     }),
     []
   );

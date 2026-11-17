@@ -4,6 +4,7 @@ import { createContext, useContext } from 'react';
 import type { MotionValue } from 'motion/react';
 import type { Surface } from '@/hooks/useAssistantController';
 import type { ActivityItem } from '@/lib/activity';
+import type { FaceStatus } from '@/lib/electron';
 import type { ConversationTurn } from '@/lib/transcript';
 import type { ApertureState } from './aperture-core';
 
@@ -40,11 +41,22 @@ export interface VisionModel {
   searchProvider: string;
   showOnboarding: boolean;
   consoleTab: ConsoleTab;
+  /** Face control's state (null until Face Control reports it). */
+  face: FaceStatus | null;
+  /** A full-screen app is in front: the resting island is a line at the top. */
+  fullScreen: boolean;
+  /** Date.now() of the last wake / hotkey / Talk (the wake-heard flash). */
+  activatedAt: number;
   actions: {
     activate: () => void;
     collapse: () => void;
     openConsole: () => void;
-    closeConsole: () => void;
+    /** The console on its Settings tab. */
+    openSettings: () => void;
+    /** Electron: show Face Control's window. */
+    showFace?: () => void;
+    /** Electron: pause or resume face control. */
+    togglePause?: () => void;
     toggleMute: () => void;
     endSession: () => void;
     sendCommand: (text: string) => void;

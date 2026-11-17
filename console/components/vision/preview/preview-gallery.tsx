@@ -2,19 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import type { IslandView } from '@/lib/island';
 import type { CaptionSize, ThemeName } from '@/lib/settings';
 import { settingsStore } from '@/lib/settings';
 import { ApertureCore, type ApertureState } from '../aperture-core';
 import { ConsoleSurface } from '../console/console';
 import { Onboarding } from '../console/onboarding';
 import { CropMarks, Grain } from '../primitives';
-import { OrbSurface } from '../surfaces/orb';
-import { StripSurface } from '../surfaces/strip';
-import { type ConsoleTab, VisionModelProvider } from '../vision-model';
+import { Island } from '../surfaces/island';
+import { type ConsoleTab, type VisionModel, VisionModelProvider } from '../vision-model';
 import { useMockLevel } from './mock-levels';
 import { PREVIEW_STATES, buildMockModel } from './mock-model';
 
-type PreviewSurface = 'orb' | 'strip' | 'console' | 'onboarding' | 'aperture' | 'marks' | 'orbs';
+type PreviewSurface = 'island' | 'console' | 'onboarding' | 'aperture' | 'marks';
 
 const noop = () => undefined;
 const ACTIONS = {
@@ -22,7 +22,7 @@ const ACTIONS = {
   answerConfirm: noop,
   collapse: noop,
   openConsole: noop,
-  closeConsole: noop,
+  openSettings: noop,
   toggleMute: noop,
   endSession: noop,
   sendCommand: noop,
@@ -64,9 +64,8 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
   const tab = (params.get('tab') as ConsoleTab) ?? 'home';
   const step = Number(params.get('step') ?? 0) as 0 | 1 | 2;
   const dwell = params.get('dwell') ? Number(params.get('dwell')) : undefined;
-  const open = params.get('open') === '1';
-  const muted = params.get('muted') === '1';
-  const chip = params.get('chip') ?? undefined;
+  const view = (params.get('view') as IslandView | null) ?? 'resting';
+  const faceParam = params.get('face');
   // Preview runs outside Electron: show a talk hotkey only when the caller passes the registered one.
   const hotkey = params.get('hotkey') ?? '';
   const mic = useMockLevel(true, 0.4);
@@ -88,7 +87,7 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
   const model = useMemo(
     () => ({
       ...buildMockModel({
-        surface: surface === 'orb' || surface === 'strip' ? surface : 'console',
+        surface: surface === 'island' ? islandSurface(view) : 'console',
         state,
         tab,
         onboarding: surface === 'onboarding',
@@ -98,30 +97,19 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
         now,
         actions: ACTIONS,
       }),
-      ...(muted ? { isMuted: true } : {}),
       hotkeyLabel: hotkey,
+      ...(surface === 'island' ? islandMock(view, now, faceParam) : {}),
     }),
-    [surface, state, tab, mic, out, pulse, now, muted, hotkey]
+    [surface, state, tab, mic, out, pulse, now, hotkey, view, faceParam]
   );
 
   return (
     <VisionModelProvider value={model}>
       <div className="min-h-svh">
-        {surface === 'orb' &&
-          (open ? (
-            <StripSurface previewProgress={dwell} />
-          ) : (
-            <OrbSurface
-              forceHint={params.get('hint') === '1'}
-              previewProgress={dwell}
-              previewChip={chip}
-            />
-          ))}
-        {surface === 'strip' && <StripSurface previewProgress={dwell} />}
+        {surface === 'island' && <Island previewView={view} previewProgress={dwell} />}
         {surface === 'console' && <ConsoleSurface previewProgress={dwell} />}
         {surface === 'onboarding' && <ConsoleOnboarding step={step} previewProgress={dwell} />}
         {(surface === 'aperture' || surface === 'marks') && <MarkSheet />}
-        {surface === 'orbs' && <OrbSheet />}
       </div>
     </VisionModelProvider>
   );
@@ -172,42 +160,66 @@ function MarkSheet() {
   );
 }
 
-const ORB_STATES: { label: string; query: string }[] = [
-  { label: 'Resting', query: 'state=idle' },
-  { label: 'Dwelling', query: 'state=idle&hint=1&dwell=0.62' },
-  { label: 'Listening', query: 'state=listening&open=1' },
-  { label: 'Acting, with chip', query: 'state=acting&chip=Opening%20youtube.com' },
-  { label: 'Muted', query: 'state=idle&open=1&muted=1' },
-];
-
-/** The floating orb in its states, each rendered in a real orb-sized frame. */
-function OrbSheet() {
-  const params = useSearchParams();
-  const theme = params.get('theme') === 'paper' ? 'paper' : 'ember';
-  return (
-    <div className="bg-ink-0 flex min-h-svh flex-col gap-3 px-10 py-8">
-      {ORB_STATES.map(({ label, query }) => (
-        <div key={label} className="flex items-center gap-8">
-          <span className="text-bone-2 w-[140px] shrink-0 text-[15px]">{label}</span>
-          <iframe
-            src={`/preview?surface=orb&anchor=1&theme=${theme}&${query}`}
-            title={label}
-            width={640}
-            height={182}
-            className="bg-ink-1 rounded-[18px]"
-            style={{ border: 0 }}
-          />
-        </div>
-      ))}
-    </div>
-  );
+/** The model surface a view belongs to: voice views are 'strip', the rest 'orb'. */
+function islandSurface(view: IslandView): VisionModel['surface'] {
+  return ['resting', 'menu', 'sliver'].includes(view) ? 'orb' : 'strip';
 }
-/* ----------------------------------------------------------------------------- */
 
-const FRAMES: { surface: PreviewSurface; w: number; h: number; extra?: string; label: string }[] = [
-  { surface: 'orb', w: 380, h: 182, extra: '&hint=1', label: 'Orb · hover hint' },
-  { surface: 'strip', w: 640, h: 182, label: 'Strip' },
-];
+/** Mock data that makes each island view look as it does live. */
+function islandMock(view: IslandView, now: number, face: string | null): Partial<VisionModel> {
+  const base: Partial<VisionModel> = {
+    face: {
+      tracking: face !== 'paused',
+      seen: face !== 'unseen',
+      eyesResume: true,
+    },
+    fullScreen: view === 'sliver' || face === 'fullscreen',
+    activatedAt: view === 'wake' ? now : now - 5_000,
+  };
+  switch (view) {
+    case 'wake':
+    case 'listening':
+      return { ...base, uiState: 'listening', userCaption: '', agentCaption: '' };
+    case 'understood':
+      return { ...base, uiState: 'thinking', userCaption: 'open youtube and play some lo-fi' };
+    case 'acting': {
+      const done = {
+        id: 's1',
+        action: 'open_url',
+        target: 'youtube.com',
+        url: 'https://www.youtube.com/',
+        status: 'done' as const,
+        ts: now - 3_000,
+      };
+      const running = {
+        id: 's2',
+        action: 'search',
+        target: 'lo-fi music',
+        status: 'running' as const,
+        ts: now - 400,
+      };
+      return {
+        ...base,
+        uiState: 'acting',
+        userCaption: 'open youtube and play some lo-fi',
+        chip: running,
+        activity: [running, done],
+      };
+    }
+    case 'confirm':
+      return {
+        ...base,
+        uiState: 'idle',
+        confirm: { question: 'Close this tab? Anything you typed in it will be lost.' },
+      };
+    case 'offline':
+      return { ...base, uiState: 'offline', notice: 'Voice is offline. Face control still works.' };
+    default:
+      return base;
+  }
+}
+
+/* ----------------------------------------------------------------------------- */
 
 function Gallery({ theme }: { theme: ThemeName }) {
   const scale = 0.5;
@@ -234,29 +246,6 @@ function Gallery({ theme }: { theme: ThemeName }) {
           Switch theme
         </a>
       </header>
-
-      {FRAMES.map(({ surface, w, h, extra, label }) => (
-        <section key={surface} className="mb-12">
-          <h2 className="label-mono text-bone-3 mb-4">{label}</h2>
-          <div className="flex flex-wrap gap-4">
-            {PREVIEW_STATES.map((state) => (
-              <div key={state}>
-                <p className="label-mono text-bone-2 mb-2">{state}</p>
-                <div
-                  className="bg-ink-1 rounded-[18px] shadow-[inset_0_0_0_1px_var(--rule)]"
-                  style={{ width: w, height: h }}
-                >
-                  {frame(
-                    `/preview?surface=${surface}&state=${state}&theme=${theme}${extra ?? ''}`,
-                    w,
-                    h
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
 
       <section className="mb-12">
         <h2 className="label-mono text-bone-3 mb-4">Console · Home</h2>

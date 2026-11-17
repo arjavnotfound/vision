@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Home, MessageSquareText, Minimize2, PhoneOff, Settings2, X } from 'lucide-react';
+import { Activity, Home, MessageSquareText, PhoneOff, Settings2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '@/lib/shadcn/utils';
 import { DwellTarget } from '../dwell-target';
@@ -82,10 +82,7 @@ export function ConsoleSurface({ previewProgress }: { previewProgress?: number }
                     End session
                   </DwellTarget>
                 )}
-                <BarButton label="Minimise to strip" onActivate={actions.closeConsole}>
-                  <Minimize2 className="size-[22px]" strokeWidth={1.8} />
-                </BarButton>
-                <BarButton label="Close to orb" onActivate={actions.collapse}>
+                <BarButton label="Close" onActivate={actions.collapse}>
                   <X className="size-6" strokeWidth={1.8} />
                 </BarButton>
               </div>

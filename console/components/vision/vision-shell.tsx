@@ -1,23 +1,21 @@
 'use client';
 
+import { useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
+import { requestWindowMode } from '@/lib/window-mode';
 import { ConsoleSurface } from './console/console';
-import { FloatingOrb } from './surfaces/orb';
+import { Island } from './surfaces/island';
 import { useVision } from './vision-model';
 
-/**
- * Renders the current surface. Orb and strip are ONE element (the floating orb,
- * closed or open), so it grows instead of swapping and the mark never restarts.
- */
+/** The island, or the console (settings) when it is open. The island sizes its own window. */
 export function VisionShell() {
   const { surface } = useVision();
+  useEffect(() => {
+    if (surface === 'console') requestWindowMode('console');
+  }, [surface]);
   return (
     <AnimatePresence initial={false}>
-      {surface === 'console' ? (
-        <ConsoleSurface key="console" />
-      ) : (
-        <FloatingOrb key="float" open={surface === 'strip'} />
-      )}
+      {surface === 'console' ? <ConsoleSurface key="console" /> : <Island key="island" />}
     </AnimatePresence>
   );
 }

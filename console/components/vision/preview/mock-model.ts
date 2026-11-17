@@ -132,6 +132,9 @@ export function buildMockModel(o: MockOptions): VisionModel {
     searchProvider: 'Bing',
     showOnboarding: o.onboarding,
     consoleTab: o.tab,
+    face: null,
+    fullScreen: false,
+    activatedAt: 0,
     actions: o.actions,
   };
 

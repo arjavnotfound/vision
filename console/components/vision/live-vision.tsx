@@ -19,7 +19,7 @@ import { useAudioLevel } from '@/hooks/useAudioLevel';
 import { useConversationTranscript } from '@/hooks/useConversationTranscript';
 import { useVisionActions } from '@/hooks/useVisionActions';
 import { useWakeSpotter } from '@/hooks/useWakeSpotter';
-import { type WakeHeard, getElectron } from '@/lib/electron';
+import { type FaceStatus, type WakeHeard, getElectron } from '@/lib/electron';
 import { settingsStore, updateSettings, useSettings } from '@/lib/settings';
 import type { ApertureState } from './aperture-core';
 import {
@@ -46,6 +46,10 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   const [consoleTab, setConsoleTab] = useState<ConsoleTab>('home');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [failurePulse, setFailurePulse] = useState(0);
+  const [face, setFace] = useState<FaceStatus | null>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => getElectron()?.onFaceStatus?.(setFace), []);
+  useEffect(() => getElectron()?.onFullScreen?.(setFullScreen), []);
 
   const agentReady = isConnected && READY_STATES.has(agent.state);
   const chipRunning = vision.chip?.status === 'running';
@@ -239,10 +243,13 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     [activate, agentReady, controller, sendText]
   );
 
-  // Audio levels for the Aperture.
-  const micTrack = microphoneTrack?.track?.mediaStreamTrack;
+  // Audio levels for the mark and the island's meter. The wake capture is live from the
+  // wake itself, so the meter moves before the session is up.
+  const micTrack = wakeMic.inputTrack() ?? microphoneTrack?.track?.mediaStreamTrack;
   const outputTrack = voiceAssistant.audioTrack?.publication?.track?.mediaStreamTrack;
-  const micLevel = useAudioLevel(isConnected && !controller.isMuted ? micTrack : undefined);
+  const micLevel = useAudioLevel(
+    controller.surface !== 'orb' && !controller.isMuted ? micTrack : undefined
+  );
   const outputLevel = useAudioLevel(outputTrack);
 
   // Browsers can block audio until a real click; dwell is not a user gesture.
@@ -309,11 +316,19 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     searchProvider,
     showOnboarding,
     consoleTab,
+    face,
+    fullScreen,
+    activatedAt: controller.activatedAt,
     actions: {
       activate: activateNow,
       collapse: controller.collapse,
       openConsole: controller.openConsole,
-      closeConsole: controller.closeConsole,
+      openSettings: () => {
+        setConsoleTab('settings');
+        controller.openConsole();
+      },
+      showFace: getElectron()?.showFace,
+      togglePause: getElectron()?.togglePause,
       toggleMute: controller.toggleMute,
       endSession: controller.endSession,
       sendCommand,
