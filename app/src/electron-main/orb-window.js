@@ -32,7 +32,8 @@ const POINTER_POLL_MS = 50;
 
 /** Windows: true while a full-screen app or presentation is in front. Never throws. */
 function createFullScreenProbe() {
-	if (process.platform !== 'win32') return () => false;
+	// QA runs on a laptop that may have a full-screen app in front.
+	if (process.platform !== 'win32' || process.env.VISION_QA_IGNORE_FULLSCREEN === '1') return () => false;
 	try {
 		const koffi = require('koffi');
 		const query = koffi.load('shell32.dll').func('int32 SHQueryUserNotificationState(_Out_ int32* state)');

@@ -25,6 +25,7 @@ PORT = 3999
 BASE = f"http://localhost:{PORT}"
 STATES = ["idle", "listening", "thinking", "speaking", "acting", "error", "offline"]
 TABS = ["home", "assistant", "activity", "settings"]
+LINE_TONES = ["idle", "accent", "warn", "dim"]
 ISLAND_VIEWS = ["wake", "listening", "understood", "acting", "confirm", "speaking", "offline", "menu"]
 
 
@@ -35,6 +36,7 @@ def jobs(theme: str) -> list[tuple[str, str, int, int]]:
     out += [("island-paused", "surface=island&anchor=1&view=resting&face=paused", 520, 150)]
     out += [("island-fullscreen-line", "surface=island&anchor=1&view=sliver", 520, 60)]
     out += [(f"island-{v}", f"surface=island&anchor=1&view={v}", 640, 440) for v in ISLAND_VIEWS]
+    out += [(f"island-line-{t}", f"surface=island&anchor=1&view=sliver&tone={t}", 520, 60) for t in LINE_TONES]
     out += [(f"console-{s}", f"surface=console&state={s}", 1200, 780) for s in STATES]
     out += [(f"console-tab-{t}", f"surface=console&tab={t}&state=speaking", 1200, 780) for t in TABS]
     out += [(f"onboarding-{n}", f"surface=onboarding&step={n}", 1200, 780) for n in range(3)]

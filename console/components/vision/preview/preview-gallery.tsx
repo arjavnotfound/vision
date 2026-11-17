@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { IslandView } from '@/lib/island';
+import type { IslandView, LineTone } from '@/lib/island';
 import type { CaptionSize, ThemeName } from '@/lib/settings';
 import { settingsStore } from '@/lib/settings';
 import { ApertureCore, type ApertureState } from '../aperture-core';
@@ -106,7 +106,13 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
   return (
     <VisionModelProvider value={model}>
       <div className="min-h-svh">
-        {surface === 'island' && <Island previewView={view} previewProgress={dwell} />}
+        {surface === 'island' && (
+          <Island
+            previewView={view}
+            previewProgress={dwell}
+            previewTone={(params.get('tone') as LineTone | null) ?? undefined}
+          />
+        )}
         {surface === 'console' && <ConsoleSurface previewProgress={dwell} />}
         {surface === 'onboarding' && <ConsoleOnboarding step={step} previewProgress={dwell} />}
         {(surface === 'aperture' || surface === 'marks') && <MarkSheet />}
