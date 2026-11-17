@@ -165,7 +165,7 @@ function createMenu() {
 									const proc = spawn('powershell.exe', [
 										'-NoProfile',
 										'-ExecutionPolicy', 'Bypass',
-										'-Command', 'Start-Process osk.exe'
+										'-Command', require('./osk-size.js').oskLaunchCommand(require('electron').screen.getPrimaryDisplay())
 									], { detached: true, stdio: 'ignore' });
 									proc.unref();
 								}
