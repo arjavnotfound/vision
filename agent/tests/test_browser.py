@@ -255,3 +255,110 @@ async def test_popups_are_folded_into_the_main_page() -> None:
         await manager.close()
         server.shutdown()
         thread.join(timeout=2)
+
+
+class _FakePage:
+    def __init__(self) -> None:
+        self.url = "about:blank"
+
+    def is_closed(self) -> bool:
+        return False
+
+    def set_default_timeout(self, _ms: int) -> None:
+        pass
+
+
+class _FakeContext:
+    def __init__(self) -> None:
+        self.pages = [_FakePage()]
+
+    async def add_init_script(self, _script: str) -> None:
+        pass
+
+    def on(self, _event: str, _handler) -> None:
+        pass
+
+    async def close(self) -> None:
+        pass
+
+
+def _fake_playwright(monkeypatch: pytest.MonkeyPatch, missing: set[str | None]) -> list:
+    calls: list = []
+
+    class Chromium:
+        async def launch_persistent_context(self, user_data_dir, *, channel=None, **options):
+            calls.append((channel, user_data_dir, options))
+            if channel in missing:
+                raise RuntimeError(f"{channel} is not installed")
+            return _FakeContext()
+
+    class Playwright:
+        chromium = Chromium()
+
+        async def stop(self) -> None:
+            pass
+
+    class Starter:
+        async def start(self):
+            return Playwright()
+
+    monkeypatch.setattr(browser_module, "async_playwright", lambda: Starter())
+
+    async def no_focus(_page) -> None:
+        pass
+
+    monkeypatch.setattr(browser_module, "_bring_page_window_to_front", no_focus)
+    return calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("missing", "expected", "folder"),
+    [
+        (set(), "chrome", "chrome-profile"),
+        ({"chrome"}, "msedge", "edge-profile"),
+        ({"chrome", "msedge"}, "chromium", "chromium-profile"),
+    ],
+)
+async def test_browser_prefers_chrome_then_edge_then_chromium(
+    monkeypatch: pytest.MonkeyPatch, tmp_path, missing, expected, folder
+) -> None:
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    calls = _fake_playwright(monkeypatch, missing)
+    manager = BrowserManager()
+
+    await manager.start()
+
+    assert manager.browser_name == expected
+    assert manager.profile_dir == tmp_path / "VISION" / folder
+    assert [c[0] for c in calls] == [c for c, _ in browser_module.BROWSER_CHANNELS][: len(calls)]
+    assert calls[-1][1] == str(tmp_path / "VISION" / folder)
+    assert calls[-1][2]["headless"] is False
+
+
+@pytest.mark.asyncio
+async def test_browser_reports_when_no_browser_starts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    _fake_playwright(monkeypatch, {"chrome", "msedge", None})
+
+    with pytest.raises(BrowserError, match="No web browser"):
+        await BrowserManager().start()
+
+
+@pytest.mark.asyncio
+async def test_headless_qa_browser_never_uses_the_signed_in_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    calls = _fake_playwright(monkeypatch, set())
+    manager = BrowserManager(headless=True)
+
+    await manager.start()
+
+    assert calls[0][2]["headless"] is True
+    assert not str(manager.profile_dir).startswith(str(tmp_path))
+    qa_root = manager.profile_dir.parent
+    await manager.close()
+    assert not qa_root.exists()
