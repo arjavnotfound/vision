@@ -2,7 +2,9 @@
 // Dots: true = ok (green), false = problem (red), null = still checking (grey).
 // `line`: one short spoken sentence when something is wrong; face control always works.
 
-export function preflightReport({ preflight, cameraStatus, micOk, internet, assistantSeen }) {
+import { cameraBusy } from "./recovery.js";
+
+export function preflightReport({ preflight, cameraStatus, cameraError, micOk, internet, assistantSeen }) {
 	const pf = preflight ?? {};
 	const camera = cameraStatus === "on" ? true : cameraStatus === "error" || pf.camera === false ? false : null;
 	const mic = micOk === false || pf.mic === false ? false : micOk === true ? true : null;
@@ -11,7 +13,9 @@ export function preflightReport({ preflight, cameraStatus, micOk, internet, assi
 	const assistant = voiceBroken ? false : assistantSeen ? true : null;
 
 	const problems = [];
-	if (camera === false) problems.push("No camera found. Plug in the webcam.");
+	if (camera === false) {
+		problems.push(cameraStatus === "error" && cameraBusy(cameraError) ? "Another app is using the camera. Close that app." : "No camera found. Plug in the webcam.");
+	}
 	if (online === false) {
 		problems.push("No internet. Voice is off, face control still works.");
 	} else if (pf.keys === false) {

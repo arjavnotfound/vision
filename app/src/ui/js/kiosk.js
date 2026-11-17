@@ -75,7 +75,7 @@ export function openStartScreen({ layer, engine, onStart }) {
 		const state = engine.getState();
 		const cam = state.camera?.status;
 		const report = preflightReport({
-			preflight: bus?.preflight, cameraStatus: cam, micOk, internet: bus?.internet, assistantSeen: Boolean(bus?.assistant?.seen),
+			preflight: bus?.preflight, cameraStatus: cam, cameraError: state.camera?.error, micOk, internet: bus?.internet, assistantSeen: Boolean(bus?.assistant?.seen),
 		});
 		for (const [id, ok] of Object.entries(report.dots)) setDot(id, ok, id === "assistant");
 		problem.hidden = !report.line;

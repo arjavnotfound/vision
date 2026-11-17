@@ -30,6 +30,11 @@ describe("Start screen preflight", () => {
 		const noCam = preflightReport({ preflight: { ...allGood, camera: false }, cameraStatus: "starting", micOk: true, internet: true, assistantSeen: true });
 		assert.equal(noCam.dots.camera, false);
 		assert.match(noCam.line, /No camera found/);
+		// Busy in another app (getUserMedia NotReadableError) is not "no camera".
+		const busy = preflightReport({ preflight: allGood, cameraStatus: "error", cameraError: { name: "NotReadableError", message: "Device in use" }, micOk: true, internet: true, assistantSeen: true });
+		assert.equal(busy.dots.camera, false);
+		assert.match(busy.line, /Another app is using the camera/);
+		assert.doesNotMatch(busy.line, /No camera found/);
 		assert.match(preflightReport({ preflight: { ...allGood, build: "building" }, cameraStatus: "on", micOk: true, internet: true }).line, /Preparing the voice assistant/);
 	});
 

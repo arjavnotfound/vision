@@ -14,13 +14,13 @@ export const CAMERA_RETRY_MS = 5000;
 export const CAMERA_STUCK_MS = 10000;
 export const CAMERA_SPEAK_MS = 3000;
 
+/** True when getUserMedia failed because another app has the camera. */
+export const cameraBusy = (error) => ["NotReadableError", "TrackStartError", "AbortError"].includes(error?.name);
+
 // Plain words for each getUserMedia failure (DOMException names).
 export function cameraProblem(error) {
+	if (cameraBusy(error)) return "Another app is using the camera. Close that app. VISION tries again every few seconds, or say “Vision, try the camera”.";
 	switch (error?.name) {
-		case "NotReadableError":
-		case "TrackStartError":
-		case "AbortError":
-			return "Another app is using the camera. Close that app. VISION tries again every few seconds, or say “Vision, try the camera”.";
 		case "NotAllowedError":
 		case "SecurityError":
 		case "PermissionDeniedError":
