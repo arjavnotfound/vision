@@ -1,4 +1,4 @@
-// Sheets and dialogs: Settings, Profiles, About, Confirm. Everything is a 64px dwell target;
+// Sheets and dialogs: Settings (with About), Profiles, Confirm. Everything is a 64px dwell target;
 // long lists are paged (Previous / Next) instead of scrolled, so they work hands-free.
 
 import { h, icons, setText } from "./dom.js";
@@ -6,6 +6,7 @@ import { markSvg } from "./mark-svg.js";
 import { clickingModeLabel } from "./labels.js";
 import { createControlsEditor } from "./controls-editor.js";
 import { choosePlan, DEFAULT_PLAN } from "./control-map.js";
+import { STEPPERS } from "./controls.js";
 
 function closeButton(onClick) {
 	return h("button", { class: "btn btn--ghost", "data-dwell": true, "aria-label": "Close", onclick: onClick }, icons.close(), "Close");
@@ -49,7 +50,7 @@ export function openConfirm(layer, { title, text, confirmLabel, danger = false, 
 		h("div", { class: "confirm__title" }, title),
 		h("div", { class: "prose" }, text),
 		h("div", { class: "confirm__actions" },
-			secondary ? h("button", { class: "btn btn--ghost", "data-dwell": true, onclick: () => { close(); secondary.onClick(); } }, secondary.label) : null,
+			secondary ? h("button", { class: "btn btn--ghost", "data-dwell": true, "data-dwell-delay": secondary.delay, onclick: () => { close(); secondary.onClick(); } }, secondary.label) : null,
 			h("div", { class: "session__spacer" }),
 			cancel ? h("button", { class: "btn", "data-dwell": true, onclick: close }, "Cancel") : null,
 			h("button", { class: `btn ${danger ? "btn--danger" : "btn--ember"} btn--wide`, "data-dwell": true, onclick: () => { close(); onConfirm(); } }, confirmLabel),
@@ -116,22 +117,23 @@ const CLICK_MODE_HINTS = {
 // pickers, camera property pages) or the classic UI, since those need a hand.
 const KIOSK = typeof location !== "undefined" && new URLSearchParams(location.search).has("kiosk");
 
-/** Settings sheet: "Settings" from the old menu bar plus every remaining engine setting. */
+/** The one Settings view: Pointer, Clicking, Voice, About. */
 // `controlMap`: { get(), set(plan) } for the person's own control choices (optional).
-export function openSettings(layer, { engine, host, theme, onThemeChange, onChanged, controlMap }) {
+// `voice`: { getConfig, setConfig, saveKeys, getWake, setWake } (absent when voice is off).
+export function openSettings(layer, { engine, host, onChanged, controlMap, voice, onRecalibrate, onKeyboard, version, initialTab = "Pointer" }) {
 	const st = engine.settings;
 	const { body, close } = openSheet(layer, { title: "Settings" });
-	const tabs = ["General", "Clicking", "Camera", "Language", "Data"];
-	let tab = "General";
-	const tabRow = h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(5, minmax(0, 1fr))" } });
+	const tabs = ["Pointer", "Clicking", "Voice", "About"];
+	let tab = tabs.includes(initialTab) ? initialTab : "Pointer";
+	const tabRow = h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(4, minmax(0, 1fr))" } });
 	const content = h("div", { style: { display: "flex", "flex-direction": "column", gap: "18px" } });
 	body.append(tabRow, content);
 
 	const changed = () => onChanged?.();
-	const settingToggle = (label, key, tech, invert = false) => toggleRow({
+	const settingToggle = (label, key, tech) => toggleRow({
 		label, tech,
-		get: () => invert ? st.get(key) === false : Boolean(st.get(key)),
-		set: (on) => { st.set(key, invert ? !on : on); changed(); },
+		get: () => Boolean(st.get(key)),
+		set: (on) => { st.set(key, on); changed(); },
 	});
 
 	function stepRow(label, tech, { get, set, min, max, step, format }) {
@@ -151,26 +153,79 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 			h("div", { class: "stepper__title" }, h("span", { class: "stepper__name" }, label), h("span", { class: "tech" }, tech)),
 			h("div", { class: "stepper__row" }, minus, value, plus));
 	}
+	const stepperFor = (def) => stepRow(def.name, def.sub, {
+		get: () => def.get(st), set: (v) => def.set(st, v, def.get(st)), min: def.min, max: def.max, step: 1, format: def.format,
+	});
+
+	// Close-eyes is the only hands-free way to resume from pause, so one stray dwell must
+	// not turn it off: switching it off needs a second, longer dwell on "Turn off".
+	const closeEyesToggle = () => {
+		const el = h("button", { class: "toggle", role: "switch", "data-dwell": true, "aria-checked": String(Boolean(st.get("closeEyesToToggle"))) },
+			h("span", { class: "toggle__name" }, "Close eyes 2s to pause / resume"), h("span", { class: "tech" }, "hands-free pause"));
+		el.addEventListener("click", () => {
+			if (!st.get("closeEyesToToggle")) {
+				st.set("closeEyesToToggle", true);
+				changed();
+				render();
+				return;
+			}
+			openConfirm(layer, {
+				title: "Turn off close-eyes resume?",
+				text: "While face control is paused, closing your eyes is the only hands-free way back. With it off, only F9 or a mouse can resume.",
+				confirmLabel: "Keep it on",
+				onConfirm: () => { },
+				secondary: { label: "Turn off", delay: 1500, onClick: () => { st.set("closeEyesToToggle", false); changed(); render(); } },
+				cancel: false,
+			});
+		});
+		return el;
+	};
 
 	const renderers = {
-		General: () => [
-			section("APPEARANCE", h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } },
-				choice({ label: "Ember Dark", tech: "default", checked: theme() === "ember", onClick: () => { onThemeChange("ember"); render(); } }),
-				choice({ label: "Paper Light", tech: "for projectors", checked: theme() === "paper", onClick: () => { onThemeChange("paper"); render(); } }),
-			)),
-			section("GESTURES", h("div", { class: "row-grid" },
-				settingToggle("Close eyes 2s to pause / resume", "closeEyesToToggle", "hands-free pause"),
-				settingToggle("Raise brows 3s for keyboard", "eyebrowRaiseOpensKeyboard", "opens the on-screen keyboard"),
-			)),
-			section("APP", h("div", { class: "row-grid" },
-				settingToggle("Sound effects", "soundEffects", "a soft click on every click"),
-				settingToggle("Start tracking on launch", "startEnabled", "no need to press F9"),
-				settingToggle("Run at login", "runAtLogin", "starts with Windows"),
-				settingToggle("Swap mouse buttons", "swapMouseButtons", "match swapped system buttons"),
-			)),
-		],
+		Pointer: () => {
+			const cams = h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } }, h("span", { class: "label" }, "Looking for cameras…"));
+			navigator.mediaDevices?.enumerateDevices?.().then((devices) => {
+				const list = devices.filter((d) => d.kind === "videoinput");
+				const current = st.get("cameraDeviceId") || "";
+				cams.replaceChildren(
+					choice({ label: "Default camera", tech: "system default", checked: !current, onClick: () => { st.set("cameraDeviceId", ""); render(); } }),
+					...list.map((cam, i) => choice({
+						label: cam.label || `Camera ${i + 1}`,
+						tech: cam.deviceId === current ? "in use" : "",
+						checked: cam.deviceId === current,
+						onClick: () => { st.set("cameraDeviceId", cam.deviceId); render(); },
+					})),
+				);
+			}, () => cams.replaceChildren(h("span", { class: "label" }, "Camera list unavailable")));
+			return [
+				section("CURSOR", h("div", { class: "row-grid" },
+					...STEPPERS.filter((def) => def.id !== "dwellTime").map(stepperFor),
+					stepRow("Motion threshold", "Ignore tiny movements", {
+						get: () => st.get("headTrackingMinDistance"), set: (v) => st.set("headTrackingMinDistance", v),
+						min: 0, max: 10, step: 1, format: (v) => String(v),
+					}),
+					stepRow("Head tilt influence", "Point by angle, not motion", {
+						get: () => st.get("headTrackingTiltInfluence"), set: (v) => st.set("headTrackingTiltInfluence", Math.round(v * 10) / 10),
+						min: 0, max: 1, step: 0.1, format: (v) => `${Math.round(v * 100)}%`,
+					}),
+				)),
+				section("CALIBRATION", h("div", { class: "row-grid" },
+					h("button", { class: "btn btn--ember", "data-dwell": true, onclick: () => { close(); onRecalibrate?.(); } }, "Recalibrate"),
+					settingToggle("Start tracking on launch", "startEnabled", "no need to press F9"),
+				)),
+				section("CAMERA", cams, h("div", { class: "row-grid" },
+					settingToggle("Mirror the camera view", "mirror"),
+					h("button", { class: "btn", "data-dwell": true, onclick: () => engine.useCamera() }, "Retry camera"),
+					host.canOpenCameraSettings && !KIOSK ? h("button", { class: "btn", "data-dwell": true, onclick: () => host.openCameraSettings(engine.getVideoStream()?.getVideoTracks?.()[0]?.label) }, "Camera settings…") : null,
+				)),
+			];
+		},
 		Clicking: () => [
-			controlMap ? section("YOUR CONTROLS", h("p", { class: "prose" }, "Choose which face gesture (or your voice) does each action. Rest on a choice to switch."),
+			section("DWELL", h("div", { class: "row-grid" },
+				stepperFor(STEPPERS.find((def) => def.id === "dwellTime")),
+				settingToggle("Dwell drag", "dwellDrag", "rest to grab, rest again to drop"),
+			)),
+			controlMap ? section("YOUR CONTROLS", h("p", { class: "prose" }, "Choose which face gesture does each action. Rest on a choice to switch."),
 				createControlsEditor({ plan: controlMap.get() ?? DEFAULT_PLAN, onChange: (plan) => { controlMap.set(plan); changed(); } }).el) : null,
 			section("CLICK METHOD", h("div", { class: "choice-grid" }, ...CLICK_MODES.map((mode) => choice({
 				label: clickingModeLabel(mode),
@@ -186,66 +241,80 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 					render();
 				},
 			})))),
+			section("GESTURES", h("div", { class: "row-grid" },
+				closeEyesToggle(),
+				settingToggle("Raise brows 3s for keyboard", "eyebrowRaiseOpensKeyboard", "opens the on-screen keyboard"),
+				settingToggle("Sound effects", "soundEffects", "a soft click on every click"),
+				settingToggle("Swap mouse buttons", "swapMouseButtons", "match swapped system buttons"),
+			)),
 			section("FINE TUNING", h("div", { class: "row-grid" },
 				stepRow("Delay before dragging", "Hold still after a click starts", {
 					get: () => st.get("delayBeforeDragging"), set: (v) => st.set("delayBeforeDragging", v),
 					min: 0, max: 1000, step: 100, format: (v) => `${(v / 1000).toFixed(1)}s`,
 				}),
-				stepRow("Motion threshold", "Ignore tiny movements", {
-					get: () => st.get("headTrackingMinDistance"), set: (v) => st.set("headTrackingMinDistance", v),
-					min: 0, max: 10, step: 1, format: (v) => String(v),
-				}),
-				stepRow("Head tilt influence", "Point by angle, not motion", {
-					get: () => st.get("headTrackingTiltInfluence"), set: (v) => st.set("headTrackingTiltInfluence", Math.round(v * 10) / 10),
-					min: 0, max: 1, step: 0.1, format: (v) => `${Math.round(v * 100)}%`,
-				}),
 			)),
 		],
-		Camera: () => {
-			const list = h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } }, h("span", { class: "label" }, "Looking for cameras…"));
-			navigator.mediaDevices?.enumerateDevices?.().then((devices) => {
-				const cams = devices.filter((d) => d.kind === "videoinput");
-				const current = st.get("cameraDeviceId") || "";
-				list.replaceChildren(
-					choice({ label: "Default camera", tech: "system default", checked: !current, onClick: () => { st.set("cameraDeviceId", ""); render(); } }),
-					...cams.map((cam, i) => choice({
-						label: cam.label || `Camera ${i + 1}`,
-						tech: cam.deviceId === current ? "in use" : "",
-						checked: cam.deviceId === current,
-						onClick: () => { st.set("cameraDeviceId", cam.deviceId); render(); },
-					})),
-				);
-			}, () => list.replaceChildren(h("span", { class: "label" }, "Camera list unavailable")));
-			return [
-				section("CAMERA SOURCE", list),
-				section("VIEW", h("div", { class: "row-grid" }, settingToggle("Mirror the camera view", "mirror"))),
-				section("TROUBLESHOOTING", h("div", { class: "row-grid" },
-					h("button", { class: "btn", "data-dwell": true, onclick: () => engine.useCamera() }, "Retry camera"),
-					host.canOpenCameraSettings && !KIOSK ? h("button", { class: "btn", "data-dwell": true, onclick: () => host.openCameraSettings(engine.getVideoStream()?.getVideoTracks?.()[0]?.label) }, "Camera settings…") : null,
-				)),
-			];
-		},
-		Language: () => {
-			const meta = st.describe("language");
-			const current = st.get("language");
-			return [
-				h("p", { class: "prose" }, "Changing the language restarts the tracking engine for a moment."),
-				pagedChoices({
-					items: (meta?.options ?? []).map((o) => ({ ...o, selected: o.value === current })),
-					pageSize: 12,
-					render: (o) => choice({ label: o.label, checked: o.selected, onClick: () => { st.set("language", o.value); close(); } }),
-				}),
-			];
-		},
-		Data: () => [
-			KIOSK ? section("SETTINGS FILE", h("p", { class: "prose" }, "Your settings are saved automatically.")) : null,
-			KIOSK ? null : section("SETTINGS FILE", h("div", { class: "row-grid" },
-				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
-				h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),
-			)),
-			section("PRIVACY", h("p", { class: "prose" }, "Face control runs entirely on this computer: camera video never leaves it and is never saved. The voice assistant sends audio online only while it listens. No telemetry or crash reports.")),
-		],
+		Voice: () => voiceSection(),
+		About: () => aboutContent({ version, host }),
 	};
+
+	function voiceSection() {
+		const holder = h("div", { style: { display: "flex", "flex-direction": "column", gap: "18px" } }, h("span", { class: "label" }, "Loading…"));
+		if (!voice) {
+			holder.replaceChildren(h("p", { class: "prose" }, "The voice assistant is off in this build. Face control works without it."));
+			return [holder];
+		}
+		Promise.all([voice.getConfig(), voice.getWake()]).then(([config, wake]) => {
+			if (!config) throw new Error("no voice config");
+			holder.replaceChildren(
+				section("WAKE WORD", h("p", { class: "prose" }, "Say “Vision”. Heard on this computer only. Relaxed hears a quieter voice; Normal ignores more background talk."),
+					h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } },
+						choice({ label: "Relaxed", tech: "quiet voice, quiet room", checked: wake === "relaxed", onClick: () => { voice.setWake("relaxed"); render(); } }),
+						choice({ label: "Normal", tech: "default", checked: wake !== "relaxed", onClick: () => { voice.setWake("normal"); render(); } }),
+					)),
+				section("LANGUAGE", h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(3, minmax(0, 1fr))" } },
+					...[["auto", "Auto"], ["en", "English"], ["hi", "Hindi"]].map(([value, label]) => choice({
+						label, checked: config.language === value,
+						onClick: () => voice.setConfig({ language: value }).then(render, () => { }),
+					})))),
+				section("VOICE", pagedChoices({
+					items: (config.voices ?? []).map((v) => ({ value: v.name, label: v.name, tech: v.style, selected: v.name === config.voice })),
+					pageSize: 6,
+					render: (item) => choice({ label: item.label, tech: item.tech, checked: item.selected, onClick: () => voice.setConfig({ voice: item.value }).then(render, () => { }) }),
+				})),
+				keyForm(config),
+			);
+		}).catch(() => holder.replaceChildren(h("p", { class: "prose" }, "Voice settings are not available right now. Face control still works.")));
+		return [holder];
+	}
+
+	function keyForm(config) {
+		const fields = config.keyFields ?? [];
+		const inputs = fields.map((field) => h("input", {
+			type: field.secret ? "password" : "text", "aria-label": field.label, autocomplete: "off", spellcheck: "false",
+			style: { height: "56px", padding: "0 16px", "font-size": "16px", "border-radius": "12px", border: "1px solid var(--rule-strong)", background: "var(--ink-2)", color: "inherit" },
+		}));
+		const status = h("p", { class: "prose" }, config.hasKeys ? "Keys are saved, encrypted on this computer." : "Voice needs keys before it can start.");
+		const save = h("button", { class: "btn btn--ember btn--wide", "data-dwell": true }, "Save keys");
+		save.addEventListener("click", () => {
+			const keys = Object.fromEntries(fields.map((field, i) => [field.name, inputs[i].value.trim()]));
+			if (Object.values(keys).some((v) => !v)) {
+				setText(status, "Fill in every key first.");
+				return;
+			}
+			voice.saveKeys(keys).then(() => setText(status, "Keys saved. Voice is starting."),
+				(error) => setText(status, `Could not save the keys: ${error?.message ?? error}`));
+		});
+		const form = h("div", { style: { display: "flex", "flex-direction": "column", gap: "10px" } },
+			...fields.map((field, i) => h("label", { style: { display: "flex", "flex-direction": "column", gap: "6px" } }, h("span", { class: "label label--dim" }, field.label), inputs[i])),
+			h("div", { class: "row-grid" }, onKeyboard ? h("button", { class: "btn", "data-dwell": true, onclick: () => onKeyboard() }, "Keyboard") : null, save));
+		if (config.hasKeys) {
+			form.hidden = true;
+			const reveal = h("button", { class: "btn", "data-dwell": true, onclick: () => { form.hidden = false; reveal.remove(); } }, "Change voice keys");
+			return section("KEYS", status, reveal, form);
+		}
+		return section("KEYS", status, form);
+	}
 
 	function render() {
 		tabRow.replaceChildren(...tabs.map((name) => choice({ label: name, checked: name === tab, onClick: () => { tab = name; render(); } })));
@@ -253,6 +322,24 @@ export function openSettings(layer, { engine, host, theme, onThemeChange, onChan
 	}
 	render();
 	return { close };
+}
+
+function aboutContent({ version, host }) {
+	return [
+		h("div", { class: "about-mark" },
+			markSvg(72),
+			h("div", {},
+				h("div", { style: { "font-size": "24px", "font-weight": "600" } }, "VISION"),
+				h("div", { class: "label" }, `VERSION ${version || "DEV"}`))),
+		h("p", { class: "prose" }, "Control your computer with your head, your face and your voice. Head movement moves the cursor; winks, an open mouth, raised brows or a steady dwell click for you. Say “Vision” to ask for something. It is built for people who cannot use their hands."),
+		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "Closing both eyes for 2 seconds pauses or resumes tracking. A helper can press F9 at any time, or move the physical mouse to take over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
+		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "camera frames stay on this computer and are never saved. The voice assistant sends your microphone audio online only while it is listening. No telemetry or crash reports."),
+		KIOSK ? null : section("SETTINGS FILE", h("div", { class: "row-grid" },
+			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
+			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),
+		)),
+		h("div", { class: "credits" }, "Open-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
+	];
 }
 
 export function openProfiles(layer, { profiles, onChanged }) {
@@ -278,21 +365,5 @@ export function openProfiles(layer, { profiles, onChanged }) {
 		);
 	}
 	render();
-	return { close };
-}
-
-export function openAbout(layer, { version }) {
-	const { body, close } = openSheet(layer, { title: "About" });
-	body.append(
-		h("div", { class: "about-mark" },
-			markSvg(72),
-			h("div", {},
-				h("div", { style: { "font-size": "24px", "font-weight": "600" } }, "VISION Face Control"),
-				h("div", { class: "label" }, `VERSION ${version || "DEV"} · APERTURE`))),
-		h("p", { class: "prose" }, "Control your computer with your head. VISION reads your face through the webcam: head movement moves the cursor, and winks, an open mouth, raised brows or a steady dwell click for you. It is built for people who cannot use their hands."),
-		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "Closing both eyes for 2 seconds pauses or resumes tracking (Settings, on after setup). A helper can press F9 at any time, or move the physical mouse to take over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
-		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "camera frames stay on this computer and are never saved. The voice assistant sends your microphone audio online only while it is listening."),
-		h("div", { class: "credits" }, "Open-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
-	);
 	return { close };
 }

@@ -61,6 +61,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	getAppVersion: () => ipcRenderer.invoke('getAppVersion'),
 
+	// Settings > Voice. Rejected when the voice assistant is off in this build.
+	getVoiceConfig: () => ipcRenderer.invoke('vision-voice-config'),
+	setVoiceConfig: (change) => ipcRenderer.invoke('vision-voice-config-set', change),
+	saveVoiceKeys: (keys) => ipcRenderer.invoke('vision-voice-keys-save', keys),
+
 	// QA hooks (only answered when the app runs with the fake input driver).
 	qa: (command) => ipcRenderer.invoke('qa', command),
 

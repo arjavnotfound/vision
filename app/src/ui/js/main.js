@@ -9,7 +9,7 @@ import { createAttitude } from "./attitude.js";
 import { createMeters } from "./meters.js";
 import { createControls } from "./controls.js";
 import { createProfiles } from "./profiles.js";
-import { openSettings, openProfiles, openAbout, openConfirm } from "./sheets.js";
+import { openSettings, openProfiles, openConfirm } from "./sheets.js";
 import { openCalibration } from "./calibration.js";
 import { openOnboarding } from "./onboarding.js";
 import { createHost } from "./host.js";
@@ -427,11 +427,28 @@ async function boot() {
 	}
 	document.getElementById("profile-btn").addEventListener("click", () => openProfiles(layer, { profiles, onChanged: () => { controls.refresh(); refreshLabels(); } }));
 	document.getElementById("keyboard-btn").addEventListener("click", () => engine.openOnScreenKeyboard());
-	document.getElementById("settings-btn").addEventListener("click", () => openSettings(layer, {
-		engine, host, theme, onThemeChange: (name) => setTheme(name), onChanged: () => { controls.refresh(); refreshLabels(); autosaveProfile(); },
-		controlMap: { get: () => controlMap, set: applyPlan },
-	}));
-	document.getElementById("about-btn").addEventListener("click", async () => openAbout(layer, { version: await host.getVersion() }));
+	// Settings > Voice talks to the main process; wake sensitivity lives in the settings file.
+	const api = window.electronAPI;
+	const voice = api?.getVoiceConfig ? {
+		getConfig: () => api.getVoiceConfig(),
+		setConfig: (change) => api.setVoiceConfig(change),
+		saveKeys: (keys) => api.saveVoiceKeys(keys),
+		getWake: async () => (await host.getOptions())?.globalSettings?.wakeSensitivity ?? "normal",
+		setWake: (value) => api.setOptions({ globalSettings: { wakeSensitivity: value } }),
+	} : null;
+	let settingsSheet = null;
+	const showSettings = async (initialTab) => {
+		settingsSheet?.close();
+		settingsSheet = openSettings(layer, {
+			engine, host, voice, initialTab, version: await host.getVersion(),
+			onChanged: () => { controls.refresh(); refreshLabels(); autosaveProfile(); },
+			controlMap: { get: () => controlMap, set: applyPlan },
+			onRecalibrate: () => startCalibration(),
+			onKeyboard: () => engine.openOnScreenKeyboard(),
+		});
+	};
+	document.getElementById("settings-btn").addEventListener("click", () => showSettings("Pointer"));
+	document.getElementById("about-btn").addEventListener("click", () => showSettings("About"));
 	host.onCommand?.((command) => {
 		if (command && typeof command === "object" && command.type === "bus") {
 			let result;
@@ -444,8 +461,9 @@ async function boot() {
 			return;
 		}
 		if (command === "calibrate") startCalibration();
-		if (command === "settings") document.getElementById("settings-btn").click();
-		if (command === "about") document.getElementById("about-btn").click();
+		if (command === "settings") showSettings("Pointer");
+		if (command === "settings-voice") showSettings("Voice");
+		if (command === "about") showSettings("About");
 	});
 
 	// ---- live status mark (driven only by existing engine state and click events)
@@ -567,7 +585,7 @@ async function boot() {
 	}
 
 	if (isPreview) {
-		await applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host, theme, setTheme, toast });
+		await applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host, toast });
 	}
 
 	await document.fonts.ready;
@@ -576,7 +594,7 @@ async function boot() {
 	window.__visionReady = true;
 }
 
-async function applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host, theme, setTheme }) {
+async function applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host }) {
 	const view = params.get("view") || "main";
 	const calibData = {
 		center: { yaw: 2, pitch: 3, leftEye: 0.29, rightEye: 0.3, mouth: 0.05, brow: 0.22 },
@@ -590,8 +608,17 @@ async function applyPreviewScene({ layer, engine, profiles, controls, dwell, sta
 	if (view.startsWith("onboarding")) {
 		openOnboarding({ layer, engine, startAt: Number(view.split("-")[1] || 1) - 1 });
 	}
-	if (view === "settings") openSettings(layer, { engine, host, theme, onThemeChange: setTheme });
-	if (view === "about") openAbout(layer, { version: "1.0.0" });
+	// ?view=settings&tab=Voice: one screenshot per section.
+	const voice = {
+		getConfig: async () => ({ voice: "Aoede", language: "auto", hasKeys: true, voices: [{ name: "Aoede", style: "Breezy" }, { name: "Puck", style: "Upbeat" }, { name: "Charon", style: "Informative" }, { name: "Kore", style: "Firm" }, { name: "Fenrir", style: "Excitable" }, { name: "Leda", style: "Youthful" }, { name: "Orus", style: "Firm" }], keyFields: [] }),
+		setConfig: async () => ({}), saveKeys: async () => ({}), getWake: async () => "normal", setWake: () => { },
+	};
+	if (view === "settings") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: params.get("tab") || "Pointer" });
+	if (params.get("confirm") === "eyes") {
+		engine.settings.set("closeEyesToToggle", true);
+		[...layer.querySelectorAll(".toggle")].find((el) => el.textContent.includes("Close eyes"))?.click();
+	}
+	if (view === "about") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: "About" });
 	if (view === "profiles") openProfiles(layer, { profiles, onChanged: () => controls.refresh() });
 	if (view === "confirm") document.querySelector('[data-window="close"]').click();
 	if (view === "main" && engine.fireSceneGesture) {
