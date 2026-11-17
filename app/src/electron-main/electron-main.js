@@ -1261,9 +1261,15 @@ function showAppWindow() {
 const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls']);
 async function handleBusCommand(cmd, value) {
 	if (cmd === 'quit') {
+		// A misheard "quit" must not end the session: the face window asks first.
 		mouseSafety.releaseAllMouseButtons('voice-quit');
-		setTimeout(() => app.quit(), 400);
-		return { done: 'quit' };
+		if (!appWindow) {
+			setTimeout(() => app.quit(), 400);
+			return { done: 'quit' };
+		}
+		showAppWindow();
+		appWindow.webContents.send('uiCommand', 'quit');
+		return { done: 'asked to confirm quit', note: 'VISION is asking the user to confirm on screen (Quit / Cancel).' };
 	}
 	if (cmd === 'status') {
 		return { state: busStatus() };

@@ -28,8 +28,8 @@ function createTray({ getWindow, toggleTracking, sendCommand, talk }) {
 		{ label: 'Pause / resume tracking (F9)', click: toggleTracking },
 		{ label: 'Calibrate…', click: () => sendCommand('calibrate') },
 		{ type: 'separator' },
-		// Quitting also stops the voice assistant (will-quit stops the agent).
-		{ label: 'Quit VISION', role: 'quit' },
+		// Asks first, in the face window (dwell-safe Quit / Cancel). will-quit stops the agent.
+		{ label: 'Quit VISION…', click: () => sendCommand('quit') },
 	]));
 	tray.on('click', show);
 	return tray;
