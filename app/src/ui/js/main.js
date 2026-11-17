@@ -5,7 +5,6 @@
 import { h, setText } from "./dom.js";
 import { createDwell } from "./dwell.js";
 import { createViewfinder } from "./viewfinder.js";
-import { createAttitude } from "./attitude.js";
 import { createMeters } from "./meters.js";
 import { createControls } from "./controls.js";
 import { createProfiles } from "./profiles.js";
@@ -126,8 +125,7 @@ async function boot() {
 	});
 
 	// ---- instruments
-	const viewfinder = createViewfinder(document.getElementById("main-viewfinder"), { engine });
-	const attitude = createAttitude(document.getElementById("attitude"));
+	const viewfinder = createViewfinder(document.getElementById("main-viewfinder"), { engine, readouts: false });
 	const meters = createMeters(document.getElementById("meters"));
 	engine.on("gesture", ({ gesture, action, phase }) => {
 		if (phase === "start" || phase === undefined) meters.fire(gesture, action);
@@ -168,26 +166,27 @@ async function boot() {
 	// ---- title bar
 	const pill = document.querySelector(".status-pill");
 	const statusWord = document.getElementById("status-word");
-	const fpsValue = document.getElementById("fps-value");
 	const pauseBtn = document.getElementById("pause-toggle");
 	const pauseLabel = document.getElementById("pause-label");
 	const hint = document.getElementById("session-hint");
 	pauseBtn.addEventListener("click", () => engine.togglePaused());
 
-	// Every way to quit (title bar, tray, voice) lands here: a dwell-safe Quit / Cancel.
+	// Every way to quit (title bar, tray, voice) lands here. Cancel is the big default on the
+	// right; Quit sits alone on the left and needs a longer dwell, so a drifting cursor can't quit.
 	let quitDialog = null;
 	function confirmQuit() {
 		if (quitDialog?.isOpen()) return;
 		const dialog = openConfirm(layer, {
 			title: "Quit VISION?",
-			text: "Head control and voice stop, and any held mouse button is released. To keep tracking without this window, choose Hide. Say “Vision, show face control” to bring it back.",
-			confirmLabel: "Quit",
-			danger: true,
-			onConfirm: () => host.windowControl("quit"),
-			secondary: { label: "Hide", onClick: () => host.windowControl("hide") },
+			text: "Head control and voice will stop. To keep using VISION without this window, choose Hide. Say “Vision, show face control” to bring it back.",
+			confirmLabel: "Cancel",
+			onConfirm: () => { },
+			cancel: false,
+			alt: { label: "Hide", onClick: () => host.windowControl("hide") },
+			secondary: { label: "Quit", danger: true, delay: 1500, onClick: () => host.windowControl("quit") },
 		});
 		quitDialog = { isOpen: () => dialog.box.isConnected };
-		speak("Quit VISION? Rest on Quit to quit, or on Cancel to keep it running.");
+		speak("Quit VISION? Rest on Cancel to keep it running. To quit, rest longer on Quit, on the left.");
 	}
 
 	for (const btn of document.querySelectorAll("[data-window]")) {
@@ -530,7 +529,7 @@ async function boot() {
 	}
 
 	// ---- render loop
-	const STATUS_WORDS = { tracking: "TRACKING", paused: "PAUSED", "no-face": "NO FACE", starting: "STARTING", "camera-error": "NO CAMERA" };
+	const STATUS_WORDS = { tracking: "ON", paused: "PAUSED", "no-face": "CAN’T SEE YOU", starting: "STARTING", "camera-error": "NO CAMERA" };
 	let lastStatus = "";
 	// Instruments update at ~30 Hz: smooth to the eye, and it leaves the renderer's main thread
 	// (which also runs tracking) mostly free. The camera video itself plays at full rate.
@@ -561,13 +560,13 @@ async function boot() {
 		}
 		cursorState.replaceChildren(
 			h("span", { class: "cursor-state__dot" }),
-			h("b", {}, paused ? "CURSOR PAUSED" : "CURSOR LIVE"),
+			h("b", {}, paused ? "CURSOR PAUSED" : "CURSOR ON"),
 			h("span", { class: "cursor-state__how" }, st.get("closeEyesToToggle")
 				? (paused ? "Close both eyes for 2 seconds to start it" : "Close both eyes for 2 seconds to pause")
 				: (paused ? "Say “Vision, resume”" : "Say “Vision, pause”")),
 		);
 		// Calibration pauses the cursor by itself; that is not news to the user.
-		if (pauseChanged && !calibration) speak(paused ? "Cursor paused. Close both eyes for 2 seconds to start it again." : "Cursor live. It follows your head now.");
+		if (pauseChanged && !calibration) speak(paused ? "Cursor paused. Close both eyes for 2 seconds to start it again." : "Cursor on. It follows your head now.");
 	}
 
 	function frameLoop(now) {
@@ -587,7 +586,6 @@ async function boot() {
 			pill.dataset.status = state.status;
 			setText(statusWord, STATUS_WORDS[state.status] ?? state.status.toUpperCase());
 		}
-		setText(fpsValue, state.camera?.status === "on" ? String(Math.round(state.fps)).padStart(2, "0") : "--");
 		pauseBtn.setAttribute("aria-pressed", String(state.paused));
 		setText(pauseLabel, state.paused ? "RESUME" : "PAUSE");
 		const resume = isKiosk
@@ -596,7 +594,6 @@ async function boot() {
 		setText(hint, state.paused ? resume : state.clickingMode === "dwell" ? "DWELL CLICK IS ON EVERYWHERE" : "REST ON ANY CONTROL TO PRESS IT");
 		drawMark(state, now);
 		viewfinder.update(state, engine.getFrame());
-		attitude.update(state.pose);
 		meters.update(state);
 	}
 	requestAnimationFrame(frameLoop);
@@ -684,6 +681,7 @@ async function applyPreviewScene({ layer, engine, profiles, controls, dwell, sta
 		[...layer.querySelectorAll(".toggle")].find((el) => el.textContent.includes("Close eyes"))?.click();
 	}
 	if (view === "about") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: "About" });
+	if (view === "about" && params.get("diag")) [...layer.querySelectorAll("button")].find((b) => b.textContent === "Diagnostics")?.click();
 	if (view === "profiles") openProfiles(layer, { profiles, onChanged: () => controls.refresh() });
 	if (view === "confirm") document.querySelector('[data-window="close"]').click();
 	if (view === "main" && engine.fireSceneGesture) {

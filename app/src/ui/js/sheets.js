@@ -40,7 +40,8 @@ export function openSheet(layer, { title, onClose }) {
 
 // cancel: false drops the Cancel button and the click-outside dismiss, when `secondary`
 // already declines and a stray click must not answer for the user.
-export function openConfirm(layer, { title, text, confirmLabel, danger = false, onConfirm, secondary = null, cancel = true }) {
+// `secondary` sits alone on the left; `alt` sits next to the main button on the right.
+export function openConfirm(layer, { title, text, confirmLabel, danger = false, onConfirm, secondary = null, alt = null, cancel = true }) {
 	const scrim = h("div", { class: "scrim" });
 	const close = () => {
 		scrim.remove();
@@ -50,8 +51,9 @@ export function openConfirm(layer, { title, text, confirmLabel, danger = false, 
 		h("div", { class: "confirm__title" }, title),
 		h("div", { class: "prose" }, text),
 		h("div", { class: "confirm__actions" },
-			secondary ? h("button", { class: "btn btn--ghost", "data-dwell": true, "data-dwell-delay": secondary.delay, onclick: () => { close(); secondary.onClick(); } }, secondary.label) : null,
+			secondary ? h("button", { class: `btn ${secondary.danger ? "btn--danger" : "btn--ghost"}`, "data-dwell": true, "data-dwell-delay": secondary.delay, onclick: () => { close(); secondary.onClick(); } }, secondary.label) : null,
 			h("div", { class: "session__spacer" }),
+			alt ? h("button", { class: "btn", "data-dwell": true, onclick: () => { close(); alt.onClick(); } }, alt.label) : null,
 			cancel ? h("button", { class: "btn", "data-dwell": true, onclick: close }, "Cancel") : null,
 			h("button", { class: `btn ${danger ? "btn--danger" : "btn--ember"} btn--wide`, "data-dwell": true, onclick: () => { close(); onConfirm(); } }, confirmLabel),
 		),
@@ -200,11 +202,11 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			return [
 				section("CURSOR", h("div", { class: "row-grid" },
 					...STEPPERS.filter((def) => def.id !== "dwellTime").map(stepperFor),
-					stepRow("Motion threshold", "Ignore tiny movements", {
+					stepRow("Steadiness", "Ignore tiny movements", {
 						get: () => st.get("headTrackingMinDistance"), set: (v) => st.set("headTrackingMinDistance", v),
 						min: 0, max: 10, step: 1, format: (v) => String(v),
 					}),
-					stepRow("Head tilt influence", "Point by angle, not motion", {
+					stepRow("Tilt to point", "Point by head angle, not movement", {
 						get: () => st.get("headTrackingTiltInfluence"), set: (v) => st.set("headTrackingTiltInfluence", Math.round(v * 10) / 10),
 						min: 0, max: 1, step: 0.1, format: (v) => `${Math.round(v * 100)}%`,
 					}),
@@ -215,7 +217,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 				)),
 				section("CAMERA", cams, h("div", { class: "row-grid" },
 					settingToggle("Mirror the camera view", "mirror"),
-					h("button", { class: "btn", "data-dwell": true, onclick: () => engine.useCamera() }, "Retry camera"),
+					h("button", { class: "btn", "data-dwell": true, onclick: () => engine.useCamera() }, "Try the camera again"),
 					host.canOpenCameraSettings && !KIOSK ? h("button", { class: "btn", "data-dwell": true, onclick: () => host.openCameraSettings(engine.getVideoStream()?.getVideoTracks?.()[0]?.label) }, "Camera settings…") : null,
 				)),
 			];
@@ -255,13 +257,13 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			)),
 		],
 		Voice: () => voiceSection(),
-		About: () => aboutContent({ version, host }),
+		About: () => aboutContent({ version, host, engine }),
 	};
 
 	function voiceSection() {
 		const holder = h("div", { style: { display: "flex", "flex-direction": "column", gap: "18px" } }, h("span", { class: "label" }, "Loading…"));
 		if (!voice) {
-			holder.replaceChildren(h("p", { class: "prose" }, "The voice assistant is off in this build. Face control works without it."));
+			holder.replaceChildren(h("p", { class: "prose" }, "Voice is not part of this version. Face control works without it."));
 			return [holder];
 		}
 		Promise.all([voice.getConfig(), voice.getWake()]).then(([config, wake]) => {
@@ -330,22 +332,54 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 	return { close };
 }
 
-function aboutContent({ version, host }) {
+function aboutContent({ version, host, engine }) {
+	// Diagnostics are for a helper or support: one dwell away, hidden until asked for.
+	const diag = diagnostics(engine);
+	diag.hidden = true;
+	const diagBtn = h("button", { class: "btn", "data-dwell": true, style: { "margin-left": "auto" }, "aria-expanded": "false" }, "Diagnostics");
+	diagBtn.addEventListener("click", () => {
+		diag.hidden = !diag.hidden;
+		diagBtn.setAttribute("aria-expanded", String(!diag.hidden));
+	});
 	return [
 		h("div", { class: "about-mark" },
 			markSvg(72),
 			h("div", {},
 				h("div", { style: { "font-size": "24px", "font-weight": "600" } }, "VISION"),
-				h("div", { class: "label" }, `VERSION ${version || "DEV"}`))),
-		h("p", { class: "prose" }, "Control your computer with your head, your face and your voice. Head movement moves the cursor; winks, an open mouth, raised brows or a steady dwell click for you. Say “Vision” to ask for something. It is built for people who cannot use their hands."),
-		h("p", { class: "prose" }, h("strong", {}, "Failsafes: "), "Closing both eyes for 2 seconds pauses or resumes tracking. A helper can press F9 at any time, or move the physical mouse to take over for two seconds. Pausing, closing or a crash always releases any held mouse button."),
-		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "camera frames stay on this computer and are never saved. The voice assistant sends your microphone audio online only while it is listening. No telemetry or crash reports."),
+				h("div", { class: "label" }, `VERSION ${version || "DEV"}`)),
+			diagBtn),
+		diag,
+		h("p", { class: "prose" }, "Use your computer without your hands. Move your head to move the cursor, use your face to click, and say “Vision” to ask for things."),
+		h("p", { class: "prose" }, h("strong", {}, "If something goes wrong: "), "close both eyes for 2 seconds to pause or resume. A helper can press F9, or move the mouse to take over. A held mouse button is always let go when VISION pauses, closes or stops."),
+		h("p", { class: "prose" }, h("strong", {}, "Privacy: "), "the camera picture stays on this computer and is never saved. Your voice goes online only while VISION is listening to you. VISION sends no usage data or crash reports."),
+		section("HISTORY", h("p", { class: "prose" }, "VISION 1 · 1st prize, Event Expo 2026. Tested by many people.")),
 		KIOSK ? null : section("SETTINGS FILE", h("div", { class: "row-grid" },
 			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
 			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),
 		)),
-		h("div", { class: "credits" }, "Open-source credits: MediaPipe Face Mesh, TensorFlow.js, clmtrackr and jsfeat; Geist, Geist Mono and Doto fonts (OFL)."),
+		h("div", { class: "credits" }, "Credits: MediaPipe Face Mesh and TensorFlow.js (Apache 2.0); Geist, Geist Mono and Doto fonts (OFL). Full licences are in THIRD_PARTY_NOTICES.md in the VISION folder."),
 	];
+}
+
+/** Live numbers for a helper or support: head angles, tracked points, camera rate. */
+function diagnostics(engine) {
+	const out = h("pre", { class: "prose", style: { "font-family": "var(--font-mono, monospace)", "font-size": "14px", margin: "0" } }, "");
+	const signed = (v) => `${v >= 0 ? "+" : ""}${Number(v || 0).toFixed(1)}°`;
+	const draw = () => {
+		const st = engine.getState?.();
+		if (!st) return;
+		// User's side: turning right is positive (the engine counts left as positive).
+		setText(out, [
+			`Status       ${st.status}${st.paused ? " (paused)" : ""}`,
+			`Camera       ${st.camera?.status ?? "-"} · ${st.camera?.width ?? "-"}×${st.camera?.height ?? "-"} · ${Math.round(st.fps || 0)} fps`,
+			`Face mesh    ${st.facemeshHz ?? "-"} Hz · ${st.points ?? 0} flow points`,
+			`Head         turn ${signed(-st.pose?.yaw)} · tilt ${signed(st.pose?.pitch)} · roll ${signed(st.pose?.roll)}`,
+			`Click method ${st.clickingMode}`,
+		].join("\n"));
+	};
+	draw();
+	const timer = setInterval(() => (out.isConnected ? out.offsetParent && draw() : clearInterval(timer)), 250);
+	return section("DIAGNOSTICS", out);
 }
 
 export function openProfiles(layer, { profiles, onChanged }) {

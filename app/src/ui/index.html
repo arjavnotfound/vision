@@ -63,14 +63,7 @@
 		</section>
 
 		<section class="stack" aria-label="Instruments">
-			<div class="stack__row">
-				<div class="card attitude-card">
-					<div class="card__head">
-						<span class="label">ATTITUDE</span>
-						<span class="label label--dim">HEAD POSE</span>
-					</div>
-					<div class="attitude" id="attitude"></div>
-				</div>
+			<div class="stack__row stack__row--single">
 				<div class="card meters-card">
 					<div class="card__head">
 						<span class="label">GESTURES</span>
@@ -106,9 +99,6 @@
 		</button>
 		<div class="session__spacer"></div>
 		<div class="session__hint" id="session-hint"></div>
-		<div class="fps-readout" aria-label="Frames per second">
-			<span class="dot-num" id="fps-value">--</span><span class="fps-readout__unit">FPS</span>
-		</div>
 		<button class="pause-toggle" id="pause-toggle" data-dwell aria-pressed="false" aria-keyshortcuts="F9">
 			<span class="pause-toggle__icon" aria-hidden="true"></span>
 			<span class="pause-toggle__text">

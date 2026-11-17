@@ -115,6 +115,7 @@ const PREVIEW_JOBS = [
 	{ name: 'settings-3-voice', query: { scene: 'tracking', view: 'settings', tab: 'Voice' } },
 	{ name: 'sheet-profiles', query: { scene: 'tracking', view: 'profiles' } },
 	{ name: 'settings-4-about', query: { scene: 'tracking', view: 'about' } },
+	{ name: 'settings-4b-diagnostics', query: { scene: 'tracking', view: 'about', diag: '1' } },
 	{ name: 'dialog-quit', query: { scene: 'tracking', view: 'confirm' } },
 	{ name: 't11-1-onboarding-welcome-paused', query: { scene: 'paused', view: 'onboarding-1' } },
 	{ name: 't11-2-onboarding-camera-live', query: { scene: 'tracking', view: 'onboarding-2' } },
