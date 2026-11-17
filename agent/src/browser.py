@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import os
 import re
+import shutil
 import sys
+import tempfile
 import time
 import uuid
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -17,6 +22,22 @@ from playwright.async_api import (
 from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
+
+
+logger = logging.getLogger(__name__)
+
+# Installed Google Chrome first (Arjav, 8 Nov), then the Edge that ships with
+# Windows, then Playwright's own Chromium. Each gets its own VISION profile so
+# sign-ins persist; the user's own browser profiles are never opened.
+BROWSER_CHANNELS: tuple[tuple[str | None, str], ...] = (
+    ("chrome", "chrome-profile"),
+    ("msedge", "edge-profile"),
+    (None, "chromium-profile"),
+)
+
+
+def vision_data_dir() -> Path:
+    return Path(os.environ.get("APPDATA") or Path.home()) / "VISION"
 
 
 class BrowserError(Exception):
@@ -256,6 +277,9 @@ class BrowserManager:
         self._browser = None
         self._context = None
         self._page: Page | None = None
+        self._qa_profile_root: str | None = None
+        self.browser_name: str | None = None
+        self.profile_dir: Path | None = None
         self._lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
 
@@ -272,40 +296,61 @@ class BrowserManager:
                     await self._shutdown()
             await self._launch()
 
+    def _user_data_dir(self, folder: str) -> Path:
+        if self._headless:
+            # QA runs get a throwaway profile: never touch the signed-in one.
+            if self._qa_profile_root is None:
+                self._qa_profile_root = tempfile.mkdtemp(prefix="vision-qa-browser-")
+            return Path(self._qa_profile_root) / folder
+        return vision_data_dir() / folder
+
     async def _launch(self) -> None:
         self._playwright = await async_playwright().start()
-        options = {
+        options: dict[str, object] = {
             "headless": self._headless,
             "args": [
                 "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
                 "--disable-infobars",
             ],
             "ignore_default_args": ["--enable-automation"],
+            "viewport": {"width": 1280, "height": 800},
+            "locale": "en-US",
         }
-        try:
-            # The Edge that ships with Windows: the installer bundles no browser.
-            self._browser = await self._playwright.chromium.launch(
-                channel="msedge", **options
+        if self._headless:
+            # Headless Chrome advertises "HeadlessChrome"; a real window keeps its own UA.
+            options["user_agent"] = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
             )
-        except Exception:
-            # Dev machines without Edge: Playwright's own Chromium, if installed.
-            self._browser = await self._playwright.chromium.launch(**options)
-        self._context = await self._browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
-            locale="en-US",
-        )
+        failures: list[str] = []
+        for channel, folder in BROWSER_CHANNELS:
+            user_data_dir = self._user_data_dir(folder)
+            try:
+                user_data_dir.mkdir(parents=True, exist_ok=True)
+                self._context = await self._playwright.chromium.launch_persistent_context(
+                    str(user_data_dir), channel=channel, **options
+                )
+            except Exception as exc:
+                failures.append(f"{channel or 'chromium'}: {exc}".splitlines()[0])
+                continue
+            self.browser_name = channel or "chromium"
+            self.profile_dir = user_data_dir
+            logger.info("web browser: %s, profile %s", self.browser_name, user_data_dir)
+            break
+        else:
+            await self._shutdown()
+            raise BrowserError("No web browser could start. " + "; ".join(failures))
         await self._context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             });
-            window.chrome = {
-                runtime: {}
-            };
+            window.chrome = window.chrome || { runtime: {} };
         """)
-        page = await self._context.new_page()
+        pages = [p for p in self._context.pages if not p.is_closed()]
+        page = pages[0] if pages else await self._context.new_page()
+        for extra in pages[1:]:
+            with contextlib.suppress(Exception):
+                await extra.close()
         # Ensure single controlled page: close unintended popups / background tabs
         self._context.on("page", self._handle_extra_page)
         await self._adopt_page(page)
@@ -344,6 +389,9 @@ class BrowserManager:
         self._context = None
         self._browser = None
         self._playwright = None
+        if self._qa_profile_root is not None:
+            shutil.rmtree(self._qa_profile_root, ignore_errors=True)
+            self._qa_profile_root = None
 
     async def close(self) -> None:
         """Tear down the browser. Only the session shutdown hook calls this."""
