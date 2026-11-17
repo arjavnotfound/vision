@@ -249,6 +249,16 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 	}
 
 	function apply() {
+		// Never save measurements taken without a face in view (they would be noise).
+		if (!engine.getState().faceFound) {
+			const text = "I can't see your face, so nothing was saved. Look at the camera, then choose it again.";
+			setText(instruction, "Nothing saved: no face in view.");
+			setText(sub, text);
+			sub.classList.add("is-warning");
+			speak(text);
+			return false;
+		}
+		sub.classList.remove("is-warning");
 		if (adaptive && plan) {
 			const st = engine.settings;
 			for (const [key, value] of Object.entries(controlSettings(plan))) {
