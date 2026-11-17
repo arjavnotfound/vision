@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createRecoveryMonitor, FACE_PROMPT_MS, CAMERA_RETRY_MS, CAMERA_STUCK_MS } from "../app/src/ui/js/recovery.js";
+import { createRecoveryMonitor, cameraProblem, FACE_PROMPT_MS, CAMERA_RETRY_MS, CAMERA_STUCK_MS, CAMERA_SPEAK_MS } from "../app/src/ui/js/recovery.js";
 
 const tracking = { status: "tracking", paused: false, camera: { status: "on" } };
 const noFace = { status: "no-face", paused: false, camera: { status: "on" } };
@@ -32,10 +32,29 @@ describe("recovery", () => {
 		const r = createRecoveryMonitor();
 		const first = r.step(camError, 0);
 		assert.deepEqual(types(first), ["banner", "retryCamera"]);
-		assert.match(first[0].text, /Camera unplugged or busy/);
+		assert.match(first[0].text, /camera stopped working/);
 		assert.deepEqual(r.step(camError, 1000), []);
-		assert.deepEqual(types(r.step(camError, CAMERA_RETRY_MS)), ["retryCamera"]);
-		assert.deepEqual(r.step(tracking, CAMERA_RETRY_MS + 100), [{ type: "banner", text: null }]);
+		assert.deepEqual(types(r.step(camError, CAMERA_RETRY_MS)), ["speak", "retryCamera"], "spoken once it has lasted 3 s");
+		assert.deepEqual(r.step(camError, CAMERA_RETRY_MS + 100), [], "spoken only once");
+		assert.deepEqual(r.step(tracking, CAMERA_RETRY_MS + 200), [{ type: "speak", text: "The camera is working again.", camera: true }, { type: "banner", text: null }]);
+	});
+
+	it("camera busy in another app: names the cause out loud after 3 s and keeps retrying", () => {
+		const r = createRecoveryMonitor();
+		const busy = { status: "camera-error", paused: true, camera: { status: "error", error: { name: "NotReadableError", message: "Device in use" } } };
+		const first = r.step(busy, 0);
+		assert.deepEqual(types(first), ["banner", "retryCamera"], "no speech for a quick blip");
+		assert.match(first[0].text, /^Another app is using the camera/);
+		const spoken = r.step(busy, CAMERA_SPEAK_MS);
+		assert.deepEqual(spoken, [{ type: "speak", text: first[0].text, camera: true }]);
+		assert.deepEqual(types(r.step(busy, CAMERA_RETRY_MS)), ["retryCamera"]);
+		assert.deepEqual(types(r.step(busy, 2 * CAMERA_RETRY_MS)), ["retryCamera"]);
+	});
+
+	it("names each camera cause in plain words", () => {
+		assert.match(cameraProblem({ name: "NotAllowedError" }), /turned off in Windows settings/);
+		assert.match(cameraProblem({ name: "NotFoundError" }), /No camera found/);
+		assert.match(cameraProblem(null), /keeps trying/);
 	});
 
 	it("an ended track or a camera stuck starting counts as lost", () => {
@@ -44,6 +63,6 @@ describe("recovery", () => {
 		const s = createRecoveryMonitor();
 		const starting = { status: "starting", paused: false, camera: { status: "starting" } };
 		assert.deepEqual(s.step(starting, 0), []);
-		assert.deepEqual(types(s.step(starting, CAMERA_STUCK_MS + 1)), ["banner", "retryCamera"]);
+		assert.deepEqual(types(s.step(starting, CAMERA_STUCK_MS + 1)), ["banner", "speak", "retryCamera"], "stuck for 10 s: spoken at once");
 	});
 });

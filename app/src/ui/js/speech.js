@@ -9,6 +9,8 @@ export function setSpeechMuted(value) {
 }
 
 export function speak(text, { interrupt = true } = {}) {
+	// Every spoken line goes to the log too, so silent QA runs can assert on it.
+	if (text) console.log(`[speak]${muted ? " (muted)" : ""} ${text}`);
 	if (muted || !text || typeof speechSynthesis === "undefined") return;
 	try {
 		if (interrupt) speechSynthesis.cancel();

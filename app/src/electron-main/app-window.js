@@ -63,6 +63,8 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	if (syntheticFace) query.synthetic = '1';
 	if (kiosk) query.kiosk = '1';
 	if (start) query.start = '1';
+	// QA runs: no speaker audio; spoken lines are still logged as [speak].
+	if (process.env.VISION_QA_SILENT === '1') query.quiet = '1';
 	if (quiet) {
 		query.quiet = '1';
 		// Minimised from the start: it shows in the taskbar but never covers the screen.
@@ -75,6 +77,11 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	const sendShown = () => win.webContents.send('windowShown', win.isVisible() && !win.isMinimized());
 	for (const event of ['show', 'hide', 'minimize', 'restore']) win.on(event, sendShown);
 	win.webContents.on('did-finish-load', sendShown);
+	// Spoken lines reach the main log (QA asserts on them; no speaker needed).
+	win.webContents.on('console-message', (event, _level, legacyMessage) => {
+		const message = event?.message ?? legacyMessage;
+		if (typeof message === 'string' && message.startsWith('[speak]')) console.log(message);
+	});
 	win.loadFile(NEW_UI_PAGE, Object.keys(query).length ? { query } : undefined);
 	win._visionWindowState = state;
 	return win;
@@ -109,6 +116,13 @@ const PREVIEW_JOBS = [
 	{ name: 'sheet-profiles', query: { scene: 'tracking', view: 'profiles' } },
 	{ name: 'settings-4-about', query: { scene: 'tracking', view: 'about' } },
 	{ name: 'dialog-quit', query: { scene: 'tracking', view: 'confirm' } },
+	{ name: 't11-1-onboarding-welcome-paused', query: { scene: 'paused', view: 'onboarding-1' } },
+	{ name: 't11-2-onboarding-camera-live', query: { scene: 'tracking', view: 'onboarding-2' } },
+	{ name: 't11-3-camera-busy', query: { scene: 'camera-error', view: 'onboarding-2' } },
+	{ name: 't11-4-onboarding-calibrate', query: { scene: 'paused', view: 'onboarding-3' } },
+	{ name: 't11-5-calibration-refused-no-face', query: { scene: 'no-face', view: 'calib-done', accept: '1' } },
+	{ name: 't11-6-quit-confirm', query: { scene: 'tracking', view: 'confirm' } },
+	{ name: 't11-7-settings-voice-no-keys', query: { scene: 'tracking', view: 'settings', tab: 'Voice', nokeys: '1' } },
 	{ name: 'overlay-tracking', page: OVERLAY_PREVIEW_PAGE, query: { state: 'tracking' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-dwell', page: OVERLAY_PREVIEW_PAGE, query: { state: 'dwell' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-click', page: OVERLAY_PREVIEW_PAGE, query: { state: 'click' }, rect: { x: 400, y: 160, width: 440, height: 260 } },

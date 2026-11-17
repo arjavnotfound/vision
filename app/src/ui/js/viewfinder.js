@@ -9,6 +9,7 @@
 //   - paused: mesh dimmed to 35% and a large Doto PAUSED in the centre
 
 import { h, setText, signed } from "./dom.js";
+import { cameraProblem } from "./recovery.js";
 
 // Ideal face position, in normalised frame coordinates (unmirrored).
 const GUIDE = { cx: 0.5, cy: 0.47, rx: 0.165, ry: 0.3 };
@@ -62,7 +63,7 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 	const pts = corner("vf-corner--br", "FLOW PTS");
 	const pillText = h("span", {}, "");
 	const pill = h("div", { class: "vf-pill", hidden: true }, h("b", { class: "vf-pill__dot" }), pillText);
-	const retry = h("button", { class: "btn", "data-dwell": true, hidden: true, onclick: () => engine.useCamera() }, "Retry camera");
+	const retry = h("button", { class: "btn", "data-dwell": true, hidden: true, onclick: () => engine.useCamera() }, "Try now");
 	const message = h("div", { class: "vf-message", hidden: true },
 		h("div", { class: "vf-message__word" }, ""),
 		h("div", { class: "vf-message__text" }, ""),
@@ -251,9 +252,7 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 		if (state?.status === "camera-error") {
 			message.hidden = false;
 			setText(word, "NO CAMERA");
-			setText(text, state.camera?.error?.name === "NotReadableError" || state.camera?.error?.name === "TrackStartError" ?
-				"The camera is busy. Close Teams, Zoom, OBS or browser tabs that use it, then retry." :
-				(state.lastError?.message || "VISION could not open the camera."));
+			setText(text, cameraProblem(state.camera?.error));
 		} else if (state?.status === "starting") {
 			message.hidden = false;
 			setText(word, "STARTING");
@@ -262,8 +261,8 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 			message.hidden = false;
 			setText(word, "PAUSED");
 			setText(text, state.gestures?.sleep?.enabled
-				? "Close both eyes for 2 seconds to resume. A helper can press F9."
-				: "Your mouse is yours again. Press F9 to resume.");
+				? "Close both eyes for 2 seconds to resume."
+				: "Say “Vision, resume” to start the cursor again.");
 		} else {
 			message.hidden = true;
 		}
