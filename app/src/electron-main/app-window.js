@@ -80,7 +80,7 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 	// Spoken lines reach the main log (QA asserts on them; no speaker needed).
 	win.webContents.on('console-message', (event, _level, legacyMessage) => {
 		const message = event?.message ?? legacyMessage;
-		if (typeof message === 'string' && message.startsWith('[speak]')) console.log(message);
+		if (typeof message === 'string' && (message.startsWith('[speak]') || message.startsWith('[first-run]'))) console.log(message);
 	});
 	win.loadFile(NEW_UI_PAGE, Object.keys(query).length ? { query } : undefined);
 	win._visionWindowState = state;

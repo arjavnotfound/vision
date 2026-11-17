@@ -430,6 +430,10 @@ async function boot() {
 			}
 			return { done: "remapped", controlMap };
 		}
+		if (cmd === "retry-camera") {
+			engine.useCamera();
+			return { done: "retrying camera", camera: engine.getState().camera?.status };
+		}
 		if (cmd === "controls") {
 			return { done: "controls", controlMap, clickingMode: st.get("clickingMode") };
 		}
@@ -627,6 +631,7 @@ async function boot() {
 		openOnboarding({
 			layer, engine,
 			onFinish: () => st.set("onboardingComplete", true),
+			hasVoiceKeys: () => voice ? voice.getConfig().then((config) => Boolean(config?.hasKeys)) : Promise.resolve(false),
 			// Adaptive calibration reads each step aloud, like the rest of the first run.
 			onCalibrate: () => startCalibration(null, { adaptive: true }),
 		});

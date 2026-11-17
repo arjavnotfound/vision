@@ -1,7 +1,8 @@
 // First-run onboarding: three short screens, each spoken aloud, each moving on by itself.
 //   1. Welcome: spoken, then moves on after WELCOME_MS.
 //   2. Camera: moves on once the face has been framed well for FRAMED_HOLD_MS.
-//   3. Calibrate: starts calibration after CALIBRATE_COUNTDOWN_MS unless the user picks Skip.
+//   3. Calibrate: starts calibration once the face has been in view for
+//      CALIBRATE_COUNTDOWN_MS (the count stops while no face is seen), unless the user picks Skip.
 // The only buttons are Back, Repeat and Skip: nothing has to be pressed to get through.
 // Camera problems are handled (and spoken) by the recovery monitor in main.js.
 
@@ -17,10 +18,11 @@ export const CALIBRATE_COUNTDOWN_MS = 10000;
 const LINES = [
 	"Welcome to VISION. Turn your head to move the cursor. Rest the cursor on a button, or wink, to click. Close both eyes for 2 seconds to start or pause the cursor. Setup takes about two minutes and moves on by itself.",
 	"Let VISION see you. Sit about an arm's length from the screen and face the camera. VISION moves on when it can see you clearly.",
-	"Last step: calibration. It learns how you turn your head and how you wink. It starts in 10 seconds. To skip it, rest the cursor on Skip for now.",
+	"Last step: calibration. It learns how you turn your head and how you wink. It starts 10 seconds after VISION can see your face. To skip it, rest the cursor on Skip for now.",
 ];
 
-export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt = 0, auto = true }) {
+// `hasVoiceKeys`: async () => boolean, so the closing line never offers voice that cannot start.
+export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt = 0, auto = true, hasVoiceKeys = async () => false }) {
 	let viewfinder = null;
 	let raf = 0;
 	let timer = 0;
@@ -121,7 +123,7 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 				setDot(frameCheck, Boolean(state.framing?.ok), !state.framing?.ok);
 				const now = performance.now();
 				framedSince = framed ? (framedSince ?? now) : null;
-				if (state.camera?.status === "error") setText(status, "The camera is not working yet. VISION keeps trying by itself.");
+				if (state.camera?.status === "error") setText(status, "The camera is not working yet. VISION tries again every few seconds, or say “Vision, try the camera”.");
 				else if (framed) setText(status, "Looks good. Hold still…");
 				else setText(status, `Tip: ${state.framing?.hint?.toLowerCase() ?? "look at the camera"}.`);
 				setText(progress, framed ? `MOVING ON IN ${Math.max(0, Math.ceil((FRAMED_HOLD_MS - (now - framedSince)) / 1000))} S` : "WAITING TO SEE YOU");
@@ -140,7 +142,34 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 			foot.append(back(1), repeat(), h("div", { class: "session__spacer" }),
 				h("button", { class: "btn btn--ghost", "data-dwell": true, onclick: () => finish(false) }, "Skip for now"),
 				progress);
-			countdown(CALIBRATE_COUNTDOWN_MS, "CALIBRATION STARTS", () => finish(true));
+			// Counts only while the face is in view: calibrating an empty chair would save noise.
+			let seen = 0;
+			let lastTick = performance.now();
+			let toldNoFace = false;
+			const wait = () => {
+				raf = requestAnimationFrame(wait);
+				const now = performance.now();
+				const face = engine.getState().faceFound;
+				seen = face ? seen + (now - lastTick) : 0;
+				lastTick = now;
+				if (!face) {
+					setText(progress, "WAITING TO SEE YOUR FACE");
+					if (auto && !toldNoFace && now - shownAt > 4000) {
+						toldNoFace = true;
+						console.log("[first-run] calibrate step: waiting for a face");
+						speak("I can't see your face yet. Calibration starts when I can see you.");
+					}
+					return;
+				}
+				const left = Math.max(0, Math.ceil((CALIBRATE_COUNTDOWN_MS - seen) / 1000));
+				setText(progress, `CALIBRATION STARTS IN ${left} S`);
+				if (auto && seen >= CALIBRATE_COUNTDOWN_MS) {
+					console.log("[first-run] calibrate step: face in view, starting calibration");
+					finish(true);
+				}
+			};
+			const shownAt = performance.now();
+			wait();
 		}
 	}
 
@@ -152,7 +181,18 @@ export function openOnboarding({ layer, engine, onCalibrate, onFinish, startAt =
 		screen.remove();
 		onFinish?.();
 		if (calibrate) onCalibrate?.();
-		else speak("Setup done. Say Vision any time to talk to me.");
+		else closingLine().then((line) => { console.log(`[first-run] closing: ${line}`); speak(line); });
+	}
+
+	// Says only what is true now: camera working or not, voice keys there or not.
+	async function closingLine() {
+		// A camera still starting gets a few seconds before it counts as not working.
+		for (let i = 0; i < 30 && engine.getState().camera?.status === "starting"; i++) await new Promise((r) => setTimeout(r, 100));
+		const camera = engine.getState().camera?.status === "on";
+		const voice = await hasVoiceKeys().catch(() => false);
+		if (!camera) return "Setup is closed, but the camera is not working yet. VISION tries again every few seconds.";
+		if (!voice) return "Setup done. Face control is ready. Voice is off until a helper adds its keys in Settings.";
+		return "Setup done. Say Vision any time to talk to me.";
 	}
 
 	show(startAt);

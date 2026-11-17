@@ -3,6 +3,8 @@
 // spoken line. Writes screenshots to the given folder.
 //   node scripts/qa/first-run-e2e.js <out-dir> [--real-camera] [--assistant]
 // --assistant: the one-app first run (Start screen) instead of the face-only one.
+// --hide-face-at-calibrate: the face leaves at the calibrate step for 10 s; calibration
+//   must wait for it (screenshot of the waiting state), then start once it is back.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -14,6 +16,7 @@ const electronExe = path.join(appDir, "node_modules", "electron", "dist", "elect
 const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "vision-firstrun-"));
 const port = 9400 + Math.floor(Math.random() * 400);
 const assistant = process.argv.includes("--assistant");
+const hideFace = process.argv.includes("--hide-face-at-calibrate");
 const prefix = assistant ? "t11-firstrun-assistant" : "t11-firstrun";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -60,6 +63,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 				last = now;
 				timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)} s  ${now}`);
 				if (shots[now]) { await sleep(600); await shot(`${prefix}-${shots[now]}.png`); }
+				if (hideFace && now === "Face control / 3 · CALIBRATE") {
+					await ev(`globalThis.__syntheticFaceOverride = "none"; true`);
+					timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)} s  face removed`);
+					await sleep(10000);
+					const still = await where();
+					const label = await ev(`document.querySelector(".onboarding__next")?.textContent`);
+					timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)} s  after 10 s with no face: ${still} (${label})`);
+					if (still !== now) failed = true;
+					await shot(`${prefix}-3a-calibrate-waiting-for-face.png`);
+					await ev(`globalThis.__syntheticFaceOverride = { leftEye: 0.3, rightEye: 0.3, mouth: 0.05, brow: 0.22, pitch: 0 }; true`);
+					timeline.push(`${((Date.now() - t0) / 1000).toFixed(1)} s  face back`);
+				}
 				if (now.startsWith("Calibration")) break;
 			}
 			await sleep(200);
@@ -67,15 +82,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 		const steps = timeline.map((l) => l.replace(/^.*s {2}/, ""));
 		const expected = assistant ? ["Start VISION / undefined", "Calibration / 1 · CENTER"] : ["Face control / 1 · WELCOME", "Face control / 2 · CAMERA", "Calibration / 1 · CENTER"];
 		const ok = expected.every((s) => steps.includes(s));
-		failed = !ok;
+		failed = failed || !ok;
 		console.log(timeline.join("\n"));
 		console.log(`${ok ? "PASS" : "FAIL"}  first run reached calibration with no input`);
 	} finally {
 		await sleep(500);
-		const spoken = fs.readFileSync(mainLog, "utf8").split(/\r?\n/).filter((l) => l.includes("[speak]"));
+		const spoken = fs.readFileSync(mainLog, "utf8").split(/\r?\n/).filter((l) => l.includes("[speak]") || l.includes("[first-run]"));
 		const driver = fs.existsSync(path.join(runDir, "driver.log")) ? fs.readFileSync(path.join(runDir, "driver.log"), "utf8").trim() : "";
 		console.log(spoken.join("\n"));
-		fs.writeFileSync(path.join(out, `${prefix}-log.txt`), [...timeline, "", ...spoken, "", `input events sent by the test: none`].join("\n"));
+		fs.writeFileSync(path.join(out, `${prefix}${hideFace ? "-noface" : ""}-log.txt`), [...timeline, "", ...spoken, "", `input events sent by the test: none`].join("\n"));
 		child.kill();
 		ws.close();
 		if (driver) console.log(`driver log (VISION's own output, not test input): ${driver.split("\n").length} lines`);
