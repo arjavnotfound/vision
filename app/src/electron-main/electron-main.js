@@ -392,7 +392,11 @@ const { installCrashRecovery } = require('./crash-recovery.js');
 app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
 // Camera frames as GPU textures make every drawImage into the tracking canvas a GPU
 // readback; on Electron 45 that cut the tracking loop from 67 to about 57 FPS.
-app.commandLine.appendSwitch("disable-features", "MediaFoundationD3D11VideoCapture");
+// QA off-screen windows count as occluded, and Chromium stops their animation frames
+// (the overlay's dwell clicker runs on them); occlusion tracking is off for those runs.
+app.commandLine.appendSwitch("disable-features", process.env.VISION_QA_OFFSCREEN === '1'
+	? "MediaFoundationD3D11VideoCapture,CalculateNativeWinOcclusion"
+	: "MediaFoundationD3D11VideoCapture");
 // Opt-in local debugging endpoint, used by scripts/bench/measure.js to read FPS.
 // Never enabled unless the environment variable is set explicitly.
 if (/^\d+$/.test(process.env.VISION_REMOTE_DEBUG_PORT || "")) {
