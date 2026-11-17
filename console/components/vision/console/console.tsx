@@ -71,14 +71,14 @@ export function ConsoleSurface({ previewProgress }: { previewProgress?: number }
               <div className="ml-auto flex items-center gap-3">
                 {model.connection !== 'offline' && (
                   <DwellTarget
-                    label="End session"
+                    label="Stop voice"
                     onActivate={actions.endSession}
                     indicator="bar"
                     hitSize={64}
                     className="text-bone-2 hover:bg-ink-2 hover:text-bone mr-2 h-16 gap-2.5 rounded-full px-5 text-[15px] shadow-[inset_0_0_0_1px_var(--rule)] transition-colors"
                   >
                     <PhoneOff className="text-err size-[18px]" strokeWidth={1.9} />
-                    End session
+                    Stop voice
                   </DwellTarget>
                 )}
                 <BarButton label="Close" onActivate={actions.collapse}>

@@ -133,7 +133,7 @@ export function ActivityView() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-baseline justify-between pb-5">
-        <SectionLabel>Everything VISION did this session</SectionLabel>
+        <SectionLabel>What VISION has done so far</SectionLabel>
         <span className="text-bone-3 text-[13px] tabular-nums">{activity.length} actions</span>
       </div>
       <div className="bg-ink-1 min-h-0 flex-1 overflow-y-auto rounded-[18px] p-3 shadow-[inset_0_0_0_1px_var(--rule)]">

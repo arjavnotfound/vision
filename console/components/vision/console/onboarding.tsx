@@ -95,9 +95,9 @@ export function Onboarding({
       state: mic === 'granted' ? 'listening' : mic === 'denied' ? 'error' : 'idle',
       title:
         mic === 'granted'
-          ? 'Say something. The eye opens with your voice.'
+          ? 'Say something. The mark moves with your voice.'
           : mic === 'denied'
-            ? 'The microphone is blocked. Quick Commands still work.'
+            ? 'The microphone is blocked. Quick commands still work.'
             : 'VISION needs your microphone to hear you.',
       cta:
         mic === 'granted' || mic === 'denied' ? (
@@ -116,14 +116,14 @@ export function Onboarding({
         <>
           {model.hotkeyLabel ? (
             <>
-              Look at the eye, or press{' '}
+              Say “Vision”, or press{' '}
               <kbd className="bg-ink-2 text-bone rounded-[10px] px-2.5 py-0.5 font-mono text-[0.78em] tracking-[0.04em] shadow-[inset_0_0_0_1px_var(--rule-strong)]">
                 {model.hotkeyLabel}
               </kbd>
               , to talk.
             </>
           ) : (
-            'Look at the eye to talk.'
+            'Say “Vision” to talk.'
           )}
         </>
       ),

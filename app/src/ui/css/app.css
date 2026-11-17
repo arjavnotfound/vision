@@ -472,6 +472,10 @@ svg {
 	min-height: 0;
 }
 
+.stack__row--single {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 /* ---------- viewfinder ---------- */
 
 .viewfinder-panel {
@@ -1947,11 +1951,11 @@ svg {
 
 .tryit__orb-hint {
 	display: flex;
-	flex-direction: column;
+	flex-direction: column-reverse;
 	align-items: center;
 	gap: 12px;
 	position: absolute;
-	bottom: 24px;
+	top: 24px;
 	left: 50%;
 	transform: translateX(-50%);
 }

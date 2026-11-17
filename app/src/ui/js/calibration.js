@@ -84,7 +84,7 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 		foot,
 	);
 	layer.append(screen);
-	const viewfinder = createViewfinder(vfHost, { engine, readouts: true, guide: true, hint: true, pausedMessage: false });
+	const viewfinder = createViewfinder(vfHost, { engine, readouts: false, guide: true, hint: true, pausedMessage: false });
 
 	// --- step widgets
 	const holdRing = h("div", { class: "hold-ring" });
@@ -131,7 +131,7 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 			setText(instruction, GESTURE_TASKS[0].name + ".");
 			setText(sub, adaptive
 				? "Do each gesture once or twice. VISION checks which ones work well for you and sets your controls."
-				: "Do each gesture once, clearly. We compare it with the current threshold and suggest a better one.");
+				: "Do each gesture once, clearly. VISION learns how strong each one is for you.");
 			say(`Now some face gestures. Do each one once or twice. ${GESTURE_TASKS[0].name}.`);
 			widget.append(h("div", { class: "measure-list" }, ...measureRows.map((r) => r.el)));
 			foot.append(h("span", { class: "label" }, "EACH GESTURE ONCE"), h("div", { class: "session__spacer" }), skipButton("Skip gesture", () => nextTask()));
@@ -196,7 +196,7 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 			return;
 		}
 		const r = results ?? { eye: {}, mouth: {}, brow: {}, pose: {}, thresholds: {}, sensitivityFactor: 1 };
-		setText(instruction, "Calibrated. Here is what we measured.");
+		setText(instruction, "Done. Here is what VISION measured.");
 		setText(sub, "Apply it to your profile, or keep your current settings. Rest the cursor on a button to choose.");
 		const item = (label, value, note) => h("div", { class: "summary__item" },
 			h("span", { class: "label" }, label),
@@ -381,8 +381,8 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 			const neutral = center?.[task.neutralKey];
 			row.vals.replaceChildren(
 				h("span", {}, "NOW ", h("b", {}, Number.isFinite(value) ? value.toFixed(2) : "—")),
-				h("span", {}, "PEAK ", h("b", {}, Number.isFinite(peaks[task.id]) ? peaks[task.id].toFixed(2) : "—")),
-				h("span", {}, "THRESHOLD ", h("b", {}, Number.isFinite(threshold) ? threshold.toFixed(2) : "—")),
+				h("span", {}, "BEST ", h("b", {}, Number.isFinite(peaks[task.id]) ? peaks[task.id].toFixed(2) : "—")),
+				h("span", {}, "CLICKS AT ", h("b", {}, Number.isFinite(threshold) ? threshold.toFixed(2) : "—")),
 				h("span", {}, "REST ", h("b", {}, Number.isFinite(neutral) ? neutral.toFixed(2) : "—")),
 			);
 			const elapsed = now - taskStart;
@@ -449,8 +449,8 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 			row.el.classList.add("is-current");
 			setText(row.state, "3S");
 			row.vals.replaceChildren(
-				h("span", {}, "NOW ", h("b", {}, "0.41")), h("span", {}, "PEAK ", h("b", {}, "0.48")),
-				h("span", {}, "THRESHOLD ", h("b", {}, "0.25")), h("span", {}, "REST ", h("b", {}, "0.04")),
+				h("span", {}, "NOW ", h("b", {}, "0.41")), h("span", {}, "BEST ", h("b", {}, "0.48")),
+				h("span", {}, "CLICKS AT ", h("b", {}, "0.25")), h("span", {}, "REST ", h("b", {}, "0.04")),
 			);
 		}
 	}

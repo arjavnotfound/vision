@@ -216,11 +216,11 @@ export function openTryIt({ layer, plan, onDone }) {
 	}
 
 	function talkStep() {
-		setText(instruction, "Now look at the orb and say: “open YouTube”.");
-		setText(sub, "The orb is at the bottom of the screen. Rest on it, then speak.");
-		speak("Now look at the orb at the bottom of the screen, and say: open YouTube.");
+		setText(instruction, "Now say: “Vision, open YouTube”.");
+		setText(sub, "VISION waits at the top of the screen. You can also rest on it and choose Talk.");
+		speak("Now say: Vision, open YouTube.");
 		stage.append(
-			h("div", { class: "tryit__orb-hint" }, h("span", { class: "label label--ember" }, "THE ORB IS DOWN HERE"), h("span", { class: "tryit__arrow" }, "↓")),
+			h("div", { class: "tryit__orb-hint" }, h("span", { class: "label label--ember" }, "VISION IS UP HERE"), h("span", { class: "tryit__arrow" }, "↑")),
 			h("button", { class: "btn btn--ember btn--wide tryit__done", "data-dwell": true, onclick: () => next() }, "I'm done"),
 		);
 		stepTimer = setTimeout(next, 30000);

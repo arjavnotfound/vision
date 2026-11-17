@@ -152,7 +152,7 @@ export function Clock({ className, size = 22 }: { className?: string; size?: num
 
 export function ConnectionPill({ connection }: { connection: ConnectionState }) {
   const label =
-    connection === 'live' ? 'Live' : connection === 'connecting' ? 'Linking' : 'Offline';
+    connection === 'live' ? 'Voice on' : connection === 'connecting' ? 'Connecting' : 'Voice off';
   return (
     <span
       className={cn(
