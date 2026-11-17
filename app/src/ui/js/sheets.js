@@ -121,7 +121,7 @@ const KIOSK = typeof location !== "undefined" && new URLSearchParams(location.se
 
 /** The one Settings view: Pointer, Clicking, Voice, About. */
 // `controlMap`: { get(), set(plan) } for the person's own control choices (optional).
-// `voice`: { getConfig, setConfig, saveKeys, getWake, setWake } (absent when voice is off).
+// `voice`: { getConfig, setConfig, saveKeys, getWake, setWake, getSounds, setSounds } (absent when voice is off).
 export function openSettings(layer, { engine, host, onChanged, controlMap, voice, onRecalibrate, onKeyboard, version, initialTab = "Pointer" }) {
 	const st = engine.settings;
 	const { body, close } = openSheet(layer, { title: "Settings" });
@@ -266,7 +266,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			holder.replaceChildren(h("p", { class: "prose" }, "Voice is not part of this version. Face control works without it."));
 			return [holder];
 		}
-		Promise.all([voice.getConfig(), voice.getWake()]).then(([config, wake]) => {
+		Promise.all([voice.getConfig(), voice.getWake(), voice.getSounds?.()]).then(([config, wake, sounds]) => {
 			if (!config) throw new Error("no voice config");
 			holder.replaceChildren(
 				config.hasKeys ? null : keyForm(config),
@@ -275,6 +275,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 						choice({ label: "Relaxed", tech: "quiet voice, quiet room", checked: wake === "relaxed", onClick: () => { voice.setWake("relaxed"); render(); } }),
 						choice({ label: "Normal", tech: "default", checked: wake !== "relaxed", onClick: () => { voice.setWake("normal"); render(); } }),
 					)),
+				sounds ? soundsSection(sounds) : null,
 				section("LANGUAGE", h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(3, minmax(0, 1fr))" } },
 					...[["auto", "Auto"], ["en", "English"], ["hi", "Hindi"]].map(([value, label]) => choice({
 						label, checked: config.language === value,
@@ -289,6 +290,18 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			);
 		}).catch(() => holder.replaceChildren(h("p", { class: "prose" }, "Voice settings are not available right now. Face control still works.")));
 		return [holder];
+	}
+
+	// The wake / listening / done / error sounds. `sounds`: { on, volume } from the settings file.
+	function soundsSection(sounds) {
+		const save = () => voice.setSounds({ soundsOn: sounds.on, soundVolume: sounds.volume });
+		return section("SOUNDS", h("div", { class: "row-grid" },
+			toggleRow({ label: "Sounds", tech: "when VISION hears you, listens, is done or has a problem", get: () => sounds.on, set: (on) => { sounds.on = on; save(); } }),
+			stepRow("Sound volume", "VISION's voice has its own volume", {
+				get: () => sounds.volume, set: (v) => { sounds.volume = v; save(); },
+				min: 10, max: 100, step: 10, format: (v) => `${v}%`,
+			}),
+		));
 	}
 
 	function keyForm(config) {
@@ -357,7 +370,7 @@ function aboutContent({ version, host, engine }) {
 			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("export-settings") }, "Export settings…"),
 			h("button", { class: "btn", "data-dwell": true, onclick: () => host.appCommand("import-settings") }, "Import settings…"),
 		)),
-		h("div", { class: "credits" }, "Credits: MediaPipe Face Mesh and TensorFlow.js (Apache 2.0); Geist, Geist Mono and Doto fonts (OFL). Full licences are in THIRD_PARTY_NOTICES.md in the VISION folder."),
+		h("div", { class: "credits" }, "Credits: MediaPipe Face Mesh and TensorFlow.js (Apache 2.0); Geist, Geist Mono and Doto fonts (OFL); sounds from Kenney Interface Sounds by Kenney.nl (CC0). Full licences are in THIRD_PARTY_NOTICES.md in the VISION folder."),
 	];
 }
 

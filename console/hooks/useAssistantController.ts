@@ -123,8 +123,14 @@ export function useAssistantController({
     getElectron()?.setVoiceState?.({ connected: isConnected, live: micLive });
   }, [isConnected, micLive]);
 
+  // Decode the cue sounds now so the first wake sound is not late.
+  useEffect(() => visionAudio.preload(), []);
+
   useEffect(() => {
-    if (isConnected && !wasConnected.current) setIsStarting(false);
+    if (isConnected && !wasConnected.current) {
+      setIsStarting(false);
+      visionAudio.play('listening');
+    }
     if (!isConnected && wasConnected.current) {
       setIsStarting(false);
       setUserMuted(false);
@@ -166,14 +172,14 @@ export function useAssistantController({
     setIsStarting(false);
     setIsOffline(true);
     // Said once while it lasts; the island keeps showing it on every try.
-    if (reportProblem('voice')) visionAudio.playTing('notice');
+    if (reportProblem('voice')) visionAudio.play('error');
     void Promise.resolve(end()).catch(() => undefined);
   }, [end]);
 
   const activate = useCallback(() => {
     touch();
     setActivatedAt(Date.now());
-    visionAudio.playTing('connect');
+    visionAudio.play('wake');
     setUserMuted(false);
     setIsOffline(false);
     setSurface((current) => (current === 'orb' ? 'strip' : current));
@@ -208,7 +214,6 @@ export function useAssistantController({
   }, [touch]);
 
   const endSession = useCallback(() => {
-    visionAudio.playTing('notice');
     setSurface('orb');
     if (isConnected) void end();
   }, [end, isConnected]);

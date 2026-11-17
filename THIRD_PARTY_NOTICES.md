@@ -41,5 +41,6 @@ and in the installed app's `resources` folder.
 | Tailwind CSS, Motion, Lucide icons | MIT / MIT / ISC |
 | Geist, Geist Mono, Doto fonts | SIL Open Font License 1.1 |
 | Fonts in `app/src/ui/fonts` | their own licenses, included next to the files |
+| Voice cue sounds in `console/public/sounds` (wake, listening, done, error): Kenney Interface Sounds by Kenney.nl, trimmed and level-matched | CC0 1.0 |
 
 Gemini voices and voice previews are produced by Google's Gemini API under Google's terms.

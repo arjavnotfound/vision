@@ -12,6 +12,8 @@ const VOLUME_DEFAULT = 100;
 const VOLUME_MIN = 10;
 const VOLUME_MAX = 100;
 const VOLUME_STEP = 20;
+// The wake / listening / done / error sounds: on, medium.
+const SOUND_VOLUME_DEFAULT = 60;
 
 const clampDwell = (ms) => Math.min(DWELL_MAX_MS, Math.max(DWELL_MIN_MS, Math.round(ms)));
 
@@ -27,6 +29,8 @@ function islandSettings(global = {}) {
 		wakeSensitivity: normalizeWake(global.wakeSensitivity),
 		islandEdge: global.islandEdge === 'bottom' ? 'bottom' : 'top',
 		voiceVolume: parseVolume(global.voiceVolume, VOLUME_DEFAULT) ?? VOLUME_DEFAULT,
+		soundsOn: global.soundsOn !== false,
+		soundVolume: parseVolume(global.soundVolume, SOUND_VOLUME_DEFAULT) ?? SOUND_VOLUME_DEFAULT,
 		migrated: global.islandSettingsMigrated === true,
 	};
 }
@@ -74,6 +78,8 @@ function parseVolume(value, current = VOLUME_DEFAULT) {
 function sanitizeGlobal(global = {}) {
 	if (global.wakeSensitivity !== undefined) global.wakeSensitivity = normalizeWake(global.wakeSensitivity);
 	if (global.voiceVolume !== undefined) global.voiceVolume = parseVolume(global.voiceVolume) ?? VOLUME_DEFAULT;
+	if (global.soundVolume !== undefined) global.soundVolume = parseVolume(global.soundVolume) ?? SOUND_VOLUME_DEFAULT;
+	if (global.soundsOn !== undefined) global.soundsOn = global.soundsOn !== false;
 	return global;
 }
 

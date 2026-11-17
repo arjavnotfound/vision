@@ -20,6 +20,10 @@ export interface VisionSettings {
   islandEdge: 'top' | 'bottom';
   /** VISION's voice volume, 10-100 ("Vision, quieter"). From the settings file. */
   voiceVolume: number;
+  /** The wake / listening / done / error sounds. From the settings file. */
+  soundsOn: boolean;
+  /** Their volume, 10-100. From the settings file. */
+  soundVolume: number;
 }
 
 export const DEFAULT_SETTINGS: VisionSettings = {
@@ -33,6 +37,8 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   onboarded: false,
   islandEdge: 'top',
   voiceVolume: 100,
+  soundsOn: true,
+  soundVolume: 60,
 };
 
 export const DWELL_MIN_MS = 600;
@@ -60,6 +66,8 @@ function sanitize(raw: unknown): VisionSettings {
     onboarded: value.onboarded === true,
     islandEdge: value.islandEdge === 'bottom' ? 'bottom' : 'top',
     voiceVolume: Math.min(100, Math.max(10, Math.round(Number(value.voiceVolume) || 100))),
+    soundsOn: value.soundsOn !== false,
+    soundVolume: Math.min(100, Math.max(10, Math.round(Number(value.soundVolume) || 60))),
   };
 }
 
@@ -95,6 +103,8 @@ class SettingsStore {
         wakeSensitivity: main.wakeSensitivity,
         islandEdge: main.islandEdge,
         voiceVolume: main.voiceVolume,
+        soundsOn: main.soundsOn,
+        soundVolume: main.soundVolume,
       });
       this.listeners.forEach((listener) => listener());
     };

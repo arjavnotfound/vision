@@ -78,6 +78,9 @@ export interface MainSettings {
   islandEdge: 'top' | 'bottom';
   /** VISION's own voice, 10-100. */
   voiceVolume?: number;
+  /** Voice cue sounds on/off and their volume, 10-100. */
+  soundsOn?: boolean;
+  soundVolume?: number;
   migrated: boolean;
 }
 

@@ -458,6 +458,11 @@ async function boot() {
 		saveKeys: (keys) => api.saveVoiceKeys(keys),
 		getWake: async () => (await host.getOptions())?.globalSettings?.wakeSensitivity ?? "normal",
 		setWake: (value) => api.setOptions({ globalSettings: { wakeSensitivity: value } }),
+		getSounds: async () => {
+			const g = (await host.getOptions())?.globalSettings;
+			return { on: g?.soundsOn !== false, volume: Number.isFinite(g?.soundVolume) ? g.soundVolume : 60 };
+		},
+		setSounds: (patch) => api.setOptions({ globalSettings: patch }),
 	} : null;
 	let settingsSheet = null;
 	const showSettings = async (initialTab) => {

@@ -85,9 +85,11 @@ export function useVisionActions(): VisionActionsState {
         // Whatever was waiting for a yes has now been answered; the help card was used.
         setConfirm(null);
         setHelp(null);
-        visionAudio.playTing('action');
         setActionPulse((n) => n + 1);
+      } else if (event.type === 'action_done') {
+        visionAudio.play('done');
       } else if (event.type === 'action_error') {
+        visionAudio.play('error');
         setErrorPulse((n) => n + 1);
       }
 

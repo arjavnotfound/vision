@@ -70,5 +70,8 @@ describe("Voice set_setting bridge", () => {
 		assert.equal(parseVolume("loud"), null);
 		assert.equal(sanitizeGlobal({ voiceVolume: 0 }).voiceVolume, 100);
 		assert.equal(islandSettings({ voiceVolume: 40 }).voiceVolume, 40);
+		assert.equal(islandSettings({ soundVolume: 30, soundsOn: false }).soundVolume, 30);
+		assert.equal(islandSettings({ soundsOn: false }).soundsOn, false);
+		assert.equal(sanitizeGlobal({ soundVolume: 500 }).soundVolume, 60);
 	});
 });
