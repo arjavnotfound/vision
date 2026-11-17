@@ -91,3 +91,46 @@ describe("Calibration math", () => {
 		assert.ok(DEFAULT_THRESHOLDS.mouth.high === 0.25, "defaults untouched");
 	});
 });
+
+import { createRangeTracker, extents, rangeDegrees, rangeSentence } from "../app/src/ui/js/calibration-math.js";
+
+describe("Calibration range step", () => {
+	const center = { yaw: 2, pitch: 3 };
+	it("extents are degrees from centre, left = positive engine yaw", () => {
+		assert.deepEqual(extents(center, { yaw: 12, pitch: 0 }), { left: 10, right: 0, up: 0, down: 3 });
+	});
+	it("locks a direction only after holding its best for 0.5 s", () => {
+		const tr = createRangeTracker(center);
+		let t = 0;
+		for (let i = 0; i < 5; i++) tr.push({ yaw: 26, pitch: 3 }, t += 33);
+		assert.equal(tr.state().left.locked, false);
+		for (let i = 0; i < 16; i++) tr.push({ yaw: 26, pitch: 3 }, t += 33);
+		const s = tr.state().left;
+		assert.equal(s.locked, true);
+		assert.equal(Math.round(s.best), 24);
+		assert.equal(tr.allLocked(), false);
+	});
+	it("one jerky frame does not set the best", () => {
+		const tr = createRangeTracker(center);
+		let t = 0;
+		for (const yaw of [2, 2, 60, 2, 2]) tr.push({ yaw, pitch: 3 }, t += 33);
+		assert.ok(tr.state().left.best < 1);
+	});
+	it("a small turn below the minimum never locks", () => {
+		const tr = createRangeTracker(center);
+		for (let t = 0; t < 2000; t += 33) tr.push({ yaw: 5, pitch: 3 }, t);
+		assert.equal(tr.state().left.locked, false);
+	});
+	it("range and sentence from the tracker", () => {
+		const tr = createRangeTracker(center);
+		let t = 0;
+		for (const pose of [{ yaw: 26, pitch: 3 }, { yaw: -25, pitch: 3 }, { yaw: 2, pitch: 15 }, { yaw: 2, pitch: -12 }]) {
+			for (let i = 0; i < 25; i++) tr.push(pose, t += 33);
+		}
+		assert.equal(tr.allLocked(), true);
+		const deg = rangeDegrees(center, tr.range());
+		assert.deepEqual(deg, { left: 24, right: 27, up: 12, down: 15 });
+		assert.equal(rangeSentence(deg), "Your range: left 24°, right 27°, up 12°, down 15°. The cursor will reach every edge.");
+		assert.match(rangeSentence({ ...deg, up: 2, down: 1 }), /further up and down would help/);
+	});
+});

@@ -124,3 +124,71 @@ export function thresholdSettings({ eye, mouth, brow }) {
 	if (brow?.ok) Object.assign(out, { browThresholdHigh: brow.high, browThresholdLow: brow.low });
 	return out;
 }
+
+// ---- Range step (UX spec 4): per-direction readout that locks when held at its maximum.
+
+export const RANGE_HOLD_MS = 500;
+// Smallest turn that counts, so a person with little movement still locks every direction.
+export const RANGE_MIN_DEG = { left: 5, right: 5, up: 4, down: 4 };
+const HOLD_TOLERANCE_DEG = 1.5;
+const SMOOTH_SAMPLES = 5;
+
+/** Degrees turned from the centre pose, per direction (never negative). Engine yaw is left-positive. */
+export function extents(center, pose) {
+	const dy = pose.yaw - center.yaw;
+	const dp = pose.pitch - center.pitch;
+	return { left: Math.max(0, dy), right: Math.max(0, -dy), up: Math.max(0, dp), down: Math.max(0, -dp) };
+}
+
+/**
+ * Tracks the four directions. push() takes a pose (degrees) and a time (ms) and returns
+ * { left: {now, best, locked}, ... }. Values are a median of the last few frames, so one
+ * jerky frame never sets the best. A direction locks once it is held within 1.5° of its best
+ * for 0.5 s; the best keeps growing after the lock.
+ */
+export function createRangeTracker(center, { holdMs = RANGE_HOLD_MS, min = RANGE_MIN_DEG } = {}) {
+	const recent = [];
+	const dirs = Object.fromEntries(Object.keys(min).map((d) => [d, { now: 0, best: 0, locked: false, nearSince: null }]));
+	return {
+		push(pose, t) {
+			if (!Number.isFinite(pose?.yaw) || !Number.isFinite(pose?.pitch)) return this.state();
+			recent.push(pose);
+			if (recent.length > SMOOTH_SAMPLES) recent.shift();
+			const smooth = { yaw: median(recent.map((p) => p.yaw)), pitch: median(recent.map((p) => p.pitch)) };
+			const ext = extents(center, smooth);
+			for (const [d, s] of Object.entries(dirs)) {
+				s.now = ext[d];
+				if (s.now > s.best) s.best = s.now;
+				const near = s.best >= min[d] && s.now >= s.best - HOLD_TOLERANCE_DEG;
+				s.nearSince = near ? (s.nearSince ?? t) : null;
+				if (near && t - s.nearSince >= holdMs) s.locked = true;
+			}
+			return this.state();
+		},
+		state() {
+			return Object.fromEntries(Object.entries(dirs).map(([d, s]) => [d, { now: s.now, best: s.best, locked: s.locked }]));
+		},
+		allLocked: () => Object.values(dirs).every((s) => s.locked),
+		/** The measured range in the summarizeRange() shape, for poseSettings(). */
+		range: () => ({
+			yawMin: center.yaw - dirs.right.best, yawMax: center.yaw + dirs.left.best,
+			pitchMin: center.pitch - dirs.down.best, pitchMax: center.pitch + dirs.up.best,
+		}),
+	};
+}
+
+/** Rounded degrees per direction from a centre and a range. */
+export function rangeDegrees(center, range) {
+	const r = (v) => Math.max(0, Math.round(v));
+	return { left: r(range.yawMax - center.yaw), right: r(center.yaw - range.yawMin), up: r(range.pitchMax - center.pitch), down: r(center.pitch - range.pitchMin) };
+}
+
+/** The one-sentence result. Names the directions too small to reach an edge, if any. */
+export function rangeSentence(deg, min = RANGE_MIN_DEG) {
+	const order = ["left", "right", "up", "down"];
+	const head = `Your range: ${order.map((d) => `${d} ${deg[d]}°`).join(", ")}.`;
+	const short = order.filter((d) => !(deg[d] >= min[d]));
+	if (!short.length) return `${head} The cursor will reach every edge.`;
+	const list = short.length === 1 ? short[0] : `${short.slice(0, -1).join(", ")} and ${short.at(-1)}`;
+	return `${head} Turning a little further ${list} would help the cursor reach that edge.`;
+}
