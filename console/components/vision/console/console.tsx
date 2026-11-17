@@ -1,19 +1,18 @@
 'use client';
 
-import { Activity, Home, MessageSquareText, PhoneOff, Settings2, X } from 'lucide-react';
+import { Activity, Home, MessageSquareText, PhoneOff, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '@/lib/shadcn/utils';
 import { DwellTarget } from '../dwell-target';
 import { Clock, ConnectionPill, CropMarks, Grain, Wordmark } from '../primitives';
 import { type ConsoleTab, useVision } from '../vision-model';
 import { Onboarding } from './onboarding';
-import { ActivityView, AssistantView, HomeView, SettingsView } from './views';
+import { ActivityView, AssistantView, HomeView } from './views';
 
 const TABS: { id: ConsoleTab; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'assistant', label: 'Assistant', icon: MessageSquareText },
   { id: 'activity', label: 'Activity', icon: Activity },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
 ];
 
 function BarButton({
@@ -143,7 +142,6 @@ export function ConsoleSurface({ previewProgress }: { previewProgress?: number }
                     {consoleTab === 'home' && <HomeView previewProgress={previewProgress} />}
                     {consoleTab === 'assistant' && <AssistantView />}
                     {consoleTab === 'activity' && <ActivityView />}
-                    {consoleTab === 'settings' && <SettingsView />}
                   </motion.div>
                 </AnimatePresence>
               </main>

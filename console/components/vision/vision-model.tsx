@@ -9,7 +9,7 @@ import type { ConversationTurn } from '@/lib/transcript';
 import type { ApertureState } from './aperture-core';
 
 export type ConnectionState = 'live' | 'connecting' | 'offline';
-export type ConsoleTab = 'home' | 'assistant' | 'activity' | 'settings';
+export type ConsoleTab = 'home' | 'assistant' | 'activity';
 
 /**
  * Everything a VISION surface needs to render. The live app builds this from

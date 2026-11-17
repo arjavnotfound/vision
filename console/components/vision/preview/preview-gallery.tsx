@@ -272,7 +272,7 @@ function Gallery({ theme }: { theme: ThemeName }) {
       <section className="mb-12">
         <h2 className="label-mono text-bone-3 mb-4">Console · tabs & onboarding</h2>
         <div className="flex flex-wrap gap-4">
-          {['assistant', 'activity', 'settings'].map((tab) => (
+          {['assistant', 'activity'].map((tab) => (
             <div
               key={tab}
               style={{ width: 1200 * scale, height: 780 * scale }}

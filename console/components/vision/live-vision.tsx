@@ -103,7 +103,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   }, [isConnected, agentReady, reportOffline]);
 
   // No voice keys yet (first run of an installed build): open Settings to add them.
-  const { activate: startVoice, openConsole: showConsole } = controller;
+  const { activate: startVoice } = controller;
   // Once keys are known to exist, activation skips the check (a round trip to main that
   // delayed the wake sound); keys are never removed while VISION runs.
   const hasKeys = useRef(false);
@@ -119,14 +119,14 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       void getVoiceConfig().then((config) => {
         if (config?.hasKeys) hasKeys.current = true;
         if (config && !config.hasKeys) {
-          setConsoleTab('settings');
-          showConsole();
+          // Keys are typed in Settings > Voice, in the face window.
+          getElectron()?.openSettings?.('voice');
         } else {
           go();
         }
       }, go);
     },
-    [startVoice, showConsole]
+    [startVoice]
   );
   useEffect(() => {
     void getElectron()
@@ -324,8 +324,8 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       collapse: controller.collapse,
       openConsole: controller.openConsole,
       openSettings: () => {
-        setConsoleTab('settings');
-        controller.openConsole();
+        controller.collapse();
+        getElectron()?.openSettings?.();
       },
       showFace: getElectron()?.showFace,
       togglePause: getElectron()?.togglePause,
