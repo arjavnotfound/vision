@@ -8,12 +8,13 @@ const { createAgentSupervisor, resolveAgentCommand } = require('../app/src/elect
 function harness({ maxRestarts = 3, stableMs = 1000 } = {}) {
 	let clock = 0;
 	const spawned = [];
+	const logs = [];
 	const killed = [];
 	let gaveUp = 0;
 	const sup = createAgentSupervisor({
 		command: { exe: process.execPath, args: [], cwd: '.' },
 		getEnv: () => ({ GOOGLE_API_KEY: 'k' }),
-		log: () => {},
+		log: (line) => logs.push(line),
 		maxRestarts,
 		stableMs,
 		restartDelayMs: 0,
@@ -22,17 +23,41 @@ function harness({ maxRestarts = 3, stableMs = 1000 } = {}) {
 			const proc = new EventEmitter();
 			proc.pid = 100 + spawned.length;
 			proc.options = options;
+			proc.stdout = new EventEmitter();
+			proc.stderr = new EventEmitter();
 			spawned.push(proc);
 			return proc;
 		},
 		killFn: (pid) => killed.push(pid),
 		now: () => clock,
 	});
-	return { sup, spawned, killed, gaveUp: () => gaveUp, tick: (ms) => { clock += ms; } };
+	return { sup, spawned, logs, killed, gaveUp: () => gaveUp, tick: (ms) => { clock += ms; } };
 }
 const flush = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe('agent supervisor', () => {
+	it('reports ready once the worker registers with LiveKit', () => {
+		const h = harness();
+		h.sup.start();
+		assert.equal(h.sup.getStatus().state, 'starting');
+		h.spawned[0].stdout.emit('data', '{"message": "registered worker", "id": "AW_x"}\n');
+		assert.equal(h.sup.getStatus().state, 'ready');
+	});
+	it('turns a rejected LiveKit key into a plain error', () => {
+		const h = harness();
+		h.sup.start();
+		h.spawned[0].stdout.emit('data', '{"message": "failed to connect to livekit, retrying in 0s", "error": "401, message=\'Invalid response status\'"}\n');
+		assert.deepEqual(h.sup.getStatus(), { state: 'error', message: "That LiveKit key didn't work. Check the API key and secret." });
+	});
+	it('logs the first stderr lines when the agent exits early', async () => {
+		const h = harness();
+		h.sup.start();
+		h.spawned[0].stderr.emit('data', "did not find executable at 'C:\\uv\\python.exe'\r\n");
+		h.spawned[0].emit('exit', 103);
+		await flush();
+		assert.ok(h.logs.some((line) => line.includes('said before it stopped') && line.includes('did not find executable')));
+		assert.match(h.sup.getStatus().message, /Python is missing/);
+	});
 	it('passes the keys to the agent as environment variables', () => {
 		const h = harness();
 		h.sup.start();
