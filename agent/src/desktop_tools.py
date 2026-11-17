@@ -22,11 +22,58 @@ from livekit.agents.llm import ToolError
 import desktop
 import vision_bus
 from intent_guard import IntentError, IntentGuard, NeedsConfirmationError
-from tools import ActionCallback, ActionGuard
+from tools import ActionCallback, ActionGuard, BrowserTools
 from voice_settings import VOICES
 
 DRAG_AUTO_RELEASE_SECONDS = 20.0
 APP_WINDOW_WAIT_SECONDS = 4.0
+
+# set_setting: the only VISION settings voice may change, and the words each accepts.
+# Face Control checks every value again before it applies it (the same steppers as Settings).
+SETTINGS = {
+    "cursor_speed": {"faster", "slower"},
+    "dwell_time": {"longer", "shorter"},
+    "paused": {"on", "off"},
+    "face_control": {"on", "off"},
+    "volume": {"louder", "quieter"},
+}
+SETTING_ALIASES = {
+    "speed": "cursor_speed", "cursor": "cursor_speed", "sensitivity": "cursor_speed",
+    "dwell": "dwell_time", "pause": "paused", "tracking": "face_control",
+}  # fmt: skip
+SETTING_RANGES = {"cursor_speed": (1, 10), "volume": (10, 100)}
+
+# "Vision, what can I say?": a few phrases for the app in front, then VISION's own.
+GENERAL_PHRASES = ["Slower cursor", "Longer dwell", "Pause face control", "Quieter"]
+APP_PHRASES = {
+    "YouTube": [
+        "Play or pause",
+        "Next video",
+        "Full screen",
+        "Search YouTube for cats",
+    ],
+    "the browser": ["Open YouTube", "Search for the weather", "Scroll down", "Go back"],
+    "File Explorer": ["Open Downloads", "Click Documents", "Go back", "Scroll down"],
+    "the desktop": [
+        "Open Chrome",
+        "Open File Explorer",
+        "What time is it",
+        "Switch to Chrome",
+    ],
+}
+BROWSER_EXES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "chromium.exe"}
+
+
+def app_in_front(title: str, exe: str) -> str:
+    title = (title or "").lower()
+    exe = (exe or "").lower().replace("/", "\\").rsplit("\\", 1)[-1]
+    if "youtube" in title:
+        return "YouTube"
+    if exe in BROWSER_EXES:
+        return "the browser"
+    if exe == "explorer.exe" and title:
+        return "File Explorer"
+    return "the desktop"
 
 
 def local_time_text(now: datetime | None = None) -> str:
@@ -50,6 +97,8 @@ class DesktopTools:
         self.bus = bus
         self._pending_close: str | None = None
         self._confirmed_close: str | None = None
+        self._pending_click: str | None = None
+        self._confirmed_click: str | None = None
         self._drag_release: asyncio.TimerHandle | None = None
 
     # ------------------------------------------------------------ plumbing
@@ -151,12 +200,12 @@ class DesktopTools:
             self.confirm_close_window,
             self.dictate,
             self.press_keys,
-            self.pause_face_control,
-            self.resume_face_control,
+            self.set_setting,
+            self.what_can_i_say,
+            self.confirm_click,
             self.recalibrate_face,
             self.show_face_control,
             self.retry_camera,
-            self.change_cursor_speed,
             self.change_click_mode,
             self.move_control,
             self.change_voice,
@@ -323,6 +372,17 @@ class DesktopTools:
         spoken = (name or "").strip()
         if not spoken:
             raise ToolError("Say the name of the button to click.")
+        if BrowserTools._requires_confirmation(spoken):
+            if self._confirmed_click != spoken.casefold():
+                self._pending_click = spoken.casefold()
+                await self._emit(
+                    "confirm_request", "click", spoken, question=f"{spoken}?"
+                )
+                raise ToolError(
+                    f"Not clicked yet: {spoken!r} may send, buy, delete or post. Ask the "
+                    "user to confirm, and after a clear yes call confirm_click, then retry."
+                )
+            self._confirmed_click = None
 
         def run() -> str:
             hwnd = self.backend.target_window()
@@ -408,6 +468,15 @@ class DesktopTools:
         return await self._act("close_window", title, (title,), run, dedupe=False)
 
     @function_tool()
+    async def confirm_click(self, context: RunContext) -> str:
+        """Record that the user clearly said yes to the send / buy / delete / post click you
+        asked about. Then call click_by_name again."""
+        if not self._pending_click:
+            raise ToolError("No click is waiting for confirmation.")
+        self._confirmed_click, self._pending_click = self._pending_click, None
+        return "The user confirmed. Call click_by_name again now."
+
+    @function_tool()
     async def confirm_close_window(self, context: RunContext) -> str:
         """Record that the user clearly said yes to closing the window you asked about."""
         if not self._pending_close:
@@ -467,14 +536,75 @@ class DesktopTools:
     # ------------------------------------------------------------ VISION itself
 
     @function_tool()
-    async def pause_face_control(self, context: RunContext) -> str:
-        """Pause head tracking (the cursor stops following the head). Same as F9."""
-        return await self._vision("pause", label="pause tracking")
+    async def set_setting(self, context: RunContext, name: str, value: str) -> str:
+        """Change one VISION setting. Act silently; if it fails, say the reason once.
+
+        Args:
+            name: One of:
+                'cursor_speed' ("slower cursor", "speed 3"): 'faster', 'slower' or 1-10.
+                'dwell_time' (how long resting clicks, "longer dwell"): 'longer',
+                    'shorter', or seconds 0.6-1.5.
+                'paused' ("pause", "stop the cursor", "resume"): 'on' pauses, 'off' resumes.
+                'face_control' ("face control off"): 'on' or 'off'.
+                'volume' (VISION's voice, "quieter"): 'louder', 'quieter' or 10-100.
+            value: The word or number, as above.
+        """
+        key = (name or "").strip().lower().replace("-", "_").replace(" ", "_")
+        key = SETTING_ALIASES.get(key, key)
+        if key not in SETTINGS:
+            raise ToolError(
+                "I can only change cursor speed, dwell time, pause, face control and volume."
+            )
+        label = key.replace("_", " ")
+        text = str(value if value is not None else "").strip().lower()
+        if key == "paused" and text in {"resume", "resumed", "start"}:
+            text = "off"
+        if text not in SETTINGS[key]:
+            try:
+                number = float(text.removesuffix("s").strip())
+            except ValueError:
+                number = None
+            if key == "dwell_time":
+                # Spoken in seconds; Face Control stores 100 ms steps.
+                low, high = (
+                    (0.6, 1.5) if number is not None and number < 10 else (600, 1500)
+                )
+            else:
+                low, high = SETTING_RANGES.get(key, (None, None))
+            if number is None or low is None:
+                words = " or ".join(sorted(SETTINGS[key]))
+                raise ToolError(f"For {label} say {words}.")
+            if not low <= number <= high:
+                raise ToolError(f"{label.capitalize()} goes from {low:g} to {high:g}.")
+            text = f"{number:g}"
+        if key == "paused":
+            # Same command as F9 and the island menu.
+            cmd = "pause" if text == "on" else "resume"
+            return await self._vision(cmd, label=f"{cmd} tracking")
+        return await self._vision(
+            "set-setting", {"name": key, "value": text}, label=f"{label} {text}"
+        )
 
     @function_tool()
-    async def resume_face_control(self, context: RunContext) -> str:
-        """Resume head tracking."""
-        return await self._vision("resume", label="resume tracking")
+    async def what_can_i_say(self, context: RunContext) -> str:
+        """The user asks "what can I say?", "help" or "what can you do?": show the phrases
+        for the app in front on VISION's island. Then say the short line this returns."""
+
+        def front() -> str:
+            hwnd = self.backend.target_window()
+            if hwnd is None:
+                return "the desktop"
+            exe = getattr(self.backend, "window_exe", lambda _h: "")(hwnd)
+            return app_in_front(self.backend.window_title(hwnd), exe)
+
+        app = await asyncio.to_thread(front)
+        phrases = APP_PHRASES[app] + GENERAL_PHRASES
+        if self.action_callback is not None:
+            card = {"type": "help", "app": app, "phrases": phrases}
+            with contextlib.suppress(Exception):
+                await self.action_callback({**card, "ts": int(time.time() * 1000)})
+        first = " or ".join(p.lower() for p in APP_PHRASES[app][:2])
+        return f"Say only: In {app} you can say {first}. More ideas are on the card."
 
     @function_tool()
     async def recalibrate_face(self, context: RunContext) -> str:
@@ -492,18 +622,6 @@ class DesktopTools:
         """Try to open the camera again now ("try the camera", "the camera is not
         working"). VISION also retries by itself every few seconds."""
         return await self._vision("retry-camera", label="try the camera")
-
-    @function_tool()
-    async def change_cursor_speed(self, context: RunContext, direction: str) -> str:
-        """Make the head-controlled cursor faster or slower.
-
-        Args:
-            direction: 'faster' or 'slower'.
-        """
-        direction = (direction or "").strip().lower()
-        if direction not in {"faster", "slower"}:
-            raise ToolError("Say faster or slower.")
-        return await self._vision("speed", direction, label=f"cursor {direction}")
 
     @function_tool()
     async def change_click_mode(self, context: RunContext, mode: str) -> str:

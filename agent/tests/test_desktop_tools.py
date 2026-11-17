@@ -221,9 +221,7 @@ async def test_vision_control_over_the_bus(monkeypatch):
         monkeypatch.setenv("VISION_BUS_PORT", str(server.server_address[1]))
         monkeypatch.setenv("VISION_BUS_TOKEN", "t0k")
         tools, _, _ = make()
-        assert "paused" in (await tools.pause_face_control(None)) or "pause" in (
-            await tools.pause_face_control(None)
-        )
+        assert "pause" in await tools.set_setting(None, "paused", "on")
         await tools.change_click_mode(None, "dwell")
         await tools.move_control(None, "right click", "brows")
         paths = [(p, b) for p, b, ok in _BusHandler.received if ok]
@@ -236,7 +234,7 @@ async def test_vision_control_over_the_bus(monkeypatch):
         monkeypatch.setenv("VISION_BUS_TOKEN", "wrong")
         tools2, _, _ = make()
         with pytest.raises(ToolError):
-            await tools2.resume_face_control(None)
+            await tools2.set_setting(None, "paused", "off")
     finally:
         server.shutdown()
 
@@ -304,10 +302,31 @@ def test_prefer_enabled_and_visible_controls():
 async def test_click_by_name_presses_the_best_match():
     tools, backend, events = make()
     backend.controls = [C("Save draft"), C("Submit"), C("Delete"), C("Delete")]
-    assert await tools.click_by_name(None, "submit") == "Clicked Submit."
-    assert await tools.click_by_name(None, "Delete") == "Clicked Delete."
-    assert backend.calls == [("press", 42, "Submit"), ("press", 42, "Delete")]
+    assert await tools.click_by_name(None, "save draft") == "Clicked Save draft."
+    assert backend.calls == [("press", 42, "Save draft")]
     assert [e["type"] for e in events][:2] == ["action_start", "action_done"]
+
+
+@pytest.mark.asyncio
+async def test_click_by_name_asks_before_send_buy_delete_or_post():
+    tools, backend, events = make()
+    backend.controls = [C("Submit"), C("Delete"), C("Post")]
+    with pytest.raises(ToolError, match="confirm_click"):
+        await tools.click_by_name(None, "submit")
+    assert backend.calls == []
+    assert events[-1]["type"] == "confirm_request"
+    assert events[-1]["question"] == "submit?"
+    assert "confirmed" in await tools.confirm_click(None)
+    assert await tools.click_by_name(None, "submit") == "Clicked Submit."
+    # One yes covers one click.
+    with pytest.raises(ToolError, match="confirm_click"):
+        await tools.click_by_name(None, "submit")
+    with pytest.raises(ToolError, match="confirm_click"):
+        await tools.click_by_name(None, "post")
+    fresh, _, _ = make()
+    with pytest.raises(ToolError, match="No click"):
+        await fresh.confirm_click(None)
+    assert backend.calls == [("press", 42, "Submit")]
 
 
 @pytest.mark.asyncio
@@ -400,3 +419,132 @@ async def test_retry_camera_asks_vision_to_open_the_camera_again():
     )
     await tools.retry_camera(None)
     assert sent == [("retry-camera", None)]
+
+
+class RecordingBus:
+    def __init__(self, reply=None):
+        self.sent = []
+        self.reply = reply or {"ok": True, "done": "ok"}
+
+    async def send_command(self, cmd, value=None):
+        self.sent.append((cmd, value))
+        if self.reply.get("error"):
+            raise vision_bus.VisionBusError(self.reply["error"])
+        return self.reply
+
+
+def bus_tools(bus, backend=None):
+    events = []
+
+    async def callback(event):
+        events.append(event)
+
+    tools = DesktopTools(
+        action_callback=callback,
+        guard=ActionGuard(clock=FakeClock()),
+        backend=backend or FakeDesktop(),
+        bus=bus,
+    )
+    return tools, events
+
+
+@pytest.mark.asyncio
+async def test_set_setting_sends_whitelisted_settings_to_face_control():
+    bus = RecordingBus()
+    tools, _ = bus_tools(bus)
+    await tools.set_setting(None, "cursor_speed", "Slower")
+    await tools.set_setting(None, "dwell", "1.2")
+    await tools.set_setting(None, "dwell_time", "1200")
+    await tools.set_setting(None, "volume", "quieter")
+    await tools.set_setting(None, "face control", "off")
+    await tools.set_setting(None, "speed", "7")
+    assert bus.sent == [
+        ("set-setting", {"name": "cursor_speed", "value": "slower"}),
+        ("set-setting", {"name": "dwell_time", "value": "1.2"}),
+        ("set-setting", {"name": "dwell_time", "value": "1200"}),
+        ("set-setting", {"name": "volume", "value": "quieter"}),
+        ("set-setting", {"name": "face_control", "value": "off"}),
+        ("set-setting", {"name": "cursor_speed", "value": "7"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_set_setting_pause_and_resume_use_the_f9_commands():
+    bus = RecordingBus()
+    tools, _ = bus_tools(bus)
+    await tools.set_setting(None, "paused", "on")
+    await tools.set_setting(None, "pause", "resume")
+    assert bus.sent == [("pause", None), ("resume", None)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("clicking_mode", "off", "only change"),
+        ("wake_sensitivity", "strict", "only change"),
+        ("runAtLogin", "on", "only change"),
+        ("cursor_speed", "11", "goes from 1 to 10"),
+        ("cursor_speed", "0", "goes from 1 to 10"),
+        ("dwell_time", "3", "goes from 0.6 to 1.5"),
+        ("dwell_time", "5000", "goes from 600 to 1500"),
+        ("volume", "0", "goes from 10 to 100"),
+        ("volume", "max", "say louder or quieter"),
+        ("paused", "maybe", "say off or on"),
+        ("face_control", "7", "say off or on"),
+    ],
+)
+async def test_set_setting_refuses_anything_outside_the_whitelist(name, value, message):
+    bus = RecordingBus()
+    tools, _ = bus_tools(bus)
+    with pytest.raises(ToolError, match=message):
+        await tools.set_setting(None, name, value)
+    assert bus.sent == []
+
+
+@pytest.mark.asyncio
+async def test_set_setting_speaks_face_controls_refusal():
+    bus = RecordingBus(
+        {
+            "ok": True,
+            "done": "none",
+            "error": "Dwell time is already 1.5s, the longest.",
+        }
+    )
+    tools, events = bus_tools(bus)
+    with pytest.raises(ToolError, match="already 1.5s"):
+        await tools.set_setting(None, "dwell_time", "longer")
+    assert events[-1]["type"] == "action_error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("title", "exe", "app"),
+    [
+        (
+            "Lofi beats - YouTube - Google Chrome",
+            "C:\\Program Files\\chrome.exe",
+            "YouTube",
+        ),
+        (
+            "Weather - Google Chrome",
+            "C:\\Program Files\\Google\\chrome.exe",
+            "the browser",
+        ),
+        ("Downloads", "C:\\Windows\\explorer.exe", "File Explorer"),
+        ("", "C:\\Windows\\explorer.exe", "the desktop"),
+        ("Untitled - Paint", "mspaint.exe", "the desktop"),
+    ],
+)
+async def test_what_can_i_say_shows_phrases_for_the_app_in_front(title, exe, app):
+    backend = FakeDesktop()
+    backend.window_title = lambda _hwnd: title
+    backend.window_exe = lambda _hwnd: exe
+    tools, events = bus_tools(RecordingBus(), backend)
+    line = await tools.what_can_i_say(None)
+    card = events[-1]
+    assert card["type"] == "help"
+    assert card["app"] == app
+    assert 4 < len(card["phrases"]) <= 10
+    assert "Slower cursor" in card["phrases"]
+    assert app in line and len(line) < 120

@@ -399,6 +399,8 @@ class BrowserTools:
         risky_words = {
             "buy",
             "confirm",
+            "pay",
+            "post",
             "delete",
             "purchase",
             "remove",
