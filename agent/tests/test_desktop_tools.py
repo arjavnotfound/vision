@@ -81,6 +81,17 @@ class FakeDesktop:
     def focus_window(self, hwnd):
         self.calls.append(("focus_window", hwnd))
 
+    controls: ClassVar[list] = []
+
+    def find_controls(self, hwnd):
+        return self.controls
+
+    def pick_control(self, spoken, controls):
+        return desktop.pick_control(spoken, controls)
+
+    def press_control(self, hwnd, control):
+        self.calls.append(("press", hwnd, control.name))
+
 
 def make(clock=None, bus=vision_bus):
     events: list[dict] = []
@@ -261,3 +272,99 @@ async def test_move_control_back_to_a_wink(monkeypatch):
     ]
     with pytest.raises(ToolError):
         await tools.move_control(None, "left click", "brows")
+
+
+C = desktop.Control
+
+
+def test_match_names_the_way_people_say_them():
+    assert desktop.match_score("submit", "Submit") == 4
+    assert desktop.match_score("SAVE", "Save draft") == 3
+    assert desktop.match_score("downloads", "Open Downloads folder") == 2
+    assert desktop.match_score("load", "Downloads") == 1
+    assert desktop.match_score("print", "Save") == 0
+    found = desktop.rank_controls("submit button", [C("Cancel"), C("Submit")])
+    assert [c.name for c in found] == ["Submit"]
+
+
+def test_prefer_enabled_and_visible_controls():
+    hidden, greyed, shown = (
+        C("Play", offscreen=True),
+        C("Play", enabled=False),
+        C("Play"),
+    )
+    best, others = desktop.pick_control("play", [hidden, greyed, shown])
+    assert best is shown and others == []
+    # An exact name beats a partial one even when the exact one is scrolled away.
+    best, _ = desktop.pick_control("play", [C("Play all"), hidden])
+    assert best is hidden
+
+
+@pytest.mark.asyncio
+async def test_click_by_name_presses_the_best_match():
+    tools, backend, events = make()
+    backend.controls = [C("Save draft"), C("Submit"), C("Delete"), C("Delete")]
+    assert await tools.click_by_name(None, "submit") == "Clicked Submit."
+    assert await tools.click_by_name(None, "Delete") == "Clicked Delete."
+    assert backend.calls == [("press", 42, "Submit"), ("press", 42, "Delete")]
+    assert [e["type"] for e in events][:2] == ["action_start", "action_done"]
+
+
+@pytest.mark.asyncio
+async def test_click_by_name_says_when_nothing_matches():
+    tools, backend, _ = make()
+    backend.controls = [C("Submit")]
+    with pytest.raises(ToolError, match="I can't find that"):
+        await tools.click_by_name(None, "print")
+    assert backend.calls == []
+
+
+@pytest.mark.asyncio
+async def test_click_by_name_asks_which_when_several_match():
+    tools, backend, _ = make()
+    backend.controls = [C("Save draft"), C("Save copy"), C("Archive", enabled=False)]
+    with pytest.raises(ToolError, match="Save draft, Save copy"):
+        await tools.click_by_name(None, "save")
+    with pytest.raises(ToolError, match="greyed out"):
+        await tools.click_by_name(None, "archive")
+    assert backend.calls == []
+
+
+@pytest.mark.skipif(not desktop.IS_WINDOWS, reason="needs Windows UI Automation")
+def test_uia_clicks_a_button_in_a_hidden_window(tmp_path):
+    """Real UIA against an off-screen, never-focused WinForms window."""
+    import subprocess
+    from pathlib import Path
+
+    log = tmp_path / "pressed.txt"
+    log.touch()
+    script = Path(__file__).parent / "fixtures" / "uia_test_window.ps1"
+    proc = subprocess.Popen(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            str(log),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        hwnd = int(
+            next(line for line in proc.stdout if line.startswith("HWND")).split()[1]
+        )
+        controls = desktop.find_controls(hwnd)
+        best, others = desktop.pick_control("Submit button", controls)
+        assert best.name == "Submit" and others == []
+        assert desktop.press_control(hwnd, best) == "invoke"
+        assert desktop.pick_control("archive", controls)[0].enabled is False
+        for _ in range(20):
+            if log.read_text().strip():
+                break
+            threading.Event().wait(0.1)
+        assert log.read_text().split() == ["Submit"]
+    finally:
+        proc.kill()

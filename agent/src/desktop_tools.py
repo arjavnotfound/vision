@@ -144,6 +144,7 @@ class DesktopTools:
             self.scroll_here,
             self.open_app,
             self.switch_to,
+            self.click_by_name,
             self.minimize_window,
             self.maximize_window,
             self.close_window,
@@ -304,6 +305,45 @@ class DesktopTools:
             return f"Switched to {title}."
 
         return await self._act("switch_to", app_or_window, (app_or_window,), run)
+
+    @function_tool()
+    async def click_by_name(self, context: RunContext, name: str) -> str:
+        """Click a button, link, tab, menu item or list item by the words on it, in the
+        current window of ANY app (desktop apps and browsers): "click Submit", "press
+        Play", "open Downloads". Matches loosely and ignores case. Act straight away.
+        If it fails, say the reason in a few words; when nothing matches say exactly
+        "I can't find that." When several differently named controls match, ask which
+        one, naming them.
+
+        Args:
+            name: The words on the control, for example 'Submit' or 'Downloads'.
+        """
+        spoken = (name or "").strip()
+        if not spoken:
+            raise ToolError("Say the name of the button to click.")
+
+        def run() -> str:
+            hwnd = self.backend.target_window()
+            if hwnd is None:
+                raise desktop.DesktopError(
+                    "I can't find that. There is no open window."
+                )
+            best, others = self.backend.pick_control(
+                spoken, self.backend.find_controls(hwnd)
+            )
+            if best is None:
+                raise desktop.DesktopError("I can't find that.")
+            if others:
+                names = ", ".join(c.name for c in [best, *others][:4])
+                raise desktop.DesktopError(
+                    f"Not clicked yet: several match ({names}). Ask the user which one."
+                )
+            if not best.enabled:
+                raise desktop.DesktopError(f"{best.name} is greyed out right now.")
+            self.backend.press_control(hwnd, best)
+            return f"Clicked {best.name}."
+
+        return await self._act("click_by_name", spoken, (spoken.lower(),), run)
 
     def _window_command(self, label: str, command: int) -> Callable[[], str]:
         def run() -> str:

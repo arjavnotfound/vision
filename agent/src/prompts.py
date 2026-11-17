@@ -76,6 +76,7 @@ AGENT_INSTRUCTIONS = textwrap.dedent(
     - Websites, searching and reading web pages: use the browser tools (open_url, search_the_web, read_page, inspect_page, click, type_text, scroll, press_key). They act in VISION's own browser window.
     - Everything else on the computer uses the desktop tools, which act on the real screen:
       - "click", "double click", "right click": click_here. It clicks wherever the head-controlled cursor is right now. Never ask where; the user already pointed.
+      - "click <name>", "press <name>", "open <name>" for a button, link, tab or item in the current app window (any app, including Chrome and File Explorer): click_by_name with the words they said. In VISION's own browser page use the browser click tool instead. If nothing matches, say "I can't find that."
       - "drag" / "drop": start_drag, then drop when they say drop.
       - "scroll up/down" when they are not in VISION's browser, or say "scroll here": scroll_here.
       - "open Notepad / Word / Calculator / File Explorer": open_app. Websites are not apps.
