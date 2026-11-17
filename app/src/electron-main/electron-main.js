@@ -1409,14 +1409,18 @@ let agentSupervisor = null;
 
 function startAssistant(busReady) {
 	if (!assistantEnabled) return;
-	const { readDevKeys, hasVoiceKeys } = require('./voice-keys.js');
+	const { readDevKeys, readKeyFile, maskKey, hasVoiceKeys } = require('./voice-keys.js');
 	const { createConnectionDetails } = require('./livekit-token.js');
 	const { createAgentSupervisor, resolveAgentCommand } = require('./agent-supervisor.js');
 	const { createVoiceSettings, VOICES, VOICE_KEY_FIELDS } = require('./voice-settings.js');
 	const appPath = app.getAppPath();
 	voiceSettings = createVoiceSettings({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage });
-	// Keys typed into Settings (encrypted); dev builds also read agent/.env.local, which wins.
-	const voiceKeys = { ...voiceSettings.readKeys(), ...(app.isPackaged ? {} : readDevKeys(path.join(appPath, '..', 'agent'))) };
+	// %APPDATA%\VISION\keys.env, then keys typed into Settings (encrypted); dev builds also read agent/.env.local, which wins.
+	const voiceKeys = {
+		...readKeyFile(path.join(app.getPath('appData'), 'VISION', 'keys.env')),
+		...voiceSettings.readKeys(),
+		...(app.isPackaged ? {} : readDevKeys(path.join(appPath, '..', 'agent'))),
+	};
 	const keysOk = hasVoiceKeys(voiceKeys);
 	preflight = { ...(preflight ?? {}), keys: keysOk, build: 'ok' };
 	sendBusState();
@@ -1442,7 +1446,15 @@ function startAssistant(busReady) {
 		showAppWindow();
 		appWindow.webContents.send('uiCommand', section === 'voice' ? 'settings-voice' : 'settings');
 	});
-	const voiceConfig = () => ({ ...voiceSettings.read(), hasKeys: hasVoiceKeys(voiceKeys), voices: VOICES, keyFields: VOICE_KEY_FIELDS });
+	const voiceConfig = () => ({
+		...voiceSettings.read(),
+		hasKeys: hasVoiceKeys(voiceKeys),
+		voices: VOICES,
+		keyFields: VOICE_KEY_FIELDS,
+		savedKeys: VOICE_KEY_FIELDS.map(({ name, label }) => ({ label, value: maskKey(voiceKeys[name], name === 'LIVEKIT_URL') })),
+		// starting | ready | error | off, with a plain message on error.
+		agent: agentSupervisor?.getStatus() ?? { state: 'off', message: null },
+	});
 	ipcMain.handle('vision-voice-config', (event) => (fromOrb(event) || fromFace(event) ? voiceConfig() : null));
 	ipcMain.handle('vision-voice-config-set', (event, change) => {
 		if (!fromOrb(event) && !fromFace(event)) throw new Error('not allowed');

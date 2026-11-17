@@ -124,6 +124,7 @@ const PREVIEW_JOBS = [
 	{ name: 't11-5-calibration-refused-no-face', query: { scene: 'no-face', view: 'calib-done', accept: '1' } },
 	{ name: 't11-6-quit-confirm', query: { scene: 'tracking', view: 'confirm' } },
 	{ name: 't11-7-settings-voice-no-keys', query: { scene: 'tracking', view: 'settings', tab: 'Voice', nokeys: '1' } },
+	{ name: 'settings-voice-keys-saved', query: { scene: 'tracking', view: 'settings', tab: 'Voice' } },
 	{ name: 'overlay-tracking', page: OVERLAY_PREVIEW_PAGE, query: { state: 'tracking' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-dwell', page: OVERLAY_PREVIEW_PAGE, query: { state: 'dwell' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-click', page: OVERLAY_PREVIEW_PAGE, query: { state: 'click' }, rect: { x: 400, y: 160, width: 440, height: 260 } },

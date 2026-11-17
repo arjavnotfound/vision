@@ -268,8 +268,9 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 		}
 		Promise.all([voice.getConfig(), voice.getWake(), voice.getSounds?.()]).then(([config, wake, sounds]) => {
 			if (!config) throw new Error("no voice config");
-			holder.replaceChildren(
-				config.hasKeys ? null : keyForm(config),
+			// Keys first: whether voice works is the first thing a helper checks here.
+			holder.replaceChildren(...[
+				keyForm(config),
 				section("WAKE WORD", h("p", { class: "prose" }, "Say “Vision”. Heard on this computer only. Relaxed hears a quieter voice; Normal ignores more background talk."),
 					h("div", { class: "choice-grid", style: { "grid-template-columns": "repeat(2, minmax(0, 1fr))" } },
 						choice({ label: "Relaxed", tech: "quiet voice, quiet room", checked: wake === "relaxed", onClick: () => { voice.setWake("relaxed"); render(); } }),
@@ -286,8 +287,7 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 					pageSize: 6,
 					render: (item) => choice({ label: item.label, tech: item.tech, checked: item.selected, onClick: () => voice.setConfig({ voice: item.value }).then(render, () => { }) }),
 				})),
-				config.hasKeys ? keyForm(config) : null,
-			);
+			].filter(Boolean));
 		}).catch(() => holder.replaceChildren(h("p", { class: "prose" }, "Voice settings are not available right now. Face control still works.")));
 		return [holder];
 	}
@@ -311,8 +311,9 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			style: { height: "56px", padding: "0 16px", "font-size": "16px", "border-radius": "12px", border: "1px solid var(--rule-strong)", background: "var(--ink-2)", color: "inherit" },
 		}));
 		// Missing keys: say plainly what is off and who fills this in. A helper types them once.
+		const agentText = (agent) => ({ ready: "Voice ready.", starting: "Connecting…", error: agent?.message || "Voice could not start." })[agent?.state] ?? "";
 		const status = config.hasKeys
-			? h("p", { class: "prose" }, "Keys are saved, encrypted on this computer.")
+			? h("p", { class: "prose", "aria-live": "polite" }, `Keys are saved on this computer. ${agentText(config.agent)}`)
 			: h("div", { class: "keys-missing", role: "alert" },
 				h("b", {}, "Voice is off: it needs its keys."),
 				h("span", {}, "A helper types these in once. They stay encrypted on this computer. Face control works without them."));
@@ -323,7 +324,15 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 			const say = (text) => status.replaceChildren(h("span", {}, text));
 			if (empty.length) return say(`Still empty: ${empty.join(", ")}.`);
 			if (keys.LIVEKIT_URL && !/^(wss|https):\/\//i.test(keys.LIVEKIT_URL)) return say("The LiveKit URL should start with wss://");
-			voice.saveKeys(keys).then(() => say("Keys saved. Voice is starting."),
+			// Saved, then follow the voice assistant until it is online or says what is wrong.
+			const watch = (tries) => voice.getConfig().then((next) => {
+				if (!status.isConnected) return;
+				const state = next?.agent?.state;
+				if (state === "ready" || state === "error") return say(state === "ready" ? "Saved · Voice ready." : `Saved · ${agentText(next.agent)}`);
+				if (tries >= 120) return say("Saved · still connecting. Check the internet connection.");
+				setTimeout(() => watch(tries + 1), 1000);
+			}, () => { });
+			voice.saveKeys(keys).then(() => { say("Saved · connecting…"); watch(0); },
 				(error) => say(`Could not save the keys: ${error?.message ?? error}`));
 		});
 		const form = h("div", { style: { display: "flex", "flex-direction": "column", gap: "10px" } },
@@ -332,7 +341,9 @@ export function openSettings(layer, { engine, host, onChanged, controlMap, voice
 		if (config.hasKeys) {
 			form.hidden = true;
 			const reveal = h("button", { class: "btn", "data-dwell": true, onclick: () => { form.hidden = false; reveal.remove(); } }, "Change voice keys");
-			return section("KEYS", status, reveal, form);
+			const saved = h("div", { class: "row-grid" }, ...(config.savedKeys ?? []).map((key) => h("div", { style: { display: "flex", "flex-direction": "column", gap: "4px" } },
+				h("span", { class: "label label--dim" }, key.label), h("span", { style: { "font-size": "16px", "overflow-wrap": "anywhere" } }, key.value))));
+			return section("KEYS", status, saved, reveal, form);
 		}
 		return section("KEYS", status, form);
 	}

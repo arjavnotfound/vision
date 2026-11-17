@@ -36,6 +36,22 @@ function readDevKeys(agentDir) {
 	return pick(values);
 }
 
+/** keys.env next to the settings (gitignored, outside the repo): keys for this computer, read at startup. */
+function readKeyFile(file) {
+	try {
+		return pick(parseDotEnv(fs.readFileSync(file, 'utf8')));
+	} catch (_error) {
+		return {};
+	}
+}
+
+/** Enough of a saved key to recognise it, never enough to use it. */
+function maskKey(value, showAll = false) {
+	const text = String(value ?? '');
+	if (!text || showAll) return text;
+	return text.length > 8 ? `${'•'.repeat(6)}${text.slice(-4)}` : '•'.repeat(6);
+}
+
 function pick(values) {
 	const out = {};
 	for (const name of [...VOICE_KEY_NAMES, ...VOICE_OPTION_NAMES]) {
@@ -47,4 +63,4 @@ function pick(values) {
 
 const hasVoiceKeys = (keys) => VOICE_KEY_NAMES.every((name) => Boolean(keys[name]));
 
-module.exports = { parseDotEnv, readDevKeys, hasVoiceKeys, VOICE_KEY_NAMES };
+module.exports = { parseDotEnv, readDevKeys, readKeyFile, maskKey, hasVoiceKeys, VOICE_KEY_NAMES };
