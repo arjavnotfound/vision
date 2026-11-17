@@ -88,7 +88,7 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 	const logFd = fs.openSync(mainLog, "w");
 	const child = spawn(electronExe, [".", "--synthetic-face"], {
 		cwd: desktopDir,
-		env: { ...process.env, VISION_FAKE_INPUT: driverLog, VISION_USER_DATA_DIR: path.join(runDir, "userData"), VISION_REMOTE_DEBUG_PORT: String(port), VISION_NO_ASSISTANT: "1", VISION_QA_SILENT: "1", ...(process.argv.includes("--fake-camera") ? { VISION_QA_FAKE_CAMERA: "1" } : {}) },
+		env: { ...process.env, VISION_FAKE_INPUT: driverLog, VISION_USER_DATA_DIR: path.join(runDir, "userData"), VISION_REMOTE_DEBUG_PORT: String(port), VISION_NO_ASSISTANT: "1", VISION_QA_SILENT: "1", VISION_QA_OFFSCREEN: "1", ...(process.argv.includes("--fake-camera") ? { VISION_QA_FAKE_CAMERA: "1" } : {}) },
 		stdio: ["ignore", logFd, logFd],
 	});
 	let exited = false;
