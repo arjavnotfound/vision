@@ -58,6 +58,7 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 	const otherPeaks = {};
 	let results = null;
 	let plan = null;
+	let refusalSpoken = false;
 	let assessment = null;
 	const say = (text) => { if (adaptive && !preview) speak(text); };
 
@@ -251,11 +252,19 @@ export function openCalibration({ layer, engine, profiles, toast, onClose, previ
 	function apply() {
 		// Never save measurements taken without a face in view (they would be noise).
 		if (!engine.getState().faceFound) {
-			const text = "I can't see your face, so nothing was saved. Look at the camera, then choose it again.";
+			const text = "I can't see your face, so nothing was saved. Look at the camera, then run calibration again.";
 			setText(instruction, "Nothing saved: no face in view.");
 			setText(sub, text);
 			sub.classList.add("is-warning");
-			speak(text);
+			// Saving is off the table: hide it and make running again the main choice.
+			for (const btn of foot.querySelectorAll("button")) {
+				if (/^(Accept|Apply)/.test(btn.textContent)) btn.hidden = true;
+				if (/^(Run again|Try again)$/.test(btn.textContent)) btn.classList.add("btn--ember");
+			}
+			if (!refusalSpoken) {
+				refusalSpoken = true;
+				speak(text);
+			}
 			return false;
 		}
 		sub.classList.remove("is-warning");
