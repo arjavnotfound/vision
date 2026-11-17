@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { RoomEvent } from 'livekit-client';
 import { useMaybeRoomContext } from '@livekit/components-react';
 import { type ActivityItem, applyActionEvent, parseActionEvent } from '@/lib/activity';
-import { type PendingConfirm, confirmFromEvent } from '@/lib/confirm';
+import { type HelpCard, type PendingConfirm, confirmFromEvent, helpFromEvent } from '@/lib/confirm';
 import { visionAudio } from '@/lib/vision-audio';
 
 export interface VisionActionsState {
@@ -18,11 +18,15 @@ export interface VisionActionsState {
   /** A pending yes/no question from a tool (closing a window, a consequential click). */
   confirm: PendingConfirm | null;
   clearConfirm: () => void;
+  /** "What can I say?" phrases for the app in front. */
+  help: HelpCard | null;
+  clearHelp: () => void;
   /** Increments when the agent reports that voice failed (no voice model reachable). */
   voiceOffline: number;
 }
 
 const CONFIRM_TIMEOUT_MS = 30_000;
+const HELP_TIMEOUT_MS = 25_000;
 
 let counter = 0;
 const makeId = () => `act-${Date.now().toString(36)}-${(counter++).toString(36)}`;
@@ -37,6 +41,8 @@ export function useVisionActions(): VisionActionsState {
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [voiceOffline, setVoiceOffline] = useState(0);
+  const [help, setHelp] = useState<HelpCard | null>(null);
+  const helpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!room) return;
@@ -58,6 +64,13 @@ export function useVisionActions(): VisionActionsState {
         setVoiceOffline((n) => n + 1);
         return;
       }
+      const card = helpFromEvent(raw);
+      if (card) {
+        setHelp(card);
+        if (helpTimer.current) clearTimeout(helpTimer.current);
+        helpTimer.current = setTimeout(() => setHelp(null), HELP_TIMEOUT_MS);
+        return;
+      }
       const question = confirmFromEvent(raw);
       if (question) {
         setConfirm(question);
@@ -69,8 +82,9 @@ export function useVisionActions(): VisionActionsState {
       if (!event) return;
 
       if (event.type === 'action_start') {
-        // Whatever was waiting for a yes has now been answered.
+        // Whatever was waiting for a yes has now been answered; the help card was used.
         setConfirm(null);
+        setHelp(null);
         visionAudio.playTing('action');
         setActionPulse((n) => n + 1);
       } else if (event.type === 'action_error') {
@@ -92,12 +106,24 @@ export function useVisionActions(): VisionActionsState {
       room.off(RoomEvent.DataReceived, handleData);
       if (chipTimer.current) clearTimeout(chipTimer.current);
       if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      if (helpTimer.current) clearTimeout(helpTimer.current);
     };
   }, [room]);
 
   const clearConfirm = useCallback(() => setConfirm(null), []);
+  const clearHelp = useCallback(() => setHelp(null), []);
 
   // The feed is newest-first, so the chip always reflects the latest action.
   const chip = chipVisible ? (activity[0] ?? null) : null;
-  return { activity, actionPulse, errorPulse, chip, confirm, clearConfirm, voiceOffline };
+  return {
+    activity,
+    actionPulse,
+    errorPulse,
+    chip,
+    confirm,
+    clearConfirm,
+    help,
+    clearHelp,
+    voiceOffline,
+  };
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { type WakeHeard, getElectron } from '@/lib/electron';
+import { clearProblem, reportProblem } from '@/lib/problems';
 import type { WakeSensitivity } from '@/lib/settings';
 
 const RATE = 16_000;
@@ -80,6 +81,8 @@ export interface WakeMic {
   position: () => number;
   /** The live mic input (for a level meter), or undefined if the mic is not open. */
   inputTrack: () => MediaStreamTrack | undefined;
+  /** The mic could not be opened (missing, unplugged or blocked). */
+  micMissing: boolean;
 }
 
 /**
@@ -99,6 +102,7 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
     input?: MediaStreamTrack;
   }>(undefined);
   const lastChunk = useRef({ end: 0, at: 0 });
+  const [micMissing, setMicMissing] = useState(false);
 
   useEffect(() => {
     getElectron()?.setWakeSensitivity?.(sensitivity);
@@ -161,15 +165,23 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
         });
         sessionContext.createMediaStreamSource(spotted.stream).connect(output);
         tap.current = { node, output, input: stream.getAudioTracks()[0] };
+        clearProblem('mic');
+        setMicMissing(false);
         // Unplugged mic: start again when a device comes back.
         stream.getAudioTracks()[0]?.addEventListener('ended', () => {
           teardown();
+          reportProblem('mic');
+          setMicMissing(true);
           if (!stopped) retry = setTimeout(open, 3_000);
         });
       } catch (error) {
         console.warn('[VISION] Wake word mic unavailable, retrying:', error);
         teardown();
-        if (!stopped) retry = setTimeout(open, 5_000);
+        if (!stopped) {
+          reportProblem('mic');
+          setMicMissing(true);
+          retry = setTimeout(open, 5_000);
+        }
       }
     };
     void open();
@@ -192,7 +204,8 @@ export function useWakeSpotter({ sensitivity, onHeard }: Options): WakeMic {
       position: () =>
         lastChunk.current.end + ((performance.now() - lastChunk.current.at) * RATE) / 1000,
       inputTrack: () => tap.current?.input,
+      micMissing,
     }),
-    []
+    [micMissing]
   );
 }

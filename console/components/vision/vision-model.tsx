@@ -30,6 +30,8 @@ export interface VisionModel {
   chip: ActivityItem | null;
   /** A yes/no question waiting for the user (dwell Yes / No, or just say it). */
   confirm: { question: string } | null;
+  /** "Vision, what can I say?": phrases for the app in front. */
+  help?: { app: string; phrases: string[] } | null;
   /** A one-line status that replaces the caption, e.g. "Voice is offline". */
   notice: string | null;
   actionPulse: number;
@@ -61,6 +63,7 @@ export interface VisionModel {
     endSession: () => void;
     sendCommand: (text: string) => void;
     answerConfirm: (yes: boolean) => void;
+    closeHelp?: () => void;
     setConsoleTab: (tab: ConsoleTab) => void;
     finishOnboarding: () => void;
     /** Electron: hide the overlay to the tray. */

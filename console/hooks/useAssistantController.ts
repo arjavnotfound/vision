@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Room } from 'livekit-client';
 import { getElectron } from '@/lib/electron';
+import { PROBLEM_TEXT, reportProblem } from '@/lib/problems';
 import { visionAudio } from '@/lib/vision-audio';
 
 /** Follow-up window: after VISION answers, keep listening this long without the wake word. */
@@ -15,19 +16,8 @@ export const SESSION_END_AFTER_COLLAPSE_MS = 10_000;
 export const ECHO_TAIL_MS = 600;
 /** Connecting longer than this means no internet / LiveKit down: say so, never hang. */
 export const START_TIMEOUT_MS = 12_000;
-export const OFFLINE_MESSAGE = 'Voice is offline. Face control still works.';
-
-function speakOffline() {
-  try {
-    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-    if (!synth) return;
-    synth.cancel();
-    // Not "No internet": the cause can also be the agent or the voice model.
-    synth.speak(new SpeechSynthesisUtterance(OFFLINE_MESSAGE));
-  } catch {
-    // no speech engine: the caption still says it
-  }
-}
+// Not "No internet": the cause can also be the agent or the voice model.
+export const OFFLINE_MESSAGE = PROBLEM_TEXT.voice;
 
 /** orb: the island resting (no voice). strip: the island open for voice. */
 export type Surface = 'orb' | 'strip' | 'console';
@@ -175,8 +165,8 @@ export function useAssistantController({
     console.warn('[VISION] Voice is offline');
     setIsStarting(false);
     setIsOffline(true);
-    visionAudio.playTing('notice');
-    speakOffline();
+    // Said once while it lasts; the island keeps showing it on every try.
+    if (reportProblem('voice')) visionAudio.playTing('notice');
     void Promise.resolve(end()).catch(() => undefined);
   }, [end]);
 

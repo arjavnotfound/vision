@@ -76,6 +76,8 @@ export interface MainSettings {
   dwellTime: number;
   wakeSensitivity: 'relaxed' | 'normal';
   islandEdge: 'top' | 'bottom';
+  /** VISION's own voice, 10-100. */
+  voiceVolume?: number;
   migrated: boolean;
 }
 

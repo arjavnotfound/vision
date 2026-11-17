@@ -9,6 +9,7 @@ import { LiveVision } from '@/components/vision/live-vision';
 import { Grain } from '@/components/vision/primitives';
 import { useDebugMode } from '@/hooks/useDebug';
 import { getElectron, useIsElectron } from '@/lib/electron';
+import { useSettings } from '@/lib/settings';
 import { getSandboxTokenSource } from '@/lib/utils';
 
 const IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
@@ -57,9 +58,10 @@ export function App({ appConfig, searchProvider }: AppProps) {
   );
 
   const isElectron = useIsElectron();
+  const { voiceVolume } = useSettings();
 
   return (
-    <AgentSessionProvider session={session}>
+    <AgentSessionProvider session={session} volume={voiceVolume / 100}>
       <DebugSetup />
       {/* In a browser tab the page itself is the backdrop; in Electron the window is transparent. */}
       {!isElectron && (

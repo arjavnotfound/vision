@@ -2,6 +2,18 @@
 // Releases for updates (see startAutoUpdates); the Store build and dev runs never do.
 const path = require('path');
 const { app, globalShortcut, BrowserWindow, ipcMain, shell } = require('electron');
+// QA runs: every window stays far left of the desktop. It still renders, so capturePage works.
+if (process.env.VISION_QA_OFFSCREEN === '1') {
+	app.on('browser-window-created', (_event, win) => {
+		const hide = () => {
+			const [x, y] = win.getPosition();
+			if (x > -10000) win.setPosition(x - 20000, y);
+		};
+		hide();
+		win.on('move', hide);
+		win.on('show', hide);
+	});
+}
 const fs = require('fs/promises');
 
 // Used as the registry key name for run-at-login on Windows.
@@ -217,7 +229,7 @@ const { createScrollHandler, createOverlaySync, summarizeInputFeedback } = requi
 const { ensureInitialRelativeMouseMove } = require('./win-relative-mouse.js');
 const { allowGestureButton, allowGestureScroll, isMouthClickMode } = require('./gesture-policy.js');
 const { createVisionBus } = require('./vision-bus.js');
-const { islandSettings, migrateIslandSettings, sanitizeGlobal } = require('./settings-migrate.js');
+const { islandSettings, migrateIslandSettings, sanitizeGlobal, parseVolume } = require('./settings-migrate.js');
 const screen = require('electron').screen; // Note: can't be used until ready event
 
 // Link to the voice assistant (see vision-bus.js). `live`: the assistant's mic is open.
@@ -1262,7 +1274,7 @@ function showAppWindow() {
 	showWindowInactive(appWindow);
 }
 
-const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls', 'retry-camera']);
+const BUS_UI_COMMANDS = new Set(['pause', 'resume', 'toggle-pause', 'recalibrate', 'speed', 'click-mode', 'remap', 'show', 'controls', 'retry-camera', 'set-setting']);
 async function handleBusCommand(cmd, value) {
 	if (cmd === 'quit') {
 		// A misheard "quit" must not end the session: the face window asks first.
@@ -1277,6 +1289,15 @@ async function handleBusCommand(cmd, value) {
 	}
 	if (cmd === 'status') {
 		return { state: busStatus() };
+	}
+	if (cmd === 'set-setting' && value?.name === 'volume') {
+		// VISION's own voice; the island applies it. Other settings go to the face window.
+		const volume = parseVolume(value.value, activeSettings.voiceVolume);
+		if (volume === null) throw new Error('Volume goes from 10 to 100, or say louder or quieter.');
+		deserializeSettings({ globalSettings: { voiceVolume: volume } });
+		await saveSettings();
+		sendIslandSettings();
+		return { done: `volume ${volume}`, value: volume };
 	}
 	if (cmd === 'voice-settings') {
 		// "Change your voice", "speak Hindi": takes effect from the next voice session.

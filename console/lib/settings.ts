@@ -18,6 +18,8 @@ export interface VisionSettings {
   onboarded: boolean;
   /** Which screen edge the island hangs from. */
   islandEdge: 'top' | 'bottom';
+  /** VISION's voice volume, 10-100 ("Vision, quieter"). From the settings file. */
+  voiceVolume: number;
 }
 
 export const DEFAULT_SETTINGS: VisionSettings = {
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   wakeSensitivity: 'normal',
   onboarded: false,
   islandEdge: 'top',
+  voiceVolume: 100,
 };
 
 export const DWELL_MIN_MS = 600;
@@ -56,6 +59,7 @@ function sanitize(raw: unknown): VisionSettings {
     wakeSensitivity: value.wakeSensitivity === 'relaxed' ? 'relaxed' : 'normal',
     onboarded: value.onboarded === true,
     islandEdge: value.islandEdge === 'bottom' ? 'bottom' : 'top',
+    voiceVolume: Math.min(100, Math.max(10, Math.round(Number(value.voiceVolume) || 100))),
   };
 }
 
@@ -90,6 +94,7 @@ class SettingsStore {
         dwellMs: main.dwellTime,
         wakeSensitivity: main.wakeSensitivity,
         islandEdge: main.islandEdge,
+        voiceVolume: main.voiceVolume,
       });
       this.listeners.forEach((listener) => listener());
     };

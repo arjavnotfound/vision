@@ -19,6 +19,7 @@ import { openStartScreen, openTryIt } from "./kiosk.js";
 import { detectMisfire, controlSettings, createBrowClick, choosePlan, DEFAULT_PLAN, INPUT_LABELS, ACTION_LABELS } from "./control-map.js";
 import { speak, setSpeechMuted } from "./speech.js";
 import { createRecoveryMonitor } from "./recovery.js";
+import { applySetting } from "./set-setting.js";
 
 const params = new URLSearchParams(location.search);
 const isPreview = params.has("preview");
@@ -433,6 +434,15 @@ async function boot() {
 		if (cmd === "retry-camera") {
 			engine.useCamera();
 			return { done: "retrying camera", camera: engine.getState().camera?.status };
+		}
+		if (cmd === "set-setting" && value && typeof value === "object") {
+			const result = applySetting(String(value.name), value.value, { st, engine });
+			if (result.done !== "none") {
+				controls.refresh();
+				refreshLabels();
+				autosaveProfile();
+			}
+			return result;
 		}
 		if (cmd === "controls") {
 			return { done: "controls", controlMap, clickingMode: st.get("clickingMode") };

@@ -218,6 +218,25 @@ function islandMock(view: IslandView, now: number, face: string | null): Partial
         uiState: 'idle',
         confirm: { question: 'Close this tab? Anything you typed in it will be lost.' },
       };
+    case 'help':
+      return {
+        ...base,
+        uiState: 'speaking',
+        agentCaption: 'On YouTube you can say play, pause, next video or full screen.',
+        help: {
+          app: 'YouTube',
+          phrases: [
+            'Play or pause',
+            'Next video',
+            'Full screen',
+            'Search YouTube for cats',
+            'Scroll down',
+            'Slower cursor',
+            'Longer dwell',
+            'Pause face control',
+          ],
+        },
+      };
     case 'offline':
       return { ...base, uiState: 'offline', notice: 'Voice is offline. Face control still works.' };
     default:

@@ -9,6 +9,7 @@ export type IslandView =
   | 'understood'
   | 'acting'
   | 'confirm'
+  | 'help'
   | 'speaking'
   | 'offline';
 
@@ -27,6 +28,8 @@ export interface IslandInput {
   userCaption: string;
   agentCaption: string;
   hasConfirm: boolean;
+  /** "What can I say?" card. */
+  hasHelp?: boolean;
   hasNotice: boolean;
   /** A step is running, or one finished in the last DONE_MS. */
   hasSteps: boolean;
@@ -42,6 +45,7 @@ export function islandView(i: IslandInput): IslandView {
     return i.fullScreen ? 'sliver' : 'resting';
   }
   if (i.hasConfirm) return 'confirm';
+  if (i.hasHelp) return 'help';
   if (i.hasNotice) return 'offline';
   if (i.sinceActivate < WAKE_MS && i.uiState !== 'speaking' && i.uiState !== 'acting')
     return 'wake';

@@ -20,6 +20,7 @@ import { useConversationTranscript } from '@/hooks/useConversationTranscript';
 import { useVisionActions } from '@/hooks/useVisionActions';
 import { useWakeSpotter } from '@/hooks/useWakeSpotter';
 import { type FaceStatus, type WakeHeard, getElectron } from '@/lib/electron';
+import { PROBLEM_TEXT, clearProblem } from '@/lib/problems';
 import { settingsStore, updateSettings, useSettings } from '@/lib/settings';
 import type { ApertureState } from './aperture-core';
 import {
@@ -101,6 +102,10 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     const timer = setTimeout(reportOffline, 15_000);
     return () => clearTimeout(timer);
   }, [isConnected, agentReady, reportOffline]);
+  // Voice works again: the next failure is said out loud again.
+  useEffect(() => {
+    if (agentReady) clearProblem('voice');
+  }, [agentReady]);
 
   // No voice keys yet (first run of an installed build): open Settings to add them.
   const { activate: startVoice } = controller;
@@ -306,7 +311,8 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     activity: vision.activity,
     chip: vision.chip,
     confirm: vision.confirm,
-    notice: controller.isOffline ? OFFLINE_MESSAGE : null,
+    help: controller.surface === 'strip' ? vision.help : null,
+    notice: controller.isOffline ? OFFLINE_MESSAGE : wakeMic.micMissing ? PROBLEM_TEXT.mic : null,
     actionPulse: vision.actionPulse,
     errorPulse: vision.errorPulse + failurePulse,
     micLevel,
@@ -332,6 +338,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       toggleMute: controller.toggleMute,
       endSession: controller.endSession,
       sendCommand,
+      closeHelp: vision.clearHelp,
       answerConfirm: (yes) => {
         vision.clearConfirm();
         sendCommand(yes ? 'Yes' : 'No');

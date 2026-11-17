@@ -7,6 +7,11 @@ const DWELL_MIN_MS = 600;
 const DWELL_MAX_MS = 1500;
 const OLD_CONSOLE_DWELL_MS = 900;
 const WAKE_SENSITIVITIES = ['relaxed', 'normal'];
+// VISION's own voice. Never below 10: a silent VISION can't tell anyone what went wrong.
+const VOLUME_DEFAULT = 100;
+const VOLUME_MIN = 10;
+const VOLUME_MAX = 100;
+const VOLUME_STEP = 20;
 
 const clampDwell = (ms) => Math.min(DWELL_MAX_MS, Math.max(DWELL_MIN_MS, Math.round(ms)));
 
@@ -21,6 +26,7 @@ function islandSettings(global = {}) {
 		dwellTime: Number.isFinite(global.dwellTime) ? clampDwell(global.dwellTime) : DWELL_DEFAULT_MS,
 		wakeSensitivity: normalizeWake(global.wakeSensitivity),
 		islandEdge: global.islandEdge === 'bottom' ? 'bottom' : 'top',
+		voiceVolume: parseVolume(global.voiceVolume, VOLUME_DEFAULT) ?? VOLUME_DEFAULT,
 		migrated: global.islandSettingsMigrated === true,
 	};
 }
@@ -47,13 +53,31 @@ function migrateIslandSettings(global = {}, old = {}) {
 	return patch;
 }
 
+/**
+ * A volume from the voice assistant: 10-100, or louder / quieter from `current`.
+ * Returns null for anything else (out of range, not a number).
+ */
+function parseVolume(value, current = VOLUME_DEFAULT) {
+	const text = String(value ?? '').trim().toLowerCase();
+	const base = Number.isFinite(current) ? current : VOLUME_DEFAULT;
+	if (text === 'louder' || text === 'quieter') {
+		const next = base + (text === 'louder' ? VOLUME_STEP : -VOLUME_STEP);
+		return Math.min(VOLUME_MAX, Math.max(VOLUME_MIN, next));
+	}
+	const number = Number(text);
+	if (text === '' || !Number.isFinite(number)) return null;
+	const rounded = Math.round(number);
+	return rounded >= VOLUME_MIN && rounded <= VOLUME_MAX ? rounded : null;
+}
+
 /** Clean values from a settings write: a saved "strict" becomes "normal". */
 function sanitizeGlobal(global = {}) {
 	if (global.wakeSensitivity !== undefined) global.wakeSensitivity = normalizeWake(global.wakeSensitivity);
+	if (global.voiceVolume !== undefined) global.voiceVolume = parseVolume(global.voiceVolume) ?? VOLUME_DEFAULT;
 	return global;
 }
 
 module.exports = {
-	islandSettings, migrateIslandSettings, sanitizeGlobal, normalizeWake,
+	islandSettings, migrateIslandSettings, sanitizeGlobal, normalizeWake, parseVolume,
 	DWELL_DEFAULT_MS, DWELL_MIN_MS, DWELL_MAX_MS,
 };

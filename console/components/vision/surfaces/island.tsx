@@ -199,6 +199,7 @@ export function Island({
       userCaption: model.userCaption,
       agentCaption: model.agentCaption,
       hasConfirm: Boolean(model.confirm),
+      hasHelp: Boolean(model.help),
       hasNotice: Boolean(model.notice),
       hasSteps: steps.length > 0,
       fullScreen: model.fullScreen,
@@ -262,6 +263,11 @@ export function Island({
 
   const transition = reduced ? { duration: 0 } : SPRING;
   const hotkey = model.hotkeyLabel.replace(/\+/g, ' ');
+
+  const [noticeTitle, ...noticeMore] = (
+    model.notice ?? 'Voice is offline. Face control still works.'
+  ).split(/(?<=\.) /);
+  const noticeRest = noticeMore.join(' ');
 
   const body = (() => {
     switch (view) {
@@ -363,14 +369,30 @@ export function Island({
             </p>
           </Row>
         );
+      case 'help':
+        return (
+          <Row
+            mark={
+              <VisionMark size={44} state={model.uiState === 'speaking' ? 'speaking' : 'idle'} />
+            }
+            end={<EndTarget label="Close" onActivate={actions.closeHelp ?? actions.collapse} />}
+          >
+            <p className="label-mono text-ember-text text-[11px] tracking-[0.18em] uppercase">
+              You can say
+            </p>
+            <p className="text-bone text-[19px] leading-snug">
+              In {model.help?.app}, start with “Vision”
+            </p>
+          </Row>
+        );
       case 'offline':
         return (
           <Row
             mark={<VisionMark size={44} state="offline" />}
             end={<EndTarget label="Close" onActivate={actions.collapse} />}
           >
-            <p className="text-bone text-[20px] leading-tight font-medium">Voice is offline</p>
-            <p className="text-bone-2 text-[14px]">Face control still works</p>
+            <p className="text-bone text-[20px] leading-tight font-medium">{noticeTitle}</p>
+            <p className="text-bone-2 text-[14px]">{noticeRest}</p>
           </Row>
         );
       case 'menu':
@@ -428,6 +450,17 @@ export function Island({
             </li>
           ))}
         </ol>
+      );
+    }
+    if (view === 'help' && model.help) {
+      return (
+        <ul className="grid grid-cols-2 gap-x-6 gap-y-2">
+          {model.help.phrases.map((phrase) => (
+            <li key={phrase} className="text-bone text-[17px] leading-snug">
+              “{phrase}”
+            </li>
+          ))}
+        </ul>
       );
     }
     if (view === 'confirm') {
