@@ -368,3 +368,19 @@ def test_uia_clicks_a_button_in_a_hidden_window(tmp_path):
         assert log.read_text().split() == ["Submit"]
     finally:
         proc.kill()
+
+
+@pytest.mark.asyncio
+async def test_show_face_control_asks_vision_to_show_its_window():
+    sent = []
+
+    class Bus:
+        async def send_command(self, cmd, value=None):
+            sent.append((cmd, value))
+            return {"ok": True, "done": "show"}
+
+    tools = DesktopTools(
+        guard=ActionGuard(clock=FakeClock()), backend=FakeDesktop(), bus=Bus()
+    )
+    await tools.show_face_control(None)
+    assert sent == [("show", None)]

@@ -154,6 +154,7 @@ class DesktopTools:
             self.pause_face_control,
             self.resume_face_control,
             self.recalibrate_face,
+            self.show_face_control,
             self.change_cursor_speed,
             self.change_click_mode,
             self.move_control,
@@ -480,6 +481,12 @@ class DesktopTools:
         return await self._vision("recalibrate", label="recalibrate")
 
     @function_tool()
+    async def show_face_control(self, context: RunContext) -> str:
+        """Bring back VISION's face control window when it is hidden or minimised
+        ("show face control", "where is VISION", "open VISION")."""
+        return await self._vision("show", label="show face control")
+
+    @function_tool()
     async def change_cursor_speed(self, context: RunContext, direction: str) -> str:
         """Make the head-controlled cursor faster or slower.
 
@@ -588,6 +595,7 @@ class DesktopTools:
 
     @function_tool()
     async def quit_vision(self, context: RunContext) -> str:
-        """Quit VISION completely (face control and voice). Only when the user asks to quit VISION."""
+        """Quit VISION completely (face control and voice). Only when the user asks to quit VISION.
+        VISION then asks the user to confirm on screen; tell them to rest on Quit."""
         self.release_all()
         return await self._vision("quit", label="quit")
