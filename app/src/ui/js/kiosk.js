@@ -22,7 +22,9 @@ export function openStartScreen({ layer, engine, onStart }) {
 	let bus = null;
 	let greetedFace = false;
 	let spokenProblem = null;
-	const WELCOME = "Welcome to VISION. Look at the Start button and hold still.";
+	let faceSince = null;
+	const AUTO_START_MS = 10000;
+	const WELCOME = "Welcome to VISION. Setup starts by itself in a few seconds. Or look at the Start button and hold still.";
 
 	const dots = Object.fromEntries(DOTS.map(({ id, label }) => {
 		const dot = h("span", { class: "status-pill__dot" });
@@ -88,11 +90,16 @@ export function openStartScreen({ layer, engine, onStart }) {
 		} else if (state.status === "no-face") {
 			setText(hint, "Look at the camera.");
 		} else if (state.status === "tracking") {
-			setText(hint, "Look at Start and hold your head still.");
+			// Moves on by itself once VISION has seen the face for a while; Start just skips the wait.
+			faceSince ??= performance.now();
+			const left = Math.ceil((AUTO_START_MS - (performance.now() - faceSince)) / 1000);
+			if (left <= 0) return start();
+			setText(hint, `Starting by itself in ${left} s. Or look at Start and hold still.`);
 			if (!greetedFace) {
 				greetedFace = true;
 			}
 		}
+		if (state.status !== "tracking") faceSince = null;
 	}
 	loop();
 

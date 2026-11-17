@@ -600,7 +600,8 @@ async function boot() {
 				if (isPreview && (action.type === "release" || action.type === "retryCamera")) continue;
 				if (action.type === "release") window.electronAPI?.releaseButtons?.("face-lost");
 				// Camera problems are always spoken: the user may not be able to read the banner.
-				if (action.type === "speak" && (action.camera || (isKiosk && !calibration))) speak(action.text);
+				// The Start screen speaks its own camera line.
+				if (action.type === "speak" && (action.camera ? !startScreen?.isOpen() : isKiosk && !calibration)) speak(action.text);
 				if (action.type === "retryCamera") {
 					try {
 						engine.useCamera();
