@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- Temporary QA harness for chunk D screens until the wiring pass mounts them in the shell. -->
+<html lang="en" data-theme="ember">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' blob:">
+	<title>VISION · harness D</title>
+	<link rel="stylesheet" href="css/tokens.css">
+	<link rel="stylesheet" href="css/app.css">
+	<style>.screen { animation: none !important; } * { transition: none !important; } body { display: block; } #page { position: fixed; inset: 0; } #card { padding: 24px; max-width: 640px; }</style>
+</head>
+<body>
+	<div id="page"></div>
+	<div class="layer" id="layer"></div>
+	<script type="module" src="js/harness-d.js"></script>
+</body>
+</html>
