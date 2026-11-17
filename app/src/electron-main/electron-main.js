@@ -387,6 +387,10 @@ if (/^\d+$/.test(process.env.VISION_REMOTE_DEBUG_PORT || "")) {
 	app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
 	app.commandLine.appendSwitch("remote-debugging-port", process.env.VISION_REMOTE_DEBUG_PORT);
 }
+// QA only: Chromium's synthetic camera, for test runs while the real webcam is busy.
+if (process.env.VISION_QA_FAKE_CAMERA === "1") {
+	app.commandLine.appendSwitch("use-fake-device-for-media-stream");
+}
 app.commandLine.appendSwitch("enable-blink-features", "MiddleClickAutoscroll");
 async function loadSettings() {
 	let data;

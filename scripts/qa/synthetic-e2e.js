@@ -6,6 +6,7 @@
 // safety) with two QA switches:
 //   --synthetic-face        face-mesh output replaced by a scripted synthetic face
 //   VISION_FAKE_INPUT=log   native mouse driver replaced by a logger (no OS input at all)
+//   --fake-camera           Chromium's synthetic camera (when the webcam is busy elsewhere)
 // Then drives gestures over CDP and checks what reaches the "driver".
 // The only real OS input is the F9 key (pressed twice) to test the global hotkey.
 
@@ -87,7 +88,7 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 	const logFd = fs.openSync(mainLog, "w");
 	const child = spawn(electronExe, [".", "--synthetic-face"], {
 		cwd: desktopDir,
-		env: { ...process.env, VISION_FAKE_INPUT: driverLog, VISION_USER_DATA_DIR: path.join(runDir, "userData"), VISION_REMOTE_DEBUG_PORT: String(port), VISION_NO_ASSISTANT: "1" },
+		env: { ...process.env, VISION_FAKE_INPUT: driverLog, VISION_USER_DATA_DIR: path.join(runDir, "userData"), VISION_REMOTE_DEBUG_PORT: String(port), VISION_NO_ASSISTANT: "1", VISION_QA_SILENT: "1", ...(process.argv.includes("--fake-camera") ? { VISION_QA_FAKE_CAMERA: "1" } : {}) },
 		stdio: ["ignore", logFd, logFd],
 	});
 	let exited = false;
@@ -102,6 +103,9 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 
 	try {
 		await waitFor(() => ev("Boolean(window.visionEngine)"), 30000);
+		// A fresh profile opens the self-advancing first run; it would start calibration mid-test.
+		await waitFor(() => ev("window.__visionReady === true"), 30000);
+		await ev(`[...document.querySelectorAll("button")].find((x) => x.textContent === "Skip setup")?.click(); true`);
 		await setFace(NEUTRAL);
 		await waitFor(() => ev("window.visionEngine.getState().faceFound"), 30000);
 		await ev(`window.__qa = []; for (const type of ["gesture", "click"]) window.visionEngine.on(type, (e) => window.__qa.push({ type, ...e })); true`);

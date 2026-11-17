@@ -63,6 +63,7 @@ describe('installer firewall rule', () => {
 		assert.equal(built.status, 0, built.stdout + built.stderr);
 		const ran = spawnSync(exe, ['/S'], { env: { ...process.env, VISION_FIREWALL_DRYRUN: out } });
 		assert.equal(ran.status, 0);
+		if (process.env.VISION_FW_EVIDENCE) fs.copyFileSync(out, process.env.VISION_FW_EVIDENCE);
 		const lines = fs.readFileSync(out, 'utf8').trim().split(/\r?\n/);
 		const program = path.join(process.env.LOCALAPPDATA, 'Programs', 'VISION', 'resources', 'agent-runtime', 'python.exe');
 		assert.equal(lines.length, 2);
