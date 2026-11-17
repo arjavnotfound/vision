@@ -126,3 +126,36 @@ export function proj(p, pose, cx, cy, sc) {
 
 /** Key points (eyes, nose, mouth) draw in ember; the rest in bone. */
 export const isKeyKind = (k) => k[0] === "e" || k === "n" || k === "m" || k === "mi";
+
+// ---- Display mesh (UX spec 6): about 70 points on the eyes, brows, lips and jaw outline only.
+// Drawing only: the tracker's own points are untouched.
+
+const every = (points, step) => (points ?? []).filter((_, i) => i % step === 0);
+const DISPLAY_KINDS = { o: 2, eL: 1, eR: 1, b: 1, m: 1 };
+
+/** [[x, y], ...] in camera pixels, from the engine's contours or the preview mesh. */
+export function meshPoints(frame) {
+	if (frame?.mesh?.pts) {
+		const seen = {};
+		return frame.mesh.pts.filter(([, , , , kind]) => {
+			const step = DISPLAY_KINDS[kind];
+			if (!step) return false;
+			seen[kind] = (seen[kind] ?? 0) + 1;
+			return (seen[kind] - 1) % step === 0;
+		}).map(([x, y]) => [x, y]);
+	}
+	const c = frame?.contours ?? {};
+	return [
+		...every(c.silhouette, 2),
+		...every(c.leftEyebrowUpper, 2), ...every(c.rightEyebrowUpper, 2),
+		...every(c.leftEyeUpper0, 2), ...every(c.leftEyeLower0, 2),
+		...every(c.rightEyeUpper0, 2), ...every(c.rightEyeLower0, 2),
+		...every(c.lipsUpperOuter, 2), ...every(c.lipsLowerOuter, 2),
+	].map(([x, y]) => [x, y]);
+}
+
+/** Opacity of a point: 60 % at the face centre, fading toward the edge of the face. */
+export function pointAlpha(x, y, cx, cy, radius) {
+	const d = Math.min(1, Math.hypot(x - cx, y - cy) / Math.max(1, radius));
+	return 0.6 * (1 - 0.65 * d * d);
+}

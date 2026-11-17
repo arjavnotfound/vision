@@ -102,7 +102,7 @@ export function createMockEngine(sceneName = "tracking") {
 		const p = pose();
 		const pts = FACE.pts.map((pt) => {
 			const [x, y, depth] = proj(pt, p, W / 2 + shift[0], H * 0.5 + shift[1], sc);
-			return [x, y, depth, isKeyKind(pt.k)];
+			return [x, y, depth, isKeyKind(pt.k), pt.k];
 		});
 		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 		for (const [x, y] of pts) {

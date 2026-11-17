@@ -1,49 +1,26 @@
-// The Viewfinder: live camera (mirrored, darkened) with a dot-mesh overlay, drawn from the
-// engine API only (engine.getVideoStream / getFrame / getState).
+// The Viewfinder: live camera (mirrored, darkened) with a soft dot-mesh overlay, drawn from
+// the engine API only (engine.getVideoStream / getFrame / getState).
 //
-// Look (from the approved "Iris" prototype):
-//   - face points are small bone dots; eye, nose and mouth points are ember
-//   - hairline polylines join the eye, brow, lip and jaw contours at ~22% opacity
-//   - a dashed framing ellipse with four crosshair ticks outside it
-//   - an ember nose reticle (r 14) with four ticks
-//   - paused: mesh dimmed to 35% and a large Doto PAUSED in the centre
+// Mesh look (UX spec 6): about 70 small ember points on the eyes, brows, lips and jaw outline,
+// 60 % opacity fading toward the edge of the face, with a 200 ms trail. No lines. Drawing only:
+// the tracker's points are untouched. Hidden when the showMesh setting is off, unless the
+// caller forces it on (Diagnostics). A dashed framing guide helps centring the face.
 
 import { h, setText, signed } from "./dom.js";
 import { cameraProblem } from "./recovery.js";
+import { meshPoints, pointAlpha } from "./face-mesh.js";
 
 // Ideal face position, in normalised frame coordinates (unmirrored).
 const GUIDE = { cx: 0.5, cy: 0.47, rx: 0.165, ry: 0.3 };
 
-/** Build a drawable mesh from the engine's real contours and optical-flow points. */
-function meshFromContours(frame) {
-	const c = frame.contours || {};
-	const pts = [];
-	const lines = [];
-	const addLoop = (points, key, closed) => {
-		if (!points || points.length < 2) return;
-		const start = pts.length;
-		for (const [x, y] of points) pts.push([x, y, 0, key]);
-		for (let i = 0; i < points.length - (closed ? 0 : 1); i++) {
-			lines.push([start + i, start + ((i + 1) % points.length)]);
-		}
-	};
-	const eye = (upper, lower) => (upper && lower && lower.length > 1) ? [...lower, ...[...upper].reverse()] : null;
-	addLoop(c.silhouette, false, true);
-	addLoop(c.leftEyebrowUpper, false, false);
-	addLoop(c.rightEyebrowUpper, false, false);
-	addLoop(eye(c.leftEyeUpper0, c.leftEyeLower0), true, true);
-	addLoop(eye(c.rightEyeUpper0, c.rightEyeLower0), true, true);
-	addLoop(eye(c.lipsUpperInner, c.lipsLowerInner), true, true);
-	// Optical-flow points sit on the nose: ember dots, no lines.
-	const p = frame.points;
-	for (let i = 0; i < (frame.pointCount || 0); i++) {
-		pts.push([p[i * 2], p[i * 2 + 1], 0, true]);
-	}
-	return { pts, lines, nose: frame.nose };
-}
+const TRAIL_MS = 200;
+const POINT_R = 1.5;
 
 // `pausedMessage: false`: calibration freezes the cursor on purpose, so no "paused" banner.
-export function createViewfinder(container, { engine, readouts = true, guide = true, hint = true, pausedMessage = true }) {
+// `mesh`: true / false, or undefined to follow the showMesh setting (default on).
+export function createViewfinder(container, { engine, readouts = true, guide = true, hint = true, pausedMessage = true, mesh: meshOption }) {
+	const meshOn = () => meshOption ?? (engine.settings?.has?.("showMesh") ? engine.settings.get("showMesh") !== false : true);
+	let trail = [];
 	container.classList.add("viewfinder");
 	const video = h("video", { autoplay: true, muted: true, playsInline: true });
 	video.muted = true;
@@ -175,60 +152,36 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 			ctx.restore();
 		}
 
-		const mesh = frame.mesh ?? meshFromContours(frame);
-		if (!mesh.pts.length) {
+		if (!meshOn()) {
+			trail = [];
 			return;
 		}
-		const P = mesh.pts.map(([x, y, depth, key]) => [X(x), Y(y), depth || 0, key]);
+		const now = performance.now();
+		const pts = meshPoints(frame).map(([x, y]) => [X(x), Y(y)]);
+		trail = trail.filter((t) => now - t.at < TRAIL_MS);
+		if (pts.length) trail.push({ at: now, pts });
+		if (!trail.length) return;
+		// Fade centre and radius from the newest set of points.
+		const latest = trail.at(-1).pts;
+		let cx = 0, cy = 0;
+		for (const [x, y] of latest) { cx += x; cy += y; }
+		cx /= latest.length;
+		cy /= latest.length;
+		let radius = 1;
+		for (const [x, y] of latest) radius = Math.max(radius, Math.hypot(x - cx, y - cy));
 		const dim = paused ? 0.35 : 1;
-
-		// Hairline polylines (~22%)
 		ctx.save();
-		ctx.strokeStyle = bone;
-		ctx.globalAlpha = 0.22 * dim;
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-		for (const [a, b] of mesh.lines) {
-			ctx.moveTo(P[a][0], P[a][1]);
-			ctx.lineTo(P[b][0], P[b][1]);
-		}
-		ctx.stroke();
-		ctx.restore();
-
-		// Dots: bone, with eye / nose / mouth points in ember (bone when paused)
-		ctx.save();
-		for (const [x, y, depth, key] of P) {
-			const r = (key ? 1.8 : 1.3) * (1 + depth * 0.4);
-			ctx.globalAlpha = dim * (key ? 1 : 0.5 + depth * 0.6);
-			ctx.fillStyle = key && !paused ? ember : bone;
-			ctx.beginPath();
-			ctx.arc(x, y, r, 0, Math.PI * 2);
-			ctx.fill();
+		ctx.fillStyle = paused ? bone : ember;
+		for (const { at, pts: set } of trail) {
+			const age = set === latest ? 1 : 0.5 * (1 - (now - at) / TRAIL_MS);
+			for (const [x, y] of set) {
+				ctx.globalAlpha = dim * age * pointAlpha(x, y, cx, cy, radius);
+				ctx.beginPath();
+				ctx.arc(x, y, POINT_R, 0, Math.PI * 2);
+				ctx.fill();
+			}
 		}
 		ctx.restore();
-
-		// Nose reticle: ember circle r 14 with four ticks
-		const nose = mesh.nose;
-		if (nose) {
-			const nx = X(nose[0]);
-			const ny = Y(nose[1]);
-			ctx.save();
-			ctx.strokeStyle = paused ? bone : ember;
-			ctx.globalAlpha = paused ? 0.6 : 1;
-			ctx.lineWidth = 1.3;
-			ctx.beginPath();
-			ctx.arc(nx, ny, 14, 0, Math.PI * 2);
-			ctx.moveTo(nx - 22, ny);
-			ctx.lineTo(nx - 9, ny);
-			ctx.moveTo(nx + 9, ny);
-			ctx.lineTo(nx + 22, ny);
-			ctx.moveTo(nx, ny - 22);
-			ctx.lineTo(nx, ny - 9);
-			ctx.moveTo(nx, ny + 9);
-			ctx.lineTo(nx, ny + 22);
-			ctx.stroke();
-			ctx.restore();
-		}
 	}
 
 	function update(state, frame) {
@@ -251,18 +204,22 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 		message.classList.toggle("vf-message--paused", state?.status === "paused");
 		if (state?.status === "camera-error") {
 			message.hidden = false;
-			setText(word, "NO CAMERA");
+			setText(word, "No camera");
 			setText(text, cameraProblem(state.camera?.error));
 		} else if (state?.status === "starting") {
 			message.hidden = false;
-			setText(word, "STARTING");
+			setText(word, "Starting");
 			setText(text, "Opening the camera…");
 		} else if (state?.status === "paused" && pausedMessage) {
 			message.hidden = false;
-			setText(word, "PAUSED");
+			setText(word, "Paused");
 			setText(text, state.gestures?.sleep?.enabled
 				? "Close both eyes for 2 seconds to resume."
 				: "Say “Vision, resume” to start the cursor again.");
+		} else if (state?.status === "no-face") {
+			message.hidden = false;
+			setText(word, "");
+			setText(text, "Finding your face…");
 		} else {
 			message.hidden = true;
 		}
@@ -296,6 +253,8 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 
 	return {
 		update,
+		/** Show or hide the mesh (null: follow the showMesh setting). */
+		setMesh(on) { meshOption = on ?? undefined; },
 		toast,
 		/** Off screen: stop decoding the preview video (the engine has its own). */
 		setShown(on) {
@@ -312,3 +271,4 @@ export function createViewfinder(container, { engine, readouts = true, guide = t
 		},
 	};
 }
+export const mount = (el, ctx) => createViewfinder(el, ctx);
