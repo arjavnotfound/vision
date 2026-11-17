@@ -492,3 +492,193 @@ def open_from_start_menu(name: str) -> None:
     type_text(name)
     time.sleep(0.9)
     press_combo([VK["enter"]])
+
+
+# ---------------------------------------------------------------- click by name (UIA)
+
+# UIA control types a person would "click": button, check box, combo box, edit,
+# hyperlink, list item, menu item, radio button, tab item, tree item, split button,
+# data item.
+CLICKABLE_TYPES = {
+    50000: "button",
+    50002: "check box",
+    50003: "combo box",
+    50004: "text box",
+    50005: "link",
+    50007: "list item",
+    50011: "menu item",
+    50013: "radio button",
+    50019: "tab",
+    50024: "tree item",
+    50029: "item",
+    50031: "button",
+}
+_FILLER = {"the", "button", "link", "tab", "icon", "menu", "item", "option"}
+INVOKE_WAIT_SECONDS = (
+    1.5  # Invoke blocks while a modal it opened is up; don't wait on it
+)
+
+
+class Control:
+    def __init__(
+        self,
+        name,
+        kind="button",
+        rect=(0, 0, 0, 0),
+        enabled=True,
+        offscreen=False,
+        element=None,
+    ) -> None:
+        self.name, self.kind, self.rect = name, kind, rect
+        self.enabled, self.offscreen, self.element = enabled, offscreen, element
+
+    def __repr__(self) -> str:
+        return f"Control({self.name!r}, {self.kind!r})"
+
+
+def _words(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", (text or "").lower()))
+
+
+def match_score(spoken: str, name: str) -> int:
+    """4 exact, 3 starts with it, 2 contains it as whole words, 1 loose, 0 no match."""
+    needle, label = _words(spoken), _words(name)
+    if not needle or not label:
+        return 0
+    if label == needle:
+        return 4
+    if label.startswith(needle + " "):
+        return 3
+    if f" {needle} " in f" {label} ":
+        return 2
+    if needle in label or all(w in label.split() for w in needle.split()):
+        return 1
+    return 0
+
+
+def rank_controls(spoken: str, controls: list) -> list:
+    """Matches for a spoken name, best first: closest name, then enabled, then on screen.
+    Ties keep window order. "Submit button" also finds "Submit"."""
+    for needle in (
+        spoken,
+        " ".join(w for w in _words(spoken).split() if w not in _FILLER),
+    ):
+        scored = [(match_score(needle, c.name), c) for c in controls]
+        scored = [(s, c) for s, c in scored if s]
+        if scored:
+            scored.sort(
+                key=lambda sc: (sc[0], sc[1].enabled, not sc[1].offscreen), reverse=True
+            )
+            return [c for _s, c in scored]
+    return []
+
+
+def pick_control(spoken: str, controls: list):
+    """(best, others) where others lists differently named controls that match just as
+    well, so the user must say which; identical names pick the first one."""
+    ranked = rank_controls(spoken, controls)
+    if not ranked:
+        return None, []
+    best = ranked[0]
+    key = (match_score(spoken, best.name), best.enabled, not best.offscreen)
+    tied = [
+        c
+        for c in ranked[1:]
+        if (match_score(spoken, c.name), c.enabled, not c.offscreen) == key
+        and _words(c.name) != _words(best.name)
+    ]
+    return best, tied
+
+
+def _uia():
+    if not IS_WINDOWS:
+        raise DesktopError("Click by name only works on Windows.")
+    sys.coinit_flags = (
+        0  # COINIT_MULTITHREADED, so an element can be invoked from a helper thread
+    )
+    import comtypes
+    import comtypes.client
+
+    comtypes.CoInitializeEx(0)
+    comtypes.client.GetModule("UIAutomationCore.dll")
+    from comtypes.gen import UIAutomationClient as uia  # noqa: N813
+
+    return uia, comtypes.client.CreateObject(
+        uia.CUIAutomation, interface=uia.IUIAutomation
+    )
+
+
+def find_controls(hwnd) -> list:
+    """Every named, clickable control in a window, in window order."""
+    uia, auto = _uia()
+    root = auto.ElementFromHandle(hwnd)
+    cond = auto.CreateOrConditionFromArray(
+        [
+            auto.CreatePropertyCondition(uia.UIA_ControlTypePropertyId, t)
+            for t in CLICKABLE_TYPES
+        ]
+    )
+    cache = auto.CreateCacheRequest()
+    for prop in (
+        uia.UIA_NamePropertyId,
+        uia.UIA_ControlTypePropertyId,
+        uia.UIA_BoundingRectanglePropertyId,
+        uia.UIA_IsEnabledPropertyId,
+        uia.UIA_IsOffscreenPropertyId,
+    ):
+        cache.AddProperty(prop)
+    found = root.FindAllBuildCache(uia.TreeScope_Descendants, cond, cache)
+    controls = []
+    for i in range(found.Length if found else 0):
+        el = found.GetElement(i)
+        name = (el.CachedName or "").strip()
+        if not name:
+            continue
+        r = el.CachedBoundingRectangle
+        controls.append(
+            Control(
+                name,
+                CLICKABLE_TYPES.get(el.CachedControlType, "button"),
+                (r.left, r.top, r.right, r.bottom),
+                bool(el.CachedIsEnabled),
+                bool(el.CachedIsOffscreen),
+                el,
+            )
+        )
+    return controls
+
+
+def press_control(hwnd, control: Control) -> str:
+    """Press a control: its Invoke action when it has one (no cursor jump, works when
+    covered), otherwise a real click at its centre. Returns how it was pressed."""
+    import threading
+
+    uia, _auto = _uia()
+    pattern = None
+    with contextlib.suppress(Exception):
+        unknown = control.element.GetCurrentPattern(uia.UIA_InvokePatternId)
+        if unknown:
+            pattern = unknown.QueryInterface(uia.IUIAutomationInvokePattern)
+    if pattern is not None:
+        errors: list = []
+
+        def invoke() -> None:
+            try:
+                _uia()
+                pattern.Invoke()
+            except Exception as exc:
+                errors.append(exc)
+
+        worker = threading.Thread(target=invoke, daemon=True)
+        worker.start()
+        worker.join(INVOKE_WAIT_SECONDS)
+        if not errors:
+            return "invoke"
+    left, top, right, bottom = control.rect
+    if control.offscreen or right <= left or bottom <= top:
+        raise DesktopError(f"{control.name} is not on screen right now.")
+    if user32.GetForegroundWindow() != hwnd:
+        focus_window(hwnd)
+    user32.SetCursorPos((left + right) // 2, (top + bottom) // 2)
+    click()
+    return "click"
