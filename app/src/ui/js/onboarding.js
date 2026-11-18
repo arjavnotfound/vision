@@ -67,7 +67,7 @@ const LINES = [
 	"Now try each way of clicking, and pick the ones you like. Wink is already picked. Then try pausing once.",
 ];
 
-export function mount(el, { engine, onFinish, hasVoiceKeys = async () => false, startAt = 0, auto = true, toast, preview = null } = {}) {
+export function mount(el, { engine, onFinish, hasVoiceKeys = async () => false, startAt = 0, auto = true, toast, preview = null, adaptive = false, onPlan = null } = {}) {
 	ensureBuildDStyles();
 	let viewfinder = null;
 	let calibration = null;
@@ -155,7 +155,7 @@ export function mount(el, { engine, onFinish, hasVoiceKeys = async () => false, 
 	function calibrate() {
 		screen.hidden = true;
 		calibration = mountCalibration(el, {
-			engine, toast, preview: auto ? null : (preview?.calibration ?? { step: "center" }),
+			engine, toast, adaptive, onPlan, preview: auto ? null : (preview?.calibration ?? { step: "center" }),
 			extraTop: skipBtn(),
 			onClose: () => {
 				calibration = null;
