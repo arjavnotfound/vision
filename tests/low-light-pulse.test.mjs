@@ -50,8 +50,15 @@ describe("Low light", () => {
 describe("Tracking confidence", () => {
 	it("is zero without a face and holds the cursor below the floor", () => {
 		assert.equal(trackingConfidence({ faceFound: false, points: 500 }), 0);
-		assert.ok(trackingConfidence({ faceFound: true, points: 5 }) < CONFIDENCE_FLOOR);
+		assert.ok(trackingConfidence({ faceFound: true, points: 0 }) < CONFIDENCE_FLOOR);
 		assert.equal(trackingConfidence({ faceFound: true, points: 200 }), 1);
+	});
+	it("lets the cursor move with the points the tracker really keeps", () => {
+		// core/vision.js seeds at most 3 flow points from the face mesh (nostrils, between eyes)
+		for (const points of [1, 2, 3]) {
+			assert.ok(trackingConfidence({ faceFound: true, points }) >= CONFIDENCE_FLOOR, `${points} points`);
+		}
+		assert.equal(trackingConfidence({ faceFound: true, points: 3 }), 1);
 	});
 });
 

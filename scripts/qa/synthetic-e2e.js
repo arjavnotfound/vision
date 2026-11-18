@@ -120,7 +120,10 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		const fps = await ev("window.visionEngine.getState().fps");
 		const status = await ev("window.visionEngine.getState().status");
 		const camera = await ev("JSON.stringify(window.visionEngine.getState().camera?.error ?? null)");
-		record("engine tracking with synthetic face", status === "tracking", `status ${status}, camera error ${camera}, loop ${fps} FPS`);
+		// lowConfidence holds the cursor still; with a face found it must be off or the cursor never moves.
+		const conf = await ev("window.visionEngine.getState().confidence");
+		const held = conf < await ev("Vision.modules.CONFIDENCE_FLOOR");
+		record("engine tracking with synthetic face", status === "tracking" && held === false, `status ${status}, cursor held ${held} (confidence ${conf}), camera error ${camera}, loop ${fps} FPS`);
 
 		// 1. Left wink -> left click
 		let t = Date.now();

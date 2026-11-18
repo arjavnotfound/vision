@@ -78,7 +78,9 @@ export function createLowLightWatch({ threshold = FRAMING_LIMITS.minBrightness, 
 export const CONFIDENCE_FLOOR = 0.2;
 // shortcut: confidence is the optical-flow point count (face mesh reports a fixed 0.9999);
 // upgrade if the landmark model ever gives a real score.
-const CONFIDENT_POINTS = 60;
+// core/vision.js seeds at most 3 flow points (nostrils, between eyes), so 3 is full
+// confidence; 60 held the cursor still on every frame.
+const CONFIDENT_POINTS = 3;
 
 /** 0..1: how much the cursor can trust this frame's movement. */
 export function trackingConfidence({ faceFound, points }) {
