@@ -243,7 +243,7 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		await set("clickDwell", true);
 		t = Date.now();
 		const dwellClick = await waitFor(() => readDriver().some((e) => e.t >= t && e.op === "down" && e.via === "click"), 8000);
-		record("dwell click on the desktop", Boolean(dwellClick), dwellClick ? `clicked after ${readDriver().find((e) => e.t >= t && e.via === "click").t - t} ms` : "no click");
+		record("dwell click on the desktop", Boolean(dwellClick), dwellClick ? `clicked after ${readDriver().find((e) => e.t >= t && e.via === "click").t - t} ms` : `no click; cursor ${await ev("JSON.stringify(window.visionEngine.getState().cursor)")}`);
 
 		// 10. Dwell drag: first dwell presses, next dwell releases
 		await set("dwellDrag", true);

@@ -4390,6 +4390,12 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			const screenOffsetY = window.electronAPI ? (virtualDisplayBounds?.y ?? 0) : 0;
 
 			let [movementX, movementY] = pointTracker.getMovement();
+			if (syntheticFace) {
+				// QA: flow points sit on whatever the real camera sees, not on the scripted (still) face,
+				// so room motion would steer the cursor and dwell would never settle.
+				movementX = 0;
+				movementY = 0;
+			}
 			lastMovement[0] = movementX;
 			lastMovement[1] = movementY;
 
