@@ -58,9 +58,21 @@ export function islandView(i: IslandInput): IslandView {
 }
 
 /** What main needs to know: the idle bar (or line), the caption pill, or the menu. */
-export function windowModeFor(view: IslandView): 'idle' | 'caption' | 'menu' {
+export function windowModeFor(view: IslandView): 'idle' | 'caption' | 'controls' | 'menu' {
   if (view === 'menu') return 'menu';
-  return view === 'resting' || view === 'sliver' ? 'idle' : 'caption';
+  if (view === 'resting' || view === 'sliver') return 'idle';
+  return islandControls(view) ? 'controls' : 'caption';
+}
+
+/**
+ * Dwell buttons under the caption: Stop while voice is live, Yes / No for a confirmation.
+ * Speech can be misheard, so each always has a way that needs no voice.
+ */
+export function islandControls(view: IslandView): 'stop' | 'confirm' | null {
+  if (view === 'confirm') return 'confirm';
+  return ['wake', 'listening', 'understood', 'acting', 'speaking', 'help'].includes(view)
+    ? 'stop'
+    : null;
 }
 
 /** Voice as the menu shows it: `<state> · <reason> · <action>` when it can't be used. */

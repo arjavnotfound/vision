@@ -12,6 +12,7 @@ import {
   captionTail,
   currentSteps,
   faceState,
+  islandControls,
   islandView,
   lineTone,
   voiceStatus,
@@ -157,6 +158,38 @@ function MenuRow({
         <span className="text-bone text-[17px] leading-tight font-medium">{label}</span>
         {detail && <span className="text-bone-2 truncate text-[13px]">{detail}</span>}
       </span>
+    </DwellTarget>
+  );
+}
+
+/** A 64 px dwell button under the caption (Stop, Yes, No). */
+function ControlButton({
+  label,
+  primary,
+  onActivate,
+  previewProgress,
+}: {
+  label: string;
+  primary?: boolean;
+  onActivate: () => void;
+  previewProgress?: number;
+}) {
+  return (
+    <DwellTarget
+      label={label}
+      onActivate={onActivate}
+      indicator="bar"
+      hitSize={64}
+      tone={primary ? 'ink' : 'ember'}
+      previewProgress={previewProgress}
+      className={cn(
+        'h-16 min-w-[112px] flex-1 rounded-[16px] px-5 text-[17px] font-medium',
+        primary
+          ? 'bg-ember text-[#1a0d07]'
+          : 'bg-ink-1 text-bone hover:bg-ink-3 shadow-[inset_0_0_0_1px_var(--rule-strong)]'
+      )}
+    >
+      {label}
     </DwellTarget>
   );
 }
@@ -442,9 +475,24 @@ export function Island({
     </div>
   );
 
+  const controlsKind = islandControls(view);
+  const controls = controlsKind && (
+    <div className={cn('flex w-[360px] gap-2', bottom ? 'mb-2' : 'mt-2')}>
+      {controlsKind === 'confirm' ? (
+        <>
+          <ControlButton label="Yes" primary onActivate={() => actions.answerConfirm(true)} />
+          <ControlButton label="No" onActivate={() => actions.answerConfirm(false)} />
+        </>
+      ) : (
+        <ControlButton label="Stop" onActivate={actions.endSession} />
+      )}
+    </div>
+  );
+
   const tone = previewTone ?? lineTone({ voiceOn, offline, face, uiState: model.uiState });
   const progress = previewProgress ?? dwell;
-  const faded = (previewNear ?? near) && view !== 'menu';
+  // The menu and the dwell buttons stay solid: the cursor is meant to be on them.
+  const faded = (previewNear ?? near) && view !== 'menu' && !controls;
 
   // Laid out as main expects: centred (or right-aligned 10 px in at top right), 4 px from
   // the edge; the line touches the top edge. See shapeRect in orb-window.js.
@@ -458,7 +506,12 @@ export function Island({
       )}
     >
       <div
-        className={cn(view === 'menu' && 'pointer-events-auto')}
+        className={cn(
+          'flex',
+          bottom ? 'flex-col-reverse' : 'flex-col',
+          position === 'top-right' ? 'items-end' : 'items-center',
+          (view === 'menu' || controls) && 'pointer-events-auto'
+        )}
         style={{
           opacity: faded ? NEAR_OPACITY : 1,
           transition: reduced ? undefined : 'opacity 150ms ease',
@@ -471,7 +524,10 @@ export function Island({
         ) : view === 'menu' ? (
           menuPanel
         ) : (
-          caption
+          <>
+            {caption}
+            {controls}
+          </>
         )}
       </div>
       {progress > 0 && view !== 'menu' && (

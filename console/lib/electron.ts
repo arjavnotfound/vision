@@ -3,7 +3,8 @@
 import { useSyncExternalStore } from 'react';
 
 /** What the island shows; the window takes the mouse only for 'menu'. */
-export type IslandMode = 'idle' | 'caption' | 'menu';
+/** controls: the caption pill with Stop or Yes/No under it (the window takes the mouse). */
+export type IslandMode = 'idle' | 'caption' | 'controls' | 'menu';
 export type IslandPosition = 'top-center' | 'top-right' | 'bottom-center';
 export type WakePhrase = 'hey-vision' | 'vision';
 /** Pages of the VISION window the island menu opens. */

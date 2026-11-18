@@ -54,6 +54,12 @@ describe('island window', () => {
 	it('is click-through in every state except the open menu', () => {
 		for (const mode of ['idle', 'caption', 'line']) assert.equal(island.ignoresMouse(mode), true);
 		assert.equal(island.ignoresMouse('menu'), false);
+		assert.equal(island.ignoresMouse('controls'), false, 'Stop, Yes and No take a dwell');
+	});
+	it('has room for the 64 px Stop or Yes / No row under the caption', () => {
+		const win = island.islandWindowBounds('controls', 'top-center', display);
+		const shape = island.shapeRect('controls', 'top-center', win);
+		assert.ok(shape.height >= 40 + 64 && shape.y + shape.height <= win.y + win.height);
 	});
 	it('fades within 80 px of the shape', () => {
 		const bar = rectFor('idle', 'top-center');

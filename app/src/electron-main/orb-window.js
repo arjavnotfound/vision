@@ -19,16 +19,19 @@ const SCHEME = 'app';
 const PARTITION = 'persist:assistant';
 
 // What the page draws (px). idle: the resting bar; caption: listening / thinking /
-// speaking; line: over a full-screen app; menu: the five-row menu panel.
+// speaking; controls: the caption with a 64 px row of dwell buttons under it (Stop, or
+// Yes / No); line: over a full-screen app; menu: the five-row menu panel.
 const SHAPES = {
 	idle: { width: 56, height: 8 },
 	caption: { width: 360, height: 40 },
+	controls: { width: 360, height: 112 },
 	line: { width: 40, height: 3 },
 	menu: { width: 320, height: 500 },
 };
 // The windows that hold them. The island window has room under the bar for the dwell ring.
 const WINDOWS = {
 	island: { width: 380, height: 80 },
+	controls: { width: 380, height: 132 },
 	menu: { width: 340, height: 520 },
 };
 const POSITIONS = new Set(['top-center', 'top-right', 'bottom-center']);
@@ -50,10 +53,10 @@ const POINTER_POLL_MS = 50; // 20 Hz
 
 const normalizePosition = (position) => (POSITIONS.has(position) ? position : 'top-center');
 
-/** Window bounds. kind: 'island' | 'menu' | 'line'. Pure: display = { bounds, workArea }. */
+/** Window bounds. kind: 'island' | 'controls' | 'menu' | 'line'. Pure: display = { bounds, workArea }. */
 function islandWindowBounds(kind, position, display) {
 	position = normalizePosition(position);
-	const size = kind === 'menu' ? WINDOWS.menu : WINDOWS.island;
+	const size = WINDOWS[kind] || WINDOWS.island;
 	if (kind === 'line') {
 		// Always the very top: a full-screen video keeps its controls at the bottom.
 		const { bounds } = display;
@@ -87,8 +90,8 @@ function distanceTo(p, r) {
 	return Math.hypot(dx, dy);
 }
 
-/** The window takes the mouse only while the menu is open. */
-const ignoresMouse = (mode) => mode !== 'menu';
+/** The window takes the mouse only while the menu or a Stop / Yes / No button shows. */
+const ignoresMouse = (mode) => mode !== 'menu' && mode !== 'controls';
 
 /**
  * Dwell to open, measured from the cursor (the window never sees it). The cursor must
@@ -217,8 +220,8 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 	const send = (channel, ...args) => win?.webContents.send(channel, ...args);
 	const display = () => screen.getPrimaryDisplay();
 	const isLine = () => fullScreenApp && mode === 'idle';
-	const kind = () => (mode === 'menu' ? 'menu' : isLine() ? 'line' : 'island');
-	const shape = () => (mode === 'menu' ? 'menu' : isLine() ? 'line' : mode);
+	const kind = () => (mode === 'menu' || mode === 'controls' ? mode : isLine() ? 'line' : 'island');
+	const shape = () => (mode === 'menu' || mode === 'controls' ? mode : isLine() ? 'line' : mode);
 
 	function activate() {
 		if (!win) return;
@@ -277,6 +280,8 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 			}
 			return;
 		}
+		// Stop / Yes / No: no fade, no dwell-to-open; the buttons take the dwell themselves.
+		if (mode === 'controls') return;
 		const rect = shapeRect(shape(), position, bounds);
 		const isNear = distanceTo(p, rect) <= FADE_NEAR;
 		if (isNear !== near) {
@@ -302,6 +307,7 @@ function createOrbWindow({ preloadPath, iconPath, consoleDir, consoleUrl, getCon
 		// Leaving the menu with the cursor still on the island must not reopen it.
 		if (was === 'menu') dwell.disarm();
 		near = null;
+		if (next === 'menu' || next === 'controls') send('vision-near', false);
 		layout();
 	}
 

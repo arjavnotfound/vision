@@ -11,6 +11,7 @@ import {
   lineTone,
   voiceStatus,
   windowModeFor,
+  islandControls,
 } from '../lib/island.ts';
 
 const base: IslandInput = {
@@ -60,12 +61,18 @@ test('understood, acting, speaking, confirm and offline', () => {
   assert.equal(islandView({ ...base, hasNotice: true }), 'offline');
 });
 
-test('main hears idle, caption or menu (only the menu takes the mouse)', () => {
+test('main hears idle, caption, controls or menu', () => {
   assert.equal(windowModeFor('resting'), 'idle');
   assert.equal(windowModeFor('sliver'), 'idle');
   assert.equal(windowModeFor('menu'), 'menu');
-  for (const view of ['wake', 'listening', 'acting', 'confirm', 'speaking', 'offline'] as const)
-    assert.equal(windowModeFor(view), 'caption');
+  assert.equal(windowModeFor('offline'), 'caption');
+  for (const view of ['wake', 'listening', 'understood', 'acting', 'speaking', 'help'] as const) {
+    assert.equal(windowModeFor(view), 'controls');
+    assert.equal(islandControls(view), 'stop');
+  }
+  assert.equal(windowModeFor('confirm'), 'controls');
+  assert.equal(islandControls('confirm'), 'confirm');
+  assert.equal(islandControls('resting'), null);
 });
 
 test('full screen shows the line, unless voice is active', () => {
