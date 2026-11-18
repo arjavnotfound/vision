@@ -421,6 +421,22 @@ async def test_retry_camera_asks_vision_to_open_the_camera_again():
     assert sent == [("retry-camera", None)]
 
 
+@pytest.mark.asyncio
+async def test_find_cursor_asks_vision_to_pulse_the_cursor():
+    sent = []
+
+    class Bus:
+        async def send_command(self, cmd, value=None):
+            sent.append((cmd, value))
+            return {"ok": True, "done": "pulse"}
+
+    tools = DesktopTools(
+        guard=ActionGuard(clock=FakeClock()), backend=FakeDesktop(), bus=Bus()
+    )
+    await tools.find_cursor(None)
+    assert sent == [("pulse", None)]
+
+
 class RecordingBus:
     def __init__(self, reply=None):
         self.sent = []

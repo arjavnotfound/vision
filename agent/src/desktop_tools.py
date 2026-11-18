@@ -206,6 +206,7 @@ class DesktopTools:
             self.recalibrate_face,
             self.show_face_control,
             self.retry_camera,
+            self.find_cursor,
             self.change_click_mode,
             self.move_control,
             self.change_voice,
@@ -622,6 +623,12 @@ class DesktopTools:
         """Try to open the camera again now ("try the camera", "the camera is not
         working"). VISION also retries by itself every few seconds."""
         return await self._vision("retry-camera", label="try the camera")
+
+    @function_tool()
+    async def find_cursor(self, context: RunContext) -> str:
+        """Show where the cursor is with rings around it ("where's my cursor",
+        "I can't find the mouse", "where is the pointer")."""
+        return await self._vision("pulse", label="show the cursor")
 
     @function_tool()
     async def change_click_mode(self, context: RunContext, mode: str) -> str:
