@@ -35,6 +35,8 @@ function islandSettings(global = {}) {
 		voiceVolume: parseVolume(global.voiceVolume, VOLUME_DEFAULT) ?? VOLUME_DEFAULT,
 		soundsOn: global.soundsOn !== false,
 		soundVolume: parseVolume(global.soundVolume, SOUND_VOLUME_DEFAULT) ?? SOUND_VOLUME_DEFAULT,
+		// Mic stays live while VISION talks so the user can cut in. Off by default.
+		allowInterrupt: global.allowInterrupt === true,
 		migrated: global.islandSettingsMigrated === true,
 	};
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Room } from 'livekit-client';
 import { getElectron } from '@/lib/electron';
+import { micOpen } from '@/lib/island';
 import { PROBLEM_TEXT, reportProblem } from '@/lib/problems';
 import { visionAudio } from '@/lib/vision-audio';
 
@@ -31,6 +32,8 @@ interface ControllerInput {
   isBusy: boolean;
   /** VISION is talking: the mic is off, so it never hears itself through hall speakers. */
   agentSpeaking?: boolean;
+  /** Settings: keep the mic live while VISION talks (off by default). */
+  allowInterrupt?: boolean;
   /** Anything that changes when the conversation moves (captions, actions, state). */
   activitySignal: unknown;
   initialSurface?: Surface;
@@ -79,6 +82,7 @@ export function useAssistantController({
   end,
   isBusy,
   agentSpeaking = false,
+  allowInterrupt = false,
   activitySignal,
   initialSurface = 'orb',
 }: ControllerInput): AssistantController {
@@ -113,8 +117,8 @@ export function useAssistantController({
   // user muted it themselves).
   useEffect(() => {
     if (!isConnected) return;
-    void setMic(room, surface !== 'orb' && !userMuted && !speakingHold);
-  }, [room, isConnected, surface, userMuted, speakingHold]);
+    void setMic(room, micOpen({ surface, userMuted, speakingHold, allowInterrupt }));
+  }, [room, isConnected, surface, userMuted, speakingHold, allowInterrupt]);
 
   // Face Control pauses mouth gestures while the mic is live (talking opens the mouth).
   // open: a session is showing, so main ignores a second wake phrase.

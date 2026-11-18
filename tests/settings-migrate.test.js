@@ -18,7 +18,7 @@ describe('settings migration', () => {
 		assert.equal(patch.wakeSensitivity, 'normal', 'a saved "strict" becomes Normal');
 		assert.equal(patch.islandEdge, 'bottom');
 		const merged = { ...global, ...patch };
-		assert.deepEqual(islandSettings(merged), { dwellTime: 1500, wakeSensitivity: 'normal', islandEdge: 'bottom', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: true });
+		assert.deepEqual(islandSettings(merged), { dwellTime: 1500, wakeSensitivity: 'normal', islandEdge: 'bottom', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, allowInterrupt: false, migrated: true });
 		assert.equal(migrateIslandSettings(merged, old), null, 'runs only once');
 	});
 	it('takes a changed island dwell time when the face window has the default', () => {
@@ -28,7 +28,7 @@ describe('settings migration', () => {
 	});
 	it('keeps relaxed, and gives one default dwell time when nothing is saved', () => {
 		assert.equal(migrateIslandSettings({}, { wakeSensitivity: 'relaxed' }).wakeSensitivity, 'relaxed');
-		assert.deepEqual(islandSettings({}), { dwellTime: 1000, wakeSensitivity: 'normal', islandEdge: 'top', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: false });
+		assert.deepEqual(islandSettings({}), { dwellTime: 1000, wakeSensitivity: 'normal', islandEdge: 'top', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, allowInterrupt: false, migrated: false });
 	});
 	it('turns a saved strict into normal on any write', () => {
 		assert.equal(sanitizeGlobal({ wakeSensitivity: 'strict' }).wakeSensitivity, 'normal');

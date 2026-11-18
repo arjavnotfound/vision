@@ -146,3 +146,17 @@ export function lineTone(i: {
   if (i.face === 'paused') return 'dim';
   return 'idle';
 }
+
+/**
+ * Whether the session mic is live. While VISION speaks (and its echo tail) the mic is
+ * muted unless the user turned on "Let me interrupt while VISION talks". The wake
+ * spotter has its own capture, so "Vision, stop" is heard either way.
+ */
+export function micOpen(m: {
+  surface: 'orb' | 'strip';
+  userMuted: boolean;
+  speakingHold: boolean;
+  allowInterrupt: boolean;
+}) {
+  return m.surface !== 'orb' && !m.userMuted && (m.allowInterrupt || !m.speakingHold);
+}

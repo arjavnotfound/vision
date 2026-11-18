@@ -74,4 +74,9 @@ describe("Voice set_setting bridge", () => {
 		assert.equal(islandSettings({ soundsOn: false }).soundsOn, false);
 		assert.equal(sanitizeGlobal({ soundVolume: 500 }).soundVolume, 60);
 	});
+	it("interrupting while VISION talks is off unless turned on", () => {
+		assert.equal(islandSettings({}).allowInterrupt, false);
+		assert.equal(islandSettings({ allowInterrupt: "yes" }).allowInterrupt, false);
+		assert.equal(islandSettings({ allowInterrupt: true }).allowInterrupt, true);
+	});
 });

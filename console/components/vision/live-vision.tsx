@@ -55,7 +55,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   // The wake capture is also the session's mic (pre-roll, one capture): published here
   // instead of LiveKit opening the mic again. Without it, LiveKit opens the mic itself.
   const onWakeHeardRef = useRef<(heard: WakeHeard) => void>(() => undefined);
-  const { wakeSensitivity, wakePhrase } = useSettings();
+  const { wakeSensitivity, wakePhrase, allowInterrupt } = useSettings();
   useEffect(() => {
     getElectron()?.setWakePhrase?.(wakePhrase);
   }, [wakePhrase]);
@@ -86,6 +86,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     end,
     isBusy,
     agentSpeaking: agent.state === 'speaking',
+    allowInterrupt,
     activitySignal: `${transcript.latestUser?.text}|${transcript.latestAgent?.text}|${vision.activity.length}|${agent.state}`,
   });
 

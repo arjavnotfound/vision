@@ -31,6 +31,8 @@ export interface VisionSettings {
   soundsOn: boolean;
   /** Their volume, 10-100. From the settings file. */
   soundVolume: number;
+  /** Let the user cut in while VISION talks. From the settings file. */
+  allowInterrupt: boolean;
 }
 
 export const DEFAULT_SETTINGS: VisionSettings = {
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   voiceVolume: 100,
   soundsOn: true,
   soundVolume: 60,
+  allowInterrupt: false,
 };
 
 export const DWELL_MIN_MS = 600;
@@ -86,6 +89,7 @@ function sanitize(raw: unknown): VisionSettings {
     voiceVolume: Math.min(100, Math.max(10, Math.round(Number(value.voiceVolume) || 100))),
     soundsOn: value.soundsOn !== false,
     soundVolume: Math.min(100, Math.max(10, Math.round(Number(value.soundVolume) || 60))),
+    allowInterrupt: value.allowInterrupt === true,
   };
 }
 
@@ -124,6 +128,7 @@ class SettingsStore {
         voiceVolume: main.voiceVolume,
         soundsOn: main.soundsOn,
         soundVolume: main.soundVolume,
+        allowInterrupt: main.allowInterrupt,
       });
       this.listeners.forEach((listener) => listener());
     };

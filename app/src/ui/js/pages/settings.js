@@ -127,6 +127,9 @@ export function createSettingsPage(ctx) {
 			row("Sounds", "A short sound when VISION hears you.", switchControl({
 				label: "Sounds", get: () => ctx.globals.get("soundsOn", true) !== false, set: (on) => ctx.globals.set({ soundsOn: on }),
 			})),
+			row("Let me interrupt while VISION talks", "When off, VISION doesn’t listen while it talks. “Vision, stop” always works.", switchControl({
+				label: "Let me interrupt while VISION talks", get: () => ctx.globals.get("allowInterrupt", false) === true, set: (on) => ctx.globals.set({ allowInterrupt: on }),
+			})),
 		];
 		if (!ctx.voice) {
 			holder.replaceChildren(h("span", { class: "srow__sentence" }, "Voice is not part of this version. Face control works without it."));

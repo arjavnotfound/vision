@@ -100,6 +100,8 @@ export interface MainSettings {
   /** Voice cue sounds on/off and their volume, 10-100. */
   soundsOn?: boolean;
   soundVolume?: number;
+  /** Mic stays live while VISION talks. Off by default. */
+  allowInterrupt?: boolean;
   migrated: boolean;
 }
 

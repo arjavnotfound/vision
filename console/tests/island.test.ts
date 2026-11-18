@@ -140,3 +140,13 @@ test('full-screen line colour follows the state', () => {
   assert.equal(lineTone({ ...rest, face: 'unseen' }), 'warn');
   assert.equal(lineTone({ ...rest, face: 'paused' }), 'dim');
 });
+
+test('micOpen: muted while VISION speaks unless interrupting is allowed', async () => {
+  const { micOpen } = await import('../lib/island.ts');
+  const live = { surface: 'strip' as const, userMuted: false, speakingHold: false, allowInterrupt: false };
+  assert.equal(micOpen(live), true);
+  assert.equal(micOpen({ ...live, speakingHold: true }), false, 'default: deaf while speaking');
+  assert.equal(micOpen({ ...live, speakingHold: true, allowInterrupt: true }), true, 'setting on: can cut in');
+  assert.equal(micOpen({ ...live, surface: 'orb', allowInterrupt: true }), false, 'collapsed stays muted');
+  assert.equal(micOpen({ ...live, userMuted: true, allowInterrupt: true }), false, 'user mute wins');
+});
