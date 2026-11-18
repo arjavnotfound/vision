@@ -1,4 +1,4 @@
-"""Screenshot every console surface and state from the /preview route.
+"""Screenshot every island view from the /preview route.
 
     uv run --project agent python scripts/qa/capture-console.py <output dir> [--theme ember|paper]
 
@@ -23,25 +23,33 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 PORT = 3999
 BASE = f"http://localhost:{PORT}"
-STATES = ["idle", "listening", "thinking", "speaking", "acting", "error", "offline"]
-TABS = ["home", "assistant", "activity", "settings"]
 LINE_TONES = ["idle", "accent", "warn", "dim"]
-ISLAND_VIEWS = ["wake", "listening", "understood", "acting", "confirm", "help", "speaking", "offline", "menu"]
+CAPTIONS = ["wake", "listening", "understood", "acting", "confirm", "help", "speaking", "offline"]
+POSITIONS = ["top-center", "top-right", "bottom-center"]
+ISLAND = (380, 80)  # the island window
+MENU = (340, 520)  # the menu window
 
 
 def jobs(theme: str) -> list[tuple[str, str, int, int]]:
-    """(name, query, width, height) for every surface, as in the preview gallery."""
-    out = [("island-resting", "surface=island&anchor=1&view=resting", 520, 150)]
-    out += [("island-unseen", "surface=island&anchor=1&view=resting&face=unseen", 520, 150)]
-    out += [("island-paused", "surface=island&anchor=1&view=resting&face=paused", 520, 150)]
-    out += [("island-fullscreen-line", "surface=island&anchor=1&view=sliver", 520, 60)]
-    out += [("island-menu-no-voice-keys", "surface=island&anchor=1&view=menu&nokeys=1", 640, 440)]
-    out += [(f"island-{v}", f"surface=island&anchor=1&view={v}", 640, 440) for v in ISLAND_VIEWS]
-    out += [(f"island-line-{t}", f"surface=island&anchor=1&view=sliver&tone={t}", 520, 60) for t in LINE_TONES]
-    out += [(f"console-{s}", f"surface=console&state={s}", 1200, 780) for s in STATES]
-    out += [(f"console-tab-{t}", f"surface=console&tab={t}&state=speaking", 1200, 780) for t in TABS]
-    out += [(f"onboarding-{n}", f"surface=onboarding&step={n}", 1200, 780) for n in range(3)]
-    return [(f"{name}-{theme}", f"{query}&theme={theme}", w, h) for name, query, w, h in out]
+    """(name, query, width, height) for every island view, laid out as in its window."""
+    q = "surface=island&anchor=1"
+    out = [(f"resting-{p}", f"{q}&view=resting&position={p}", *ISLAND) for p in POSITIONS]
+    out += [
+        ("resting-dwell-ring", f"{q}&view=resting&dwell=0.6", *ISLAND),
+        ("resting-faded-near-cursor", f"{q}&view=resting&near=1", *ISLAND),
+        ("resting-paused", f"{q}&view=resting&face=paused", *ISLAND),
+        ("resting-unseen", f"{q}&view=resting&face=unseen", *ISLAND),
+        ("resting-voice-off", f"{q}&view=resting&voice=nokeys", *ISLAND),
+        ("menu", f"{q}&view=menu", *MENU),
+        ("menu-paused", f"{q}&view=menu&face=paused", *MENU),
+        ("menu-voice-keys-missing", f"{q}&view=menu&voice=nokeys", *MENU),
+        ("menu-voice-offline", f"{q}&view=menu&voice=offline", *MENU),
+        ("menu-dwell-on-talk", f"{q}&view=menu&dwell=0.5", *MENU),
+        ("menu-bottom-center", f"{q}&view=menu&position=bottom-center", *MENU),
+    ]
+    out += [(f"caption-{v}", f"{q}&view={v}", *ISLAND) for v in CAPTIONS]
+    out += [(f"fullscreen-line-{t}", f"{q}&view=sliver&tone={t}", *ISLAND) for t in LINE_TONES]
+    return [(f"island-{name}-{theme}", f"{query}&theme={theme}", w, h) for name, query, w, h in out]
 
 
 def wait_for_server(timeout_s: float) -> None:
@@ -78,6 +86,8 @@ def main() -> int:
             browser = p.chromium.launch(channel="chrome", headless=True)
             for name, query, width, height in jobs(args.theme):
                 page = browser.new_page(viewport={"width": width, "height": height})
+                # A desktop-like backdrop, so the transparent window reads as it does over an app.
+                page.add_init_script("document.addEventListener('DOMContentLoaded', () => document.body.style.background = '#3a3f47')")
                 hotkey = f"&hotkey={urllib.parse.quote(args.hotkey)}" if args.hotkey else ""
                 page.goto(f"{BASE}/preview?{query}{hotkey}", wait_until="networkidle")
                 page.wait_for_timeout(900)  # let entry animations settle

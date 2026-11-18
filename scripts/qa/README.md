@@ -11,7 +11,7 @@ throwaway profile):
 
 ## capture-console
 
-Every island state and console surface (console states and tabs, onboarding) from the
+Every island view (resting, dwell ring, faded, menu, captions, full-screen line) from the
 `/preview` route, in a throwaway Google Chrome via Playwright. It starts `next dev` on
 port 3999 and stops it when done (first compile takes about a minute):
 

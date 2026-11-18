@@ -23,7 +23,7 @@ export const DONE_MS = 2_500;
 
 export interface IslandInput {
   /** 'orb': resting (no voice), 'strip': voice is on. */
-  surface: 'orb' | 'strip' | 'console';
+  surface: 'orb' | 'strip';
   uiState: string;
   userCaption: string;
   agentCaption: string;
@@ -57,9 +57,33 @@ export function islandView(i: IslandInput): IslandView {
   return 'listening';
 }
 
-/** Which window size a view needs. */
-export function windowModeFor(view: IslandView): 'island' | 'island-open' {
-  return view === 'resting' || view === 'sliver' ? 'island' : 'island-open';
+/** What main needs to know: the idle bar (or line), the caption pill, or the menu. */
+export function windowModeFor(view: IslandView): 'idle' | 'caption' | 'menu' {
+  if (view === 'menu') return 'menu';
+  return view === 'resting' || view === 'sliver' ? 'idle' : 'caption';
+}
+
+/** Voice as the menu shows it: `<state> · <reason> · <action>` when it can't be used. */
+export function voiceStatus(i: {
+  voiceOff: boolean;
+  offline: boolean;
+  micMissing: boolean;
+  wakePhrase: 'hey-vision' | 'vision';
+  hotkey?: string;
+}): { on: boolean; text: string } {
+  if (i.voiceOff) return { on: false, text: 'Voice is off · Voice keys missing · Add keys' };
+  if (i.micMissing) return { on: false, text: 'Voice is off · No microphone · Plug one in' };
+  if (i.offline) return { on: false, text: 'Voice is off · Could not connect · Try again' };
+  const phrase = i.wakePhrase === 'vision' ? 'Vision' : 'Hey Vision';
+  return { on: true, text: `Say “${phrase}” to talk${i.hotkey ? ` · or ${i.hotkey}` : ''}` };
+}
+
+/** One caption line for the pill: the end of a long reply, so the newest words show. */
+export function captionTail(text: string, max = 52): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(-max + 1);
+  return `…${cut.slice(cut.indexOf(' ') + 1 || 0)}`;
 }
 
 /** The face status dot and line. paused wins over unseen. */

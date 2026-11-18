@@ -4,10 +4,12 @@ import {
   DONE_MS,
   type IslandInput,
   WAKE_MS,
+  captionTail,
   currentSteps,
   faceState,
   islandView,
   lineTone,
+  voiceStatus,
   windowModeFor,
 } from '../lib/island.ts';
 
@@ -58,11 +60,45 @@ test('understood, acting, speaking, confirm and offline', () => {
   assert.equal(islandView({ ...base, hasNotice: true }), 'offline');
 });
 
-test('window size follows the view', () => {
-  assert.equal(windowModeFor('resting'), 'island');
-  assert.equal(windowModeFor('sliver'), 'island');
-  for (const view of ['menu', 'wake', 'listening', 'acting', 'confirm'] as const)
-    assert.equal(windowModeFor(view), 'island-open');
+test('main hears idle, caption or menu (only the menu takes the mouse)', () => {
+  assert.equal(windowModeFor('resting'), 'idle');
+  assert.equal(windowModeFor('sliver'), 'idle');
+  assert.equal(windowModeFor('menu'), 'menu');
+  for (const view of ['wake', 'listening', 'acting', 'confirm', 'speaking', 'offline'] as const)
+    assert.equal(windowModeFor(view), 'caption');
+});
+
+test('full screen shows the line, unless voice is active', () => {
+  assert.equal(islandView({ ...base, surface: 'orb', fullScreen: true }), 'sliver');
+  assert.equal(islandView({ ...base, fullScreen: true }), 'listening');
+});
+
+test('voice status gives a state, a reason and an action', () => {
+  const ok = {
+    voiceOff: false,
+    offline: false,
+    micMissing: false,
+    wakePhrase: 'hey-vision' as const,
+  };
+  assert.deepEqual(voiceStatus(ok), { on: true, text: 'Say “Hey Vision” to talk' });
+  assert.equal(
+    voiceStatus({ ...ok, wakePhrase: 'vision', hotkey: 'Ctrl Alt Space' }).text,
+    'Say “Vision” to talk · or Ctrl Alt Space'
+  );
+  assert.equal(
+    voiceStatus({ ...ok, voiceOff: true }).text,
+    'Voice is off · Voice keys missing · Add keys'
+  );
+  assert.equal(voiceStatus({ ...ok, offline: true }).text.split(' · ').length, 3);
+  assert.equal(voiceStatus({ ...ok, micMissing: true }).on, false);
+});
+
+test('a long caption keeps its newest words and fits one line', () => {
+  assert.equal(captionTail('Done.'), 'Done.');
+  const tail = captionTail(
+    'It is thirty-one degrees and humid in Mumbai, with light rain likely after four.'
+  );
+  assert.ok(tail.startsWith('…') && tail.endsWith('after four.') && tail.length <= 52);
 });
 
 test('face state: paused wins over unseen', () => {

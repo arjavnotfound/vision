@@ -4,12 +4,11 @@ import { createContext, useContext } from 'react';
 import type { MotionValue } from 'motion/react';
 import type { Surface } from '@/hooks/useAssistantController';
 import type { ActivityItem } from '@/lib/activity';
-import type { FaceStatus } from '@/lib/electron';
+import type { FaceStatus, VisionPage } from '@/lib/electron';
 import type { ConversationTurn } from '@/lib/transcript';
 import type { ApertureState } from './aperture-core';
 
 export type ConnectionState = 'live' | 'connecting' | 'offline';
-export type ConsoleTab = 'home' | 'assistant' | 'activity';
 
 /**
  * Everything a VISION surface needs to render. The live app builds this from
@@ -41,22 +40,23 @@ export interface VisionModel {
   isMuted: boolean;
   hotkeyLabel: string;
   searchProvider: string;
-  showOnboarding: boolean;
-  consoleTab: ConsoleTab;
   /** Face control's state (null until Face Control reports it). */
   face: FaceStatus | null;
   /** Voice keys are missing: voice can't start until a helper adds them. */
   voiceOff?: boolean;
-  /** A full-screen app is in front: the resting island is a line at the top. */
+  /** The microphone is missing or blocked. */
+  micMissing?: boolean;
+  /** Changes when "Vision, menu" asks for the menu. */
+  menuRequest?: number;
+  /** A full-screen app is in front: the resting island is a 40x3 line at the top. */
   fullScreen: boolean;
   /** Date.now() of the last wake / hotkey / Talk (the wake-heard flash). */
   activatedAt: number;
   actions: {
     activate: () => void;
     collapse: () => void;
-    openConsole: () => void;
-    /** The console on its Settings tab. */
-    openSettings: () => void;
+    /** Open the VISION window on a page (vision:navigate). */
+    navigate: (page: VisionPage) => void;
     /** Electron: show Face Control's window. */
     showFace?: () => void;
     /** Electron: pause or resume face control. */
@@ -66,10 +66,6 @@ export interface VisionModel {
     sendCommand: (text: string) => void;
     answerConfirm: (yes: boolean) => void;
     closeHelp?: () => void;
-    setConsoleTab: (tab: ConsoleTab) => void;
-    finishOnboarding: () => void;
-    /** Electron: hide the overlay to the tray. */
-    hideWindow?: () => void;
   };
 }
 

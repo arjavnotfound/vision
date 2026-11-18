@@ -20,7 +20,7 @@ export const START_TIMEOUT_MS = 12_000;
 export const OFFLINE_MESSAGE = PROBLEM_TEXT.voice;
 
 /** orb: the island resting (no voice). strip: the island open for voice. */
-export type Surface = 'orb' | 'strip' | 'console';
+export type Surface = 'orb' | 'strip';
 
 interface ControllerInput {
   room?: Room;
@@ -48,7 +48,6 @@ export interface AssistantController {
   activatedAt: number;
   activate: () => void;
   collapse: () => void;
-  openConsole: () => void;
   toggleMute: () => void;
   endSession: () => void;
   /** Reset the idle timers (call on any user interaction with the UI). */
@@ -118,10 +117,12 @@ export function useAssistantController({
   }, [room, isConnected, surface, userMuted, speakingHold]);
 
   // Face Control pauses mouth gestures while the mic is live (talking opens the mouth).
+  // open: a session is showing, so main ignores a second wake phrase.
   const micLive = isConnected && surface !== 'orb' && !userMuted;
+  const open = surface !== 'orb';
   useEffect(() => {
-    getElectron()?.setVoiceState?.({ connected: isConnected, live: micLive });
-  }, [isConnected, micLive]);
+    getElectron()?.setVoiceState?.({ connected: isConnected, live: micLive, open });
+  }, [isConnected, micLive, open]);
 
   // Decode the cue sounds now so the first wake sound is not late.
   useEffect(() => visionAudio.preload(), []);
@@ -203,11 +204,6 @@ export function useAssistantController({
     setSurface('orb');
   }, [touch]);
 
-  const openConsole = useCallback(() => {
-    touch();
-    setSurface('console');
-  }, [touch]);
-
   const toggleMute = useCallback(() => {
     touch();
     setUserMuted((muted) => !muted);
@@ -227,7 +223,6 @@ export function useAssistantController({
     activatedAt,
     activate,
     collapse,
-    openConsole,
     toggleMute,
     endSession,
     touch,

@@ -2,7 +2,12 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type OverlayMode = 'island' | 'island-open' | 'console';
+/** What the island shows; the window takes the mouse only for 'menu'. */
+export type IslandMode = 'idle' | 'caption' | 'menu';
+export type IslandPosition = 'top-center' | 'top-right' | 'bottom-center';
+export type WakePhrase = 'hey-vision' | 'vision';
+/** Pages of the VISION window the island menu opens. */
+export type VisionPage = 'settings' | 'diagnostics' | 'help' | 'voice' | 'home';
 
 /** Face control as Face Control reports it to the island. */
 export interface FaceStatus {
@@ -17,22 +22,33 @@ export interface VoiceConfig {
   voice: string;
   language: VoiceLanguage;
   hasKeys: boolean;
-  voices: { name: string; style: string }[];
+  voices: { name: string; style: string; label?: string }[];
   keyFields: { name: string; label: string; secret: boolean }[];
 }
 
 /** A keyword the local spotter heard. ok: it started after a pause (the second check). */
 export interface WakeHeard {
-  keyword: 'vision' | 'hey_vision' | 'stop' | 'cancel';
+  keyword: 'vision' | 'hey_vision' | 'stop' | 'cancel' | 'menu';
   ok: boolean;
+  /** What main's wake gate decided (ignored keywords are never sent). */
+  action?: 'wake' | 'stop' | 'menu';
   /** Mic sample count (from sendWakeAudio) at the end of the chunk it was heard in. */
   end?: number;
 }
 
 export interface ElectronAPI {
   isElectron: true;
-  setMode?: (mode: OverlayMode) => void;
-  setEdge?: (edge: 'top' | 'bottom') => void;
+  setMode?: (mode: IslandMode) => void;
+  setPosition?: (position: IslandPosition) => void;
+  /** The cursor is within 80 px of the island. */
+  onNear?: (callback: (near: boolean) => void) => () => void;
+  /** Dwell progress on the island, 0..1 (measured in main). */
+  onDwell?: (callback: (progress: number) => void) => () => void;
+  /** Main opens (dwell, menu hotkey) or closes (left alone, cursor far away) the menu. */
+  onMenu?: (callback: (action: string) => void) => () => void;
+  /** vision:navigate: open the VISION window on a page. */
+  navigate?: (page: VisionPage) => void;
+  setWakePhrase?: (phrase: WakePhrase) => void;
   showFace?: () => void;
   togglePause?: () => void;
   onFullScreen?: (callback: (on: boolean) => void) => () => void;
@@ -42,7 +58,7 @@ export interface ElectronAPI {
   hide?: () => void;
   quit?: () => void;
   /** One-app VISION: tell Face Control when the mic is live (mouth gestures pause). */
-  setVoiceState?: (state: { connected: boolean; live: boolean }) => void;
+  setVoiceState?: (state: { connected: boolean; live: boolean; open: boolean }) => void;
   isOneApp?: () => Promise<boolean>;
   /** LiveKit server URL + token, minted by the VISION main process. */
   getConnectionDetails?: (options: { agentName?: string }) => Promise<{
@@ -75,7 +91,9 @@ export interface ElectronAPI {
 export interface MainSettings {
   dwellTime: number;
   wakeSensitivity: 'relaxed' | 'normal';
-  islandEdge: 'top' | 'bottom';
+  islandEdge?: 'top' | 'bottom';
+  islandPosition?: IslandPosition;
+  wakePhrase?: WakePhrase;
   /** VISION's own voice, 10-100. */
   voiceVolume?: number;
   /** Voice cue sounds on/off and their volume, 10-100. */

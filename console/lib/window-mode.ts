@@ -1,24 +1,15 @@
-import { type OverlayMode, getElectron } from './electron';
+import { type IslandMode, getElectron } from './electron';
 
-const ORDER: Record<OverlayMode, number> = { island: 0, 'island-open': 1, console: 2 };
-// Longer than the island's collapse spring, so the morph is never clipped.
-const SHRINK_DELAY_MS = 680;
+let current: IslandMode | null = null;
 
-let current: OverlayMode = 'island';
-let timer: ReturnType<typeof setTimeout> | undefined;
-
-/** Resize the Electron window: growing happens at once, shrinking after the collapse. */
-export function requestWindowMode(mode: OverlayMode) {
+/**
+ * Tell main what the island shows. The idle bar and the caption pill share one window
+ * (main only moves its dwell and fade zone); the menu gets its own size and is the only
+ * time the window takes the mouse, so a change is sent at once.
+ */
+export function requestWindowMode(mode: IslandMode) {
   const electron = getElectron();
-  if (!electron?.setMode) return;
-  clearTimeout(timer);
-  if (ORDER[mode] >= ORDER[current]) {
-    current = mode;
-    electron.setMode(mode);
-    return;
-  }
-  timer = setTimeout(() => {
-    current = mode;
-    electron.setMode?.(mode);
-  }, SHRINK_DELAY_MS);
+  if (!electron?.setMode || mode === current) return;
+  current = mode;
+  electron.setMode(mode);
 }

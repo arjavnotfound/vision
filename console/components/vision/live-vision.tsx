@@ -21,19 +21,12 @@ import { useVisionActions } from '@/hooks/useVisionActions';
 import { useWakeSpotter } from '@/hooks/useWakeSpotter';
 import { type FaceStatus, type WakeHeard, getElectron } from '@/lib/electron';
 import { PROBLEM_TEXT, clearProblem } from '@/lib/problems';
-import { settingsStore, updateSettings, useSettings } from '@/lib/settings';
+import { useSettings } from '@/lib/settings';
 import type { ApertureState } from './aperture-core';
-import {
-  type ConnectionState,
-  type ConsoleTab,
-  type VisionModel,
-  VisionModelProvider,
-} from './vision-model';
+import { type ConnectionState, type VisionModel, VisionModelProvider } from './vision-model';
 import { VisionShell } from './vision-shell';
 
 const READY_STATES = new Set(['listening', 'thinking', 'speaking', 'idle']);
-/** "Stop" or "cancel" counts only this soon after "Vision". */
-const STOP_WINDOW_MS = 2_500;
 
 /** Builds the VisionModel from the live LiveKit session and renders the shell. */
 export function LiveVision({ searchProvider }: { searchProvider: string }) {
@@ -44,8 +37,6 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   const { microphoneTrack } = useLocalParticipant();
   const transcript = useConversationTranscript();
   const vision = useVisionActions();
-  const [consoleTab, setConsoleTab] = useState<ConsoleTab>('home');
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [failurePulse, setFailurePulse] = useState(0);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
@@ -64,7 +55,10 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   // The wake capture is also the session's mic (pre-roll, one capture): published here
   // instead of LiveKit opening the mic again. Without it, LiveKit opens the mic itself.
   const onWakeHeardRef = useRef<(heard: WakeHeard) => void>(() => undefined);
-  const { wakeSensitivity } = useSettings();
+  const { wakeSensitivity, wakePhrase } = useSettings();
+  useEffect(() => {
+    getElectron()?.setWakePhrase?.(wakePhrase);
+  }, [wakePhrase]);
   const wakeMic = useWakeSpotter({
     sensitivity: wakeSensitivity,
     onHeard: useCallback((heard: WakeHeard) => onWakeHeardRef.current(heard), []),
@@ -124,8 +118,8 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       void getVoiceConfig().then((config) => {
         if (config?.hasKeys) hasKeys.current = true;
         if (config && !config.hasKeys) {
-          // Keys are typed in Settings > Voice, in the face window.
-          getElectron()?.openSettings?.('voice');
+          // Keys are added on the Voice page of the VISION window.
+          getElectron()?.navigate?.('voice');
         } else {
           go();
         }
@@ -153,8 +147,9 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
 
   const activateNow = useCallback(() => activate(), [activate]);
   const hotkeyLabel = useActivationHotkey(activateNow);
-  // Wake word. While VISION speaks (and its echo tail) a wake is ignored, so its own voice
-  // never wakes it; "Vision, stop" / "Vision, cancel" still work then.
+  // Wake phrase. Main's gate already dropped a wake phrase heard while a session is open
+  // (no chime, no restart), so only "Vision, stop" and "Vision, menu" act then. VISION's
+  // own voice can't wake it: the session is open while it speaks.
   const speakingUntil = useRef(0);
   useEffect(() => {
     if (agent.state === 'speaking') {
@@ -165,20 +160,17 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
       speakingUntil.current = Date.now() + ECHO_TAIL_MS;
   }, [agent.state, wakeMic]);
   const micLive = isConnected && controller.surface !== 'orb';
-  const lastVisionHeard = useRef(0);
   const { endSession } = controller;
+  const [menuRequest, setMenuRequest] = useState(0);
   const onWakeHeard = useCallback(
     (heard: WakeHeard) => {
-      const now = Date.now();
-      if (heard.keyword === 'stop' || heard.keyword === 'cancel') {
-        if (now - lastVisionHeard.current < STOP_WINDOW_MS) {
-          console.log(`[VISION] Wake word: ${heard.keyword}`);
-          endSession();
-        }
+      if (heard.action === 'stop' || heard.action === 'menu') {
+        console.log(`[VISION] Wake word: ${heard.keyword}`);
+        endSession();
+        if (heard.action === 'menu') setMenuRequest((n) => n + 1);
         return;
       }
-      lastVisionHeard.current = now;
-      if (!heard.ok || now < speakingUntil.current) return;
+      if (heard.action !== 'wake' || Date.now() < speakingUntil.current) return;
       console.log('[VISION] Wake word heard');
       // A mic that is already live sent these words; otherwise replay from the wake word.
       const end = heard.end;
@@ -193,28 +185,6 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
   useEffect(() => {
     onWakeHeardRef.current = onWakeHeard;
   }, [onWakeHeard]);
-
-  // First run: show onboarding in the console.
-  const openConsole = controller.openConsole;
-  // In the one VISION app, Face Control's Start screen and try-it replace this.
-  useEffect(() => {
-    if (settingsStore.get().onboarded) return;
-    let cancelled = false;
-    void (getElectron()?.isOneApp?.() ?? Promise.resolve(false))
-      .catch(() => false)
-      .then((oneApp) => {
-        if (cancelled) return;
-        if (oneApp) {
-          updateSettings({ onboarded: true });
-          return;
-        }
-        setShowOnboarding(true);
-        openConsole();
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [openConsole]);
 
   // A failed agent (for example every voice model unreachable) ends the session and
   // says voice is offline, like a session that never starts.
@@ -234,7 +204,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     reportOffline();
   }, [voiceOffline, reportOffline]);
 
-  // Quick Commands sent before the agent has joined are queued until it is ready.
+  // Text sent before the agent has joined are queued until it is ready.
   const pending = useRef<string | null>(null);
   const { sendText } = transcript;
   useEffect(() => {
@@ -322,6 +292,8 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     confirm: vision.confirm,
     help: controller.surface === 'strip' ? vision.help : null,
     notice: controller.isOffline ? OFFLINE_MESSAGE : wakeMic.micMissing ? PROBLEM_TEXT.mic : null,
+    micMissing: wakeMic.micMissing,
+    menuRequest,
     actionPulse: vision.actionPulse,
     errorPulse: vision.errorPulse + failurePulse,
     micLevel,
@@ -329,8 +301,6 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     isMuted: controller.isMuted && controller.surface !== 'orb',
     hotkeyLabel,
     searchProvider,
-    showOnboarding,
-    consoleTab,
     face,
     voiceOff,
     fullScreen,
@@ -338,11 +308,7 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
     actions: {
       activate: activateNow,
       collapse: controller.collapse,
-      openConsole: controller.openConsole,
-      openSettings: () => {
-        controller.collapse();
-        getElectron()?.openSettings?.();
-      },
+      navigate: (page) => getElectron()?.navigate?.(page),
       showFace: getElectron()?.showFace,
       togglePause: getElectron()?.togglePause,
       toggleMute: controller.toggleMute,
@@ -353,17 +319,6 @@ export function LiveVision({ searchProvider }: { searchProvider: string }) {
         vision.clearConfirm();
         sendCommand(yes ? 'Yes' : 'No');
       },
-      setConsoleTab: (tab) => {
-        controller.touch();
-        setConsoleTab(tab);
-      },
-      finishOnboarding: () => {
-        updateSettings({ onboarded: true });
-        setShowOnboarding(false);
-        setConsoleTab('home');
-        controller.collapse();
-      },
-      hideWindow: getElectron()?.hide,
     },
   };
 

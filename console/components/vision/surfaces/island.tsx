@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Mic, Pause, Play, ScanFace, Settings, Square, X } from 'lucide-react';
-import { AnimatePresence, type MotionValue, motion, useTransform } from 'motion/react';
+import { Activity, Check, CircleHelp, Mic, Pause, Play, Settings, X } from 'lucide-react';
+import { type MotionValue, motion, useTransform } from 'motion/react';
 import { type ActivityItem, actionVerb, domainOf } from '@/lib/activity';
 import { getElectron } from '@/lib/electron';
 import {
   type FaceState,
   type IslandView,
   type LineTone,
+  captionTail,
   currentSteps,
   faceState,
   islandView,
   lineTone,
+  voiceStatus,
   windowModeFor,
 } from '@/lib/island';
 import { useSettings } from '@/lib/settings';
@@ -23,24 +25,15 @@ import { DwellTarget } from '../dwell-target';
 import { VisionMark } from '../vision-mark';
 import { useVision } from '../vision-model';
 
-/** Prototype spring: cubic-bezier(.2,1.35,.35,1) over ~0.6s. */
-const SPRING = { duration: 0.55, ease: [0.2, 1.2, 0.35, 1] } as const;
 /** "Can't see you" only after the face has been gone this long (not on a blink). */
 const UNSEEN_AFTER_MS = 1_500;
-/** The menu closes by itself after this long without the pointer on it. */
-const MENU_IDLE_MS = 10_000;
-
-const STOP_HINT = 'Stops when you’re quiet · say “Vision, stop”';
+/** Near the cursor the island fades to this, so it never hides what is under it. */
+const NEAR_OPACITY = 0.15;
 
 function stepText(item: ActivityItem) {
   const domain = domainOf(item);
   const target = item.action === 'open_url' && domain ? domain : item.target;
   return `${actionVerb(item.action)} ${target}`.trim();
-}
-
-function pausedText(eyesResume: boolean) {
-  // The spoken "Vision, resume" is not built yet: show the gesture that resumes.
-  return eyesResume ? 'Paused · close your eyes 2 s to resume' : 'Paused · rest here to resume';
 }
 
 const LINE: Record<LineTone, string> = {
@@ -50,25 +43,10 @@ const LINE: Record<LineTone, string> = {
   dim: 'bg-bone-3 opacity-35',
 };
 
-const DOT: Record<FaceState, string> = {
-  tracking: 'bg-ok',
-  unseen: 'bg-warn',
-  paused: 'bg-bone-3',
-};
-
-function StatusDot({ state, className }: { state: FaceState; className?: string }) {
-  return (
-    <span
-      aria-hidden
-      className={cn('inline-block size-2 shrink-0 rounded-full', DOT[state], className)}
-    />
-  );
-}
-
 /** Live level bars for Listening (motion values, no re-render per frame). */
 function LevelMeter({ level }: { level: MotionValue<number> }) {
   return (
-    <span aria-hidden className="flex h-6 items-center gap-[3px]">
+    <span aria-hidden className="flex h-4 shrink-0 items-center gap-[3px]">
       {[0.55, 0.85, 1, 0.75, 0.5].map((k, i) => (
         <Bar key={i} level={level} k={k} />
       ))}
@@ -78,67 +56,107 @@ function LevelMeter({ level }: { level: MotionValue<number> }) {
 
 function Bar({ level, k }: { level: MotionValue<number>; k: number }) {
   const scaleY = useTransform(level, (v) => 0.18 + Math.min(1, v * 1.25) * k * 0.82);
-  return <motion.span className="bg-ember h-6 w-[3px] rounded-full" style={{ scaleY }} />;
+  return <motion.span className="bg-ember h-4 w-[3px] rounded-full" style={{ scaleY }} />;
 }
 
-function BigTarget({
+/** The dwell fill ring next to the bar. It stays solid while the island fades. */
+function DwellRing({ progress }: { progress: number }) {
+  const r = 9;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg aria-hidden width={22} height={22} viewBox="0 0 22 22" className="shrink-0">
+      <circle cx={11} cy={11} r={r} fill="none" stroke="var(--rule-strong)" strokeWidth={2.5} />
+      <circle
+        cx={11}
+        cy={11}
+        r={r}
+        fill="none"
+        stroke="var(--ember)"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - progress)}
+        transform="rotate(-90 11 11)"
+      />
+    </svg>
+  );
+}
+
+/** The resting island: a 56x8 bar. Paused: grey with a pause glyph. Offline: a red dot. */
+function RestingBar({ face, offline }: { face: FaceState; offline: boolean }) {
+  return (
+    <div
+      role="img"
+      aria-label={
+        face === 'paused'
+          ? 'VISION: face control paused'
+          : offline
+            ? 'VISION: voice is off'
+            : 'VISION'
+      }
+      className={cn(
+        'relative flex h-2 w-14 items-center justify-center gap-[3px] rounded-full',
+        face === 'paused' ? 'bg-bone-3 opacity-60' : face === 'unseen' ? 'bg-warn' : 'bg-bone-2'
+      )}
+    >
+      {face === 'paused' && (
+        <>
+          <span className="bg-ink-0 h-[5px] w-[2px] rounded-full" />
+          <span className="bg-ink-0 h-[5px] w-[2px] rounded-full" />
+        </>
+      )}
+      {offline && (
+        <span className="bg-err absolute top-1/2 -right-3 size-1.5 -translate-y-1/2 rounded-full" />
+      )}
+    </div>
+  );
+}
+
+/** One line, at most 360x40: what VISION hears, does or says. */
+function CaptionPill({ mark, children }: { mark: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-ink-1 flex h-10 max-w-[360px] min-w-[160px] items-center gap-2.5 rounded-full pr-4 pl-2.5 shadow-[inset_0_0_0_1px_var(--rule-strong),0_12px_30px_-14px_rgba(0,0,0,0.55)]">
+      <span className="shrink-0">{mark}</span>
+      <div className="text-bone flex min-w-0 flex-1 items-center gap-2 text-[15px] leading-none">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MenuRow({
   label,
+  detail,
   icon,
   onActivate,
-  onHover,
-  className,
+  disabled,
   previewProgress,
 }: {
   label: string;
-  icon?: React.ReactNode;
+  detail?: string;
+  icon: React.ReactNode;
   onActivate: () => void;
-  onHover?: () => void;
-  className?: string;
+  disabled?: boolean;
   previewProgress?: number;
 }) {
   return (
     <DwellTarget
       label={label}
       onActivate={onActivate}
-      onHoverChange={(on) => on && onHover?.()}
+      disabled={disabled}
       indicator="bar"
-      hitSize={72}
+      hitSize={64}
       previewProgress={previewProgress}
       className={cn(
-        'bg-ink-2 text-bone hover:bg-ink-3 flex-col gap-1.5 rounded-[18px] text-[15px] font-medium shadow-[inset_0_0_0_1px_var(--rule-strong)] transition-colors',
-        className
+        'bg-ink-2 hover:bg-ink-3 h-16 w-full justify-start gap-4 rounded-[16px] px-4 text-left shadow-[inset_0_0_0_1px_var(--rule)] transition-colors',
+        disabled && 'opacity-50'
       )}
     >
-      {icon}
-      {label}
-    </DwellTarget>
-  );
-}
-
-/** Stop / Close at the island's far end: never where the resting pill was. */
-function EndTarget({
-  label,
-  onActivate,
-  stop = false,
-}: {
-  label: string;
-  onActivate: () => void;
-  stop?: boolean;
-}) {
-  return (
-    <DwellTarget
-      label={label}
-      onActivate={onActivate}
-      indicator="bar"
-      hitSize={56}
-      className="text-bone-2 hover:bg-ink-3 hover:text-bone h-14 shrink-0 gap-2 rounded-full px-4 text-[14px] font-medium shadow-[inset_0_0_0_1px_var(--rule-strong)] transition-colors"
-    >
-      {stop ? (
-        <Square className="text-ember size-4 fill-current" strokeWidth={0} />
-      ) : (
-        <X className="size-5" strokeWidth={1.8} />
-      )}
-      {label}
+      <span className="text-bone-2 grid size-7 shrink-0 place-items-center">{icon}</span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-bone text-[17px] leading-tight font-medium">{label}</span>
+        {detail && <span className="text-bone-2 truncate text-[13px]">{detail}</span>}
+      </span>
     </DwellTarget>
   );
 }
@@ -147,26 +165,47 @@ export function Island({
   previewView,
   previewProgress,
   previewTone,
+  previewNear,
 }: {
   /** Force a view (preview only). */
   previewView?: IslandView;
   previewProgress?: number;
   /** Force the full-screen line's colour (preview only). */
   previewTone?: LineTone;
+  /** Show the faded look (preview only). */
+  previewNear?: boolean;
 }) {
   const model = useVision();
   const { actions } = model;
   const settings = useSettings();
   const reduced = useReducedMotionPref();
-  const bottom = settings.islandEdge === 'bottom';
+  const position = settings.islandPosition;
+  const bottom = position === 'bottom-center';
   const [menu, setMenu] = useState<'menu' | null>(null);
+  const [near, setNear] = useState(false);
+  const [dwell, setDwell] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    getElectron()?.setEdge?.(settings.islandEdge);
-  }, [settings.islandEdge]);
+    getElectron()?.setPosition?.(position);
+  }, [position]);
+  useEffect(() => {
+    const electron = getElectron();
+    const offNear = electron?.onNear?.(setNear);
+    const offDwell = electron?.onDwell?.(setDwell);
+    const offMenu = electron?.onMenu?.((action) => setMenu(action === 'open' ? 'menu' : null));
+    return () => {
+      offNear?.();
+      offDwell?.();
+      offMenu?.();
+    };
+  }, []);
+  // "Vision, menu".
+  useEffect(() => {
+    if (model.menuRequest) setMenu('menu');
+  }, [model.menuRequest]);
 
-  // Voice starting (wake word, hotkey) closes the menu.
+  // Voice starting (wake phrase, hotkey) closes the menu.
   const voiceOn = model.surface === 'strip';
   useEffect(() => {
     if (voiceOn) setMenu(null);
@@ -224,23 +263,8 @@ export function Island({
     return () => clearTimeout(timer);
   }, [rawFace]);
 
-  // The menu closes itself when left alone.
-  const [menuTouched, setMenuTouched] = useState(0);
-  const touchMenu = () => setMenuTouched(Date.now());
-  useEffect(() => {
-    if (!menu || previewView) return;
-    const timer = setTimeout(() => setMenu(null), MENU_IDLE_MS);
-    return () => clearTimeout(timer);
-  }, [menu, menuTouched, previewView]);
-
-  const openMenu = () => {
-    touchMenu();
-    setMenu('menu');
-  };
-  const closeMenu = () => setMenu(null);
-
-  // A request whose steps have all finished goes back to exactly the resting island once
-  // VISION has nothing more to say (no Stop, no step list, the resting mark).
+  // A request whose steps have all finished goes back to the resting island once VISION
+  // has nothing more to say.
   const working = steps.some((step) => step.status === 'running') || !steps.length;
   const [finished, setFinished] = useState(false);
   const hadSteps = steps.length > 0;
@@ -261,393 +285,200 @@ export function Island({
     fn?.();
   };
 
-  const transition = reduced ? { duration: 0 } : SPRING;
   const hotkey = model.hotkeyLabel.replace(/\+/g, ' ');
+  const voice = voiceStatus({
+    voiceOff: Boolean(model.voiceOff),
+    offline: Boolean(model.notice) && !model.micMissing,
+    micMissing: Boolean(model.micMissing),
+    wakePhrase: settings.wakePhrase,
+    hotkey,
+  });
+  const offline = !voice.on;
+  const [noticeTitle] = (model.notice ?? 'Voice is off. Face control still works.').split(
+    /(?<=\.) /
+  );
 
-  const [noticeTitle, ...noticeMore] = (
-    model.notice ?? 'Voice is offline. Face control still works.'
-  ).split(/(?<=\.) /);
-  const noticeRest = noticeMore.join(' ');
-
-  const body = (() => {
+  const caption = (() => {
     switch (view) {
-      case 'sliver':
-        return null;
-      case 'resting':
-        return null;
       case 'wake':
         return (
-          <Row mark={<VisionMark size={44} state="listening" micLevel={model.micLevel} />}>
-            <p className="label-mono text-ember-text text-[12px] tracking-[0.18em] uppercase">
-              Heard you
-            </p>
-            <p className="text-bone text-[22px] leading-tight font-medium">Go ahead</p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="listening" micLevel={model.micLevel} />}>
+            <span className="font-medium">Go ahead</span>
+          </CaptionPill>
         );
       case 'listening':
         return (
-          <Row
-            mark={<VisionMark size={44} state="listening" micLevel={model.micLevel} />}
-            end={<EndTarget label="Stop" stop onActivate={actions.endSession} />}
-          >
-            <div className="flex items-center gap-3">
-              <p className="text-bone text-[22px] leading-tight font-medium">Listening…</p>
-              <LevelMeter level={model.micLevel} />
-            </div>
-            <p className="text-bone-2 text-[14px]">{STOP_HINT}</p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="listening" micLevel={model.micLevel} />}>
+            <span className="font-medium">Listening…</span>
+            <LevelMeter level={model.micLevel} />
+          </CaptionPill>
         );
       case 'understood':
         return (
-          <Row
-            mark={<VisionMark size={44} state="listening" micLevel={model.micLevel} />}
-            end={<EndTarget label="Stop" stop onActivate={actions.endSession} />}
-          >
-            <p className="label-mono text-bone-3 text-[11px] tracking-[0.18em] uppercase">
-              You said
-            </p>
-            <p className="text-bone line-clamp-2 text-[20px] leading-snug">“{model.userCaption}”</p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="listening" micLevel={model.micLevel} />}>
+            <span className="truncate">“{captionTail(model.userCaption, 44)}”</span>
+          </CaptionPill>
         );
-      case 'acting':
+      case 'acting': {
+        const running = steps.find((step) => step.status === 'running');
         return (
-          <Row
+          <CaptionPill
             mark={
               working ? (
-                <VisionMark size={44} state="acting" actionPulse={model.actionPulse} />
+                <VisionMark size={22} state="acting" actionPulse={model.actionPulse} />
               ) : (
-                <VisionMark size={44} state="idle" />
+                <VisionMark size={22} state="idle" />
               )
             }
-            end={working ? <EndTarget label="Stop" stop onActivate={actions.endSession} /> : null}
           >
-            <p className="text-bone flex items-center gap-2 text-[20px] leading-tight font-medium">
-              {working ? (
-                'Working on it'
-              ) : (
-                <>
-                  <Check className="text-ok size-5" strokeWidth={2.4} />
-                  Done
-                </>
-              )}
-            </p>
-            {model.userCaption && (
-              <p className="text-bone-2 line-clamp-1 text-[14px]">“{model.userCaption}”</p>
+            {working ? (
+              <span className="truncate">
+                <span className="font-medium">Working on it</span>
+                {running && <span className="text-bone-2"> · {stepText(running)}</span>}
+              </span>
+            ) : (
+              <>
+                <Check className="text-ok size-4 shrink-0" strokeWidth={2.4} />
+                <span className="font-medium">Done</span>
+              </>
             )}
-          </Row>
+          </CaptionPill>
         );
+      }
       case 'speaking':
         return (
-          <Row
+          <CaptionPill
             mark={
               <VisionMark
-                size={44}
+                size={22}
                 state={model.uiState === 'error' ? 'error' : 'speaking'}
                 outputLevel={model.outputLevel}
                 errorPulse={model.errorPulse}
               />
             }
-            end={<EndTarget label="Stop" stop onActivate={actions.endSession} />}
           >
-            <div className="flex items-center gap-3">
-              <p className="label-mono text-ember-text text-[12px] tracking-[0.18em] uppercase">
-                Speaking
-              </p>
-              <LevelMeter level={model.outputLevel} />
-            </div>
-            <p className="text-bone line-clamp-3 text-[18px] leading-snug">{model.agentCaption}</p>
-          </Row>
+            <span className="truncate">{captionTail(model.agentCaption)}</span>
+          </CaptionPill>
         );
       case 'confirm':
         return (
-          <Row mark={<VisionMark size={44} state="thinking" />}>
-            <p className="label-mono text-ember-text text-[11px] tracking-[0.18em] uppercase">
-              Needs a yes
-            </p>
-            <p className="text-bone line-clamp-3 text-[19px] leading-snug">
-              {model.confirm?.question || 'Should I go ahead?'}
-            </p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="thinking" />}>
+            <span className="truncate">{model.confirm?.question || 'Should I go ahead?'}</span>
+            <span className="text-ember-text shrink-0 text-[13px]">Say yes or no</span>
+          </CaptionPill>
         );
       case 'help':
         return (
-          <Row
-            mark={
-              <VisionMark size={44} state={model.uiState === 'speaking' ? 'speaking' : 'idle'} />
-            }
-            end={<EndTarget label="Close" onActivate={actions.closeHelp ?? actions.collapse} />}
-          >
-            <p className="label-mono text-ember-text text-[11px] tracking-[0.18em] uppercase">
-              You can say
-            </p>
-            <p className="text-bone text-[19px] leading-snug">
-              In {model.help?.app}, start with “Vision”
-            </p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="idle" />}>
+            <span className="truncate">
+              <span className="text-bone-2">Say </span>
+              {(model.help?.phrases ?? []).slice(0, 3).join(' · ')}
+            </span>
+          </CaptionPill>
         );
       case 'offline':
         return (
-          <Row
-            mark={<VisionMark size={44} state="offline" />}
-            end={<EndTarget label="Close" onActivate={actions.collapse} />}
-          >
-            <p className="text-bone text-[20px] leading-tight font-medium">{noticeTitle}</p>
-            <p className="text-bone-2 text-[14px]">{noticeRest}</p>
-          </Row>
+          <CaptionPill mark={<VisionMark size={22} state="offline" />}>
+            <span className="truncate">{noticeTitle}</span>
+          </CaptionPill>
         );
-      case 'menu':
-        return (
-          <Row
-            mark={<VisionMark size={44} state="idle" />}
-            end={<EndTarget label="Close" onActivate={closeMenu} />}
-          >
-            <p className="text-bone flex items-center gap-2 text-[17px] font-medium">
-              <StatusDot state={face} />
-              {face === 'paused'
-                ? pausedText(Boolean(model.face?.eyesResume))
-                : face === 'unseen'
-                  ? 'Can’t see you'
-                  : 'Face control is on'}
-            </p>
-            <p className="text-bone-2 text-[14px]">
-              {model.voiceOff
-                ? 'Voice is off · a helper adds its keys in Settings'
-                : `Say “Vision” to talk${hotkey ? ` · or ${hotkey}` : ''}`}
-            </p>
-            {model.fullScreen && (
-              <p className="text-bone-3 text-[13px]">
-                {model.voiceOff
-                  ? 'In full screen, VISION is a thin line at the top. Rest on it.'
-                  : 'In full screen, VISION is a thin line at the top. Rest on it or say “Vision”.'}
-              </p>
-            )}
-          </Row>
-        );
+      default:
+        return null;
     }
   })();
 
-  // The card under the island: steps, yes/no, the menu.
-  const card = (() => {
-    if (view === 'acting' && steps.length) {
-      return (
-        <ol className="flex flex-col gap-2">
-          {steps.map((step, i) => (
-            <li key={step.id} className="flex items-center gap-3 text-[15px]">
-              <span className="label-mono text-bone-3 w-[64px] shrink-0 text-[11px] tracking-[0.12em] uppercase">
-                Step {i + 1}
-              </span>
-              <span
-                className={cn(
-                  'min-w-0 flex-1 truncate',
-                  step.status === 'running' ? 'text-bone' : 'text-bone-2'
-                )}
-              >
-                {stepText(step)}
-              </span>
-              {step.status === 'running' && (
-                <span className="bg-ember size-2 shrink-0 animate-pulse rounded-full" />
-              )}
-              {step.status === 'done' && <Check className="text-ok size-4" strokeWidth={2.2} />}
-              {step.status === 'error' && (
-                <span className="text-err shrink-0 text-[13px]">Didn’t work</span>
-              )}
-            </li>
-          ))}
-        </ol>
-      );
-    }
-    if (view === 'help' && model.help) {
-      return (
-        <ul className="grid grid-cols-2 gap-x-6 gap-y-2">
-          {model.help.phrases.map((phrase) => (
-            <li key={phrase} className="text-bone text-[17px] leading-snug">
-              “{phrase}”
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    if (view === 'confirm') {
-      return (
-        // The middle, where a resting pointer is likely, is text. No background dismiss.
-        <div className="flex items-stretch gap-4">
-          <BigTarget
-            label="No"
-            className="h-[88px] w-[190px] text-[20px]"
-            onActivate={() => actions.answerConfirm(false)}
-          />
-          <p className="text-bone-2 flex flex-1 items-center justify-center text-center text-[14px] leading-snug">
-            say yes
-            <br />
-            or no
-          </p>
-          <BigTarget
-            label="Yes"
-            className="bg-ember-soft h-[88px] w-[190px] text-[20px] shadow-[inset_0_0_0_1.5px_var(--ember)]"
-            onActivate={() => actions.answerConfirm(true)}
-            previewProgress={previewProgress}
-          />
-        </div>
-      );
-    }
-    if (view === 'menu') {
-      const paused = face === 'paused';
-      const icon = 'size-6';
-      return (
-        <div className="grid grid-cols-4 gap-3">
-          <BigTarget
-            label={model.voiceOff ? 'Voice is off' : 'Talk'}
-            icon={<Mic className={icon} strokeWidth={1.8} />}
-            className="h-[92px]"
-            onHover={touchMenu}
-            onActivate={run(actions.activate)}
-            previewProgress={previewProgress}
-          />
-          <BigTarget
-            label="Face control"
-            icon={<ScanFace className={icon} strokeWidth={1.8} />}
-            className="h-[92px] text-[14px]"
-            onHover={touchMenu}
-            onActivate={run(actions.showFace)}
-          />
-          <BigTarget
-            label={paused ? 'Resume' : 'Pause'}
-            icon={
-              paused ? (
-                <Play className={icon} strokeWidth={1.8} />
-              ) : (
-                <Pause className={icon} strokeWidth={1.8} />
-              )
-            }
-            className="h-[92px]"
-            onHover={touchMenu}
-            onActivate={run(actions.togglePause)}
-          />
-          <BigTarget
-            label="Settings"
-            icon={<Settings className={icon} strokeWidth={1.8} />}
-            className="h-[92px]"
-            onHover={touchMenu}
-            onActivate={run(actions.openSettings)}
-          />
-        </div>
-      );
-    }
-    return null;
-  })();
+  const paused = face === 'paused';
+  const menuPanel = view === 'menu' && (
+    <div className="bg-ink-1 flex w-[320px] flex-col gap-1.5 rounded-[22px] p-2 shadow-[inset_0_0_0_1px_var(--rule-strong),var(--shadow-lift)]">
+      <div className="flex flex-col gap-0.5 px-3 pt-1.5 pb-1">
+        <p className="text-bone text-[15px] font-medium">
+          {paused
+            ? 'Face control is paused'
+            : face === 'unseen'
+              ? 'Face control can’t see you'
+              : 'Face control is on'}
+        </p>
+        <p className={cn('text-[13px]', voice.on ? 'text-bone-2' : 'text-warn')}>{voice.text}</p>
+      </div>
+      <MenuRow
+        label="Talk"
+        detail={voice.on ? undefined : voice.text.split(' · ')[1]}
+        disabled={!voice.on && Boolean(model.voiceOff)}
+        icon={<Mic className="size-6" strokeWidth={1.8} />}
+        onActivate={run(actions.activate)}
+        previewProgress={previewProgress}
+      />
+      <MenuRow
+        label={paused ? 'Resume face control' : 'Pause face control'}
+        icon={
+          paused ? (
+            <Play className="size-6" strokeWidth={1.8} />
+          ) : (
+            <Pause className="size-6" strokeWidth={1.8} />
+          )
+        }
+        onActivate={run(actions.togglePause)}
+      />
+      <MenuRow
+        label="Settings"
+        icon={<Settings className="size-6" strokeWidth={1.8} />}
+        onActivate={run(() => actions.navigate('settings'))}
+      />
+      <MenuRow
+        label="Diagnostics"
+        icon={<Activity className="size-6" strokeWidth={1.8} />}
+        onActivate={run(() => actions.navigate('diagnostics'))}
+      />
+      <MenuRow
+        label="Help"
+        icon={<CircleHelp className="size-6" strokeWidth={1.8} />}
+        onActivate={run(() => actions.navigate('help'))}
+      />
+      <MenuRow
+        label="Close"
+        icon={<X className="size-6" strokeWidth={1.8} />}
+        onActivate={() => setMenu(null)}
+      />
+    </div>
+  );
 
-  const resting = view === 'resting';
-  const tone =
-    previewTone ??
-    lineTone({ voiceOn, offline: Boolean(model.notice), face, uiState: model.uiState });
-  const restingLabel =
-    face === 'paused'
-      ? pausedText(Boolean(model.face?.eyesResume))
-      : face === 'unseen'
-        ? 'Can’t see you'
-        : null;
+  const tone = previewTone ?? lineTone({ voiceOn, offline, face, uiState: model.uiState });
+  const progress = previewProgress ?? dwell;
+  const faded = (previewNear ?? near) && view !== 'menu';
 
+  // Laid out as main expects: centred (or right-aligned 10 px in at top right), 4 px from
+  // the edge; the line touches the top edge. See shapeRect in orb-window.js.
   return (
     <div
       className={cn(
-        'pointer-events-none fixed inset-x-0 flex items-center',
-        bottom ? 'bottom-0 flex-col-reverse' : 'top-0 flex-col'
+        'pointer-events-none fixed inset-0 flex',
+        bottom ? 'flex-col-reverse' : 'flex-col',
+        position === 'top-right' && view !== 'sliver' ? 'items-end pr-[10px]' : 'items-center',
+        view === 'sliver' ? 'pt-0' : bottom ? 'pb-1' : 'pt-1'
       )}
     >
-      {view === 'sliver' ? (
-        <DwellTarget
-          label="Open VISION"
-          onActivate={openMenu}
-          indicator="none"
-          hitSize={0}
-          className={cn('pointer-events-auto h-2 w-[160px] rounded-b-full', LINE[tone])}
-        >
-          <span className="sr-only">VISION</span>
-        </DwellTarget>
-      ) : (
-        <motion.div
-          layout
-          transition={transition}
-          className={cn(
-            'bg-ink-1 pointer-events-auto relative overflow-hidden',
-            'shadow-[inset_0_0_0_1px_var(--rule-strong),0_18px_40px_-18px_rgba(0,0,0,0.55)]',
-            view === 'wake' &&
-              'shadow-[inset_0_0_0_2px_var(--ember),0_0_40px_rgba(255,90,31,0.35)]',
-            face === 'paused' && resting && 'bg-ink-2'
-          )}
-          style={{ borderRadius: bottom ? '26px 26px 0 0' : '0 0 26px 26px' }}
-        >
-          {resting ? (
-            <DwellTarget
-              label="VISION menu"
-              onActivate={openMenu}
-              indicator="bar"
-              hitSize={34}
-              previewProgress={previewProgress}
-              className="h-[34px] justify-center gap-2.5 px-4"
-              style={{ minWidth: 130 }}
-            >
-              <span className={cn(face === 'paused' && 'opacity-50')}>
-                <VisionMark size={22} state="idle" />
-              </span>
-              <StatusDot state={face} />
-              {restingLabel && (
-                <span
-                  className={cn(
-                    'text-[13px] font-medium whitespace-nowrap',
-                    face === 'paused' ? 'text-bone-2' : 'text-bone'
-                  )}
-                >
-                  {restingLabel}
-                </span>
-              )}
-            </DwellTarget>
-          ) : (
-            <motion.div
-              key="open"
-              initial={reduced ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: reduced ? 0 : 0.2, delay: reduced ? 0 : 0.12 }}
-              className="w-[min(580px,calc(100vw-24px))]"
-            >
-              {body}
-            </motion.div>
-          )}
-        </motion.div>
-      )}
-
-      <AnimatePresence>
-        {card && (
-          <motion.div
-            key={view}
-            initial={reduced ? false : { opacity: 0, y: bottom ? 8 : -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, transition: { duration: reduced ? 0 : 0.15 } }}
-            transition={transition}
-            className="bg-ink-1 pointer-events-auto mt-2 mb-2 w-[min(580px,calc(100vw-24px))] rounded-[22px] p-4 shadow-[inset_0_0_0_1px_var(--rule-strong),var(--shadow-lift)]"
-          >
-            {card}
-          </motion.div>
+      <div
+        className={cn(view === 'menu' && 'pointer-events-auto')}
+        style={{
+          opacity: faded ? NEAR_OPACITY : 1,
+          transition: reduced ? undefined : 'opacity 150ms ease',
+        }}
+      >
+        {view === 'sliver' ? (
+          <div aria-label="VISION" className={cn('h-[3px] w-10 rounded-b-full', LINE[tone])} />
+        ) : view === 'resting' ? (
+          <RestingBar face={face} offline={offline} />
+        ) : view === 'menu' ? (
+          menuPanel
+        ) : (
+          caption
         )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function Row({
-  mark,
-  end,
-  children,
-}: {
-  mark: React.ReactNode;
-  end?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-[84px] items-center gap-4 py-3 pr-3 pl-5">
-      <div className="shrink-0">{mark}</div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">{children}</div>
-      {end}
+      </div>
+      {progress > 0 && view !== 'menu' && (
+        <div className={cn(bottom ? 'mb-1.5' : 'mt-1.5', position === 'top-right' && 'mr-[17px]')}>
+          <DwellRing progress={progress} />
+        </div>
+      )}
     </div>
   );
 }

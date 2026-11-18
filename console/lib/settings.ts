@@ -1,7 +1,12 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { type MainSettings, getElectron } from '@/lib/electron';
+import {
+  type IslandPosition,
+  type MainSettings,
+  type WakePhrase,
+  getElectron,
+} from '@/lib/electron';
 
 export type ThemeName = 'ember' | 'paper';
 export type CaptionSize = 'M' | 'L' | 'XL';
@@ -13,11 +18,13 @@ export interface VisionSettings {
   dwellMs: number;
   captionSize: CaptionSize;
   reducedMotion: boolean;
-  /** "Vision" wake word. From the settings file, like dwellMs and islandEdge. */
+  /** "Vision" wake word. From the settings file, like dwellMs. */
   wakeSensitivity: WakeSensitivity;
   onboarded: boolean;
-  /** Which screen edge the island hangs from. */
-  islandEdge: 'top' | 'bottom';
+  /** Where the island sits. From the settings file. */
+  islandPosition: IslandPosition;
+  /** What starts voice: "Hey Vision" or "Vision". From the settings file. */
+  wakePhrase: WakePhrase;
   /** VISION's voice volume, 10-100 ("Vision, quieter"). From the settings file. */
   voiceVolume: number;
   /** The wake / listening / done / error sounds. From the settings file. */
@@ -35,7 +42,8 @@ export const DEFAULT_SETTINGS: VisionSettings = {
   reducedMotion: false,
   wakeSensitivity: 'normal',
   onboarded: false,
-  islandEdge: 'top',
+  islandPosition: 'top-center',
+  wakePhrase: 'hey-vision',
   voiceVolume: 100,
   soundsOn: true,
   soundVolume: 60,
@@ -43,6 +51,13 @@ export const DEFAULT_SETTINGS: VisionSettings = {
 
 export const DWELL_MIN_MS = 600;
 export const DWELL_MAX_MS = 1500;
+
+const POSITIONS: IslandPosition[] = ['top-center', 'top-right', 'bottom-center'];
+
+/** The old islandEdge setting, until the settings file has islandPosition. */
+export function positionFrom(main: Pick<MainSettings, 'islandEdge' | 'islandPosition'>) {
+  return main.islandPosition ?? (main.islandEdge === 'bottom' ? 'bottom-center' : 'top-center');
+}
 
 const STORAGE_KEY = 'vision.settings.v1';
 
@@ -64,7 +79,10 @@ function sanitize(raw: unknown): VisionSettings {
     // "strict" was removed (it locked people out in music): it reads as normal.
     wakeSensitivity: value.wakeSensitivity === 'relaxed' ? 'relaxed' : 'normal',
     onboarded: value.onboarded === true,
-    islandEdge: value.islandEdge === 'bottom' ? 'bottom' : 'top',
+    islandPosition: POSITIONS.includes(value.islandPosition as IslandPosition)
+      ? (value.islandPosition as IslandPosition)
+      : 'top-center',
+    wakePhrase: value.wakePhrase === 'vision' ? 'vision' : 'hey-vision',
     voiceVolume: Math.min(100, Math.max(10, Math.round(Number(value.voiceVolume) || 100))),
     soundsOn: value.soundsOn !== false,
     soundVolume: Math.min(100, Math.max(10, Math.round(Number(value.soundVolume) || 60))),
@@ -88,7 +106,7 @@ class SettingsStore {
     this.loadMain();
   }
 
-  // Dwell time, wake sensitivity and island edge live in the settings file; localStorage
+  // Dwell time, wake sensitivity, wake phrase and island position live in the settings file; localStorage
   // keeps only window state (onboarded). The old local values move over once.
   private mainLoaded = false;
   private loadMain() {
@@ -101,7 +119,8 @@ class SettingsStore {
         ...this.state,
         dwellMs: main.dwellTime,
         wakeSensitivity: main.wakeSensitivity,
-        islandEdge: main.islandEdge,
+        islandPosition: positionFrom(main),
+        wakePhrase: main.wakePhrase,
         voiceVolume: main.voiceVolume,
         soundsOn: main.soundsOn,
         soundVolume: main.soundVolume,

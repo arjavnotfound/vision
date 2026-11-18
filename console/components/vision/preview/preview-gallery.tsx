@@ -3,40 +3,35 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { IslandView, LineTone } from '@/lib/island';
+import { PROBLEM_TEXT } from '@/lib/problems';
 import type { CaptionSize, ThemeName } from '@/lib/settings';
 import { settingsStore } from '@/lib/settings';
 import { ApertureCore, type ApertureState } from '../aperture-core';
-import { ConsoleSurface } from '../console/console';
-import { Onboarding } from '../console/onboarding';
-import { CropMarks, Grain } from '../primitives';
 import { Island } from '../surfaces/island';
-import { type ConsoleTab, type VisionModel, VisionModelProvider } from '../vision-model';
+import { type VisionModel, VisionModelProvider } from '../vision-model';
 import { useMockLevel } from './mock-levels';
 import { PREVIEW_STATES, buildMockModel } from './mock-model';
 
-type PreviewSurface = 'island' | 'console' | 'onboarding' | 'aperture' | 'marks';
+type PreviewSurface = 'island' | 'aperture' | 'marks';
 
 const noop = () => undefined;
 const ACTIONS = {
   activate: noop,
   answerConfirm: noop,
   collapse: noop,
-  openConsole: noop,
-  openSettings: noop,
+  navigate: noop,
   toggleMute: noop,
   endSession: noop,
   sendCommand: noop,
-  setConsoleTab: noop,
-  finishOnboarding: noop,
 };
 
 /**
  * /preview — design QA without a backend.
- *   ?surface=orb|strip|console|onboarding|aperture
- *   &state=idle|listening|thinking|speaking|acting|error|offline
- *   &theme=ember|paper  &tab=home|assistant|activity|settings  &step=0|1|2
- *   &hint=1 (orb hover label)  &dwell=0.6 (freeze a dwell indicator)  &caption=M|L|XL
- * With no `surface`, renders a gallery of every surface × state (iframes).
+ *   ?surface=island|aperture  &view=resting|sliver|menu|wake|listening|...
+ *   &theme=ember|paper  &position=top-center|top-right|bottom-center
+ *   &face=unseen|paused  &voice=nokeys|offline|nomic  &near=1 (faded)
+ *   &dwell=0.6 (freeze a dwell indicator)  &tone=idle|accent|warn|dim (full-screen line)
+ * With no `surface`, renders a gallery of every island view (iframes).
  */
 export function PreviewGallery() {
   const params = useSearchParams();
@@ -44,13 +39,16 @@ export function PreviewGallery() {
   const theme = (params.get('theme') === 'paper' ? 'paper' : 'ember') as ThemeName;
 
   useEffect(() => {
+    const position = params.get('position');
     settingsStore.override({
       theme,
       onboarded: true,
       captionSize: (params.get('caption') as CaptionSize) ?? 'L',
       reducedMotion: params.get('reduced') === '1',
+      islandPosition:
+        position === 'top-right' || position === 'bottom-center' ? position : 'top-center',
+      wakePhrase: params.get('phrase') === 'vision' ? 'vision' : 'hey-vision',
     });
-    // anchor=1: lay the orb out exactly as in the Electron window (right-anchored).
     if (params.get('anchor') === '1') document.documentElement.classList.add('is-electron');
   }, [params, theme]);
 
@@ -60,49 +58,36 @@ export function PreviewGallery() {
 
 function SingleCapture({ surface }: { surface: PreviewSurface }) {
   const params = useSearchParams();
-  const state = (params.get('state') as ApertureState) ?? 'idle';
-  const tab = (params.get('tab') as ConsoleTab) ?? 'home';
-  const step = Number(params.get('step') ?? 0) as 0 | 1 | 2;
   const dwell = params.get('dwell') ? Number(params.get('dwell')) : undefined;
   const view = (params.get('view') as IslandView | null) ?? 'resting';
   const faceParam = params.get('face');
+  const voice = params.get('voice');
   // Preview runs outside Electron: show a talk hotkey only when the caller passes the registered one.
   const hotkey = params.get('hotkey') ?? '';
-  const voiceOff = params.get('nokeys') === '1';
   const mic = useMockLevel(true, 0.4);
   const out = useMockLevel(true, 2.1);
-  const [pulse, setPulse] = useState(0);
   const [now] = useState(() => Date.now());
-
-  // Re-fire the shutter / error so a still capture catches it.
-  useEffect(() => {
-    if (state !== 'acting' && state !== 'error') return;
-    const first = setTimeout(() => setPulse(1), 300);
-    const id = setInterval(() => setPulse((n) => n + 1), 2600);
-    return () => {
-      clearTimeout(first);
-      clearInterval(id);
-    };
-  }, [state]);
 
   const model = useMemo(
     () => ({
       ...buildMockModel({
-        surface: surface === 'island' ? islandSurface(view) : 'console',
-        state,
-        tab,
-        onboarding: surface === 'onboarding',
+        surface: islandSurface(view),
+        state: 'idle',
         mic,
         out,
-        pulse,
+        pulse: 0,
         now,
         actions: ACTIONS,
       }),
       hotkeyLabel: hotkey,
-      voiceOff,
-      ...(surface === 'island' ? islandMock(view, now, faceParam) : {}),
+      voiceOff: voice === 'nokeys',
+      micMissing: voice === 'nomic',
+      ...islandMock(view, now, faceParam),
+      ...(voice === 'offline' || voice === 'nomic'
+        ? { notice: voice === 'nomic' ? PROBLEM_TEXT.mic : PROBLEM_TEXT.voice }
+        : {}),
     }),
-    [surface, state, tab, mic, out, pulse, now, hotkey, view, faceParam, voiceOff]
+    [mic, out, now, hotkey, view, faceParam, voice]
   );
 
   return (
@@ -112,38 +97,13 @@ function SingleCapture({ surface }: { surface: PreviewSurface }) {
           <Island
             previewView={view}
             previewProgress={dwell}
+            previewNear={params.get('near') === '1'}
             previewTone={(params.get('tone') as LineTone | null) ?? undefined}
           />
         )}
-        {surface === 'console' && <ConsoleSurface previewProgress={dwell} />}
-        {surface === 'onboarding' && <ConsoleOnboarding step={step} previewProgress={dwell} />}
         {(surface === 'aperture' || surface === 'marks') && <MarkSheet />}
       </div>
     </VisionModelProvider>
-  );
-}
-
-function ConsoleOnboarding({
-  step,
-  previewProgress,
-}: {
-  step: 0 | 1 | 2;
-  previewProgress?: number;
-}) {
-  return (
-    <div className="pointer-events-none fixed inset-0 grid place-items-center p-4">
-      <div
-        className="bg-ink-0 pointer-events-auto relative overflow-hidden rounded-[28px] shadow-[inset_0_0_0_1px_var(--rule-strong),var(--shadow-lift)]"
-        style={{
-          width: 'min(1168px, calc(100vw - 32px))',
-          height: 'min(748px, calc(100vh - 32px))',
-        }}
-      >
-        <Grain />
-        <CropMarks inset={12} length={20} />
-        <Onboarding previewStep={step} previewProgress={previewProgress} />
-      </div>
-    </div>
   );
 }
 
@@ -239,6 +199,14 @@ function islandMock(view: IslandView, now: number, face: string | null): Partial
           ],
         },
       };
+    case 'speaking':
+      return {
+        ...base,
+        uiState: 'speaking',
+        userCaption: "what's the weather like in Mumbai today",
+        agentCaption:
+          "It's thirty-one degrees and humid in Mumbai, with light rain likely after four.",
+      };
     case 'offline':
       return { ...base, uiState: 'offline', notice: 'Voice is offline. Face control still works.' };
     default:
@@ -248,76 +216,49 @@ function islandMock(view: IslandView, now: number, face: string | null): Partial
 
 /* ----------------------------------------------------------------------------- */
 
+const GALLERY: [string, string, number, number][] = [
+  ['Resting', 'view=resting', 380, 80],
+  ['Resting, dwell ring', 'view=resting&dwell=0.6', 380, 80],
+  ['Resting, faded near the cursor', 'view=resting&near=1', 380, 80],
+  ['Paused', 'view=resting&face=paused', 380, 80],
+  ['Voice off', 'view=resting&voice=nokeys', 380, 80],
+  ['Full-screen line', 'view=sliver', 380, 80],
+  ['Listening', 'view=listening', 380, 80],
+  ['Speaking', 'view=speaking', 380, 80],
+  ['Menu', 'view=menu', 340, 520],
+  ['Menu, voice off', 'view=menu&voice=nokeys', 340, 520],
+];
+
 function Gallery({ theme }: { theme: ThemeName }) {
-  const scale = 0.5;
-  const frame = (src: string, w: number, h: number, s = 1) => (
-    <iframe
-      src={src}
-      title={src}
-      width={w}
-      height={h}
-      style={{ width: w, height: h, transform: `scale(${s})`, transformOrigin: '0 0', border: 0 }}
-    />
-  );
   return (
     <div className="bg-ink-0 text-bone min-h-svh p-10">
       <header className="mb-10 flex items-baseline gap-6">
         <span className="font-mono text-[15px] tracking-[0.42em]">VISION</span>
-        <span className="label-mono text-bone-3">
-          Design QA · {theme === 'paper' ? 'Paper Light' : 'Ember Dark'}
+        <span className="text-bone-3 text-[13px]">
+          Island · {theme === 'paper' ? 'Paper Light' : 'Ember Dark'}
         </span>
         <a
-          className="label-mono text-ember-text ml-auto"
+          className="text-ember-text ml-auto text-[13px]"
           href={`/preview?theme=${theme === 'paper' ? 'ember' : 'paper'}`}
         >
           Switch theme
         </a>
       </header>
-
-      <section className="mb-12">
-        <h2 className="label-mono text-bone-3 mb-4">Console · Home</h2>
-        <div className="flex flex-wrap gap-4">
-          {PREVIEW_STATES.map((state) => (
-            <div
-              key={state}
-              style={{ width: 1200 * scale, height: 780 * scale }}
-              className="overflow-hidden"
-            >
-              <p className="label-mono text-bone-2 mb-2">{state}</p>
-              {frame(`/preview?surface=console&state=${state}&theme=${theme}`, 1200, 780, scale)}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-12">
-        <h2 className="label-mono text-bone-3 mb-4">Console · tabs & onboarding</h2>
-        <div className="flex flex-wrap gap-4">
-          {['assistant', 'activity'].map((tab) => (
-            <div
-              key={tab}
-              style={{ width: 1200 * scale, height: 780 * scale }}
-              className="overflow-hidden"
-            >
-              {frame(
-                `/preview?surface=console&tab=${tab}&state=speaking&theme=${theme}`,
-                1200,
-                780,
-                scale
-              )}
-            </div>
-          ))}
-          {[0, 1, 2].map((step) => (
-            <div
-              key={step}
-              style={{ width: 1200 * scale, height: 780 * scale }}
-              className="overflow-hidden"
-            >
-              {frame(`/preview?surface=onboarding&step=${step}&theme=${theme}`, 1200, 780, scale)}
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="flex flex-wrap gap-6">
+        {GALLERY.map(([name, query, w, h]) => (
+          <div key={name}>
+            <p className="text-bone-2 mb-2 text-[13px]">{name}</p>
+            <iframe
+              src={`/preview?surface=island&anchor=1&${query}&theme=${theme}`}
+              title={name}
+              width={w}
+              height={h}
+              className="bg-ink-3"
+              style={{ border: 0 }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { MotionValue } from 'motion/react';
 import type { ActivityItem } from '@/lib/activity';
 import type { ConversationTurn } from '@/lib/transcript';
 import type { ApertureState } from '../aperture-core';
-import type { ConsoleTab, VisionModel } from '../vision-model';
+import type { VisionModel } from '../vision-model';
 
 export const PREVIEW_STATES: ApertureState[] = [
   'idle',
@@ -100,8 +100,6 @@ export const MOCK_TURNS: ConversationTurn[] = [
 interface MockOptions {
   surface: VisionModel['surface'];
   state: ApertureState;
-  tab: ConsoleTab;
-  onboarding: boolean;
   mic: MotionValue<number>;
   out: MotionValue<number>;
   pulse: number;
@@ -130,8 +128,6 @@ export function buildMockModel(o: MockOptions): VisionModel {
     isMuted: false,
     hotkeyLabel: '',
     searchProvider: 'Bing',
-    showOnboarding: o.onboarding,
-    consoleTab: o.tab,
     face: null,
     fullScreen: false,
     activatedAt: 0,

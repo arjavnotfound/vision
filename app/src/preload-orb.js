@@ -1,37 +1,36 @@
-// Preload for the island window (the island and the console).
+// Preload for the island window.
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Hit regions: the window is click-through except over a visible element (the island,
-// its cards, the console panel). Full-window wrappers and the page itself are padding. Main
-// sends the cursor position while it is inside the window: VISION's head pointer moves
-// with SetCursorPos, which Electron's forwarded mouse events never see.
-ipcRenderer.on('vision-pointer', (_event, x, y) => {
-	const el = document.elementFromPoint(x, y);
-	const rect = el && el !== document.documentElement && el !== document.body ? el.getBoundingClientRect() : null;
-	ipcRenderer.send('vision-hit', Boolean(rect) && (rect.width < window.innerWidth - 1 || rect.height < window.innerHeight - 1));
-});
-
-// The window cannot take focus, so a text field asks for the keyboard while in use.
-const TEXT_FIELD = 'textarea, [contenteditable=""], [contenteditable="true"], input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=button]):not([type=submit])';
-const isTextField = (el) => Boolean(el?.closest?.(TEXT_FIELD));
-window.addEventListener('pointerdown', (event) => {
-	if (isTextField(event.target)) ipcRenderer.send('vision-keyboard', true);
-}, true);
-window.addEventListener('focusout', (event) => {
-	if (isTextField(event.target) && !isTextField(event.relatedTarget)) ipcRenderer.send('vision-keyboard', false);
-}, true);
+// The window is click-through except while the menu is open, and never takes focus. Main
+// watches the cursor and sends what the page needs: near (fade), dwell progress (the fill
+// ring) and menu open/close.
+const on = (channel, map = (value) => value) => (callback) => {
+	const listener = (_event, value) => callback(map(value));
+	ipcRenderer.on(channel, listener);
+	return () => ipcRenderer.removeListener(channel, listener);
+};
 
 contextBridge.exposeInMainWorld('electronAPI', {
 	isElectron: true,
-	/** 'island' | 'island-open' | 'console': resizes the window. */
+	/** 'idle' | 'caption' | 'menu': what the island shows (the window takes the mouse only for 'menu'). */
 	setMode: (mode) => ipcRenderer.send('vision-mode', mode),
-	/** 'top' | 'bottom': which screen edge the island hangs from. */
-	setEdge: (edge) => ipcRenderer.send('vision-edge', edge),
+	/** 'top-center' | 'top-right' | 'bottom-center'. */
+	setPosition: (position) => ipcRenderer.send('vision-position', position),
+	/** The cursor is within 80 px of the island: it fades. */
+	onNear: on('vision-near', Boolean),
+	/** Dwell progress on the island, 0..1. */
+	onDwell: on('vision-dwell', Number),
+	/** 'open' (dwell or menu hotkey) | 'close' (left alone or cursor far away). */
+	onMenu: on('vision-menu', String),
+	/** Open the VISION window on a page: 'settings' | 'diagnostics' | 'help' | ... */
+	navigate: (page) => ipcRenderer.send('vision:navigate', page),
+	/** 'hey-vision' | 'vision'. */
+	setWakePhrase: (phrase) => ipcRenderer.send('vision-wake-phrase', phrase),
 	/** Show Face Control's window (without taking focus). */
 	showFace: () => ipcRenderer.send('vision-show-face'),
 	/** Open the one Settings view (in the face window). */
 	openSettings: (section) => ipcRenderer.send('vision-open-settings', section),
-	/** { dwellTime, wakeSensitivity, islandEdge, migrated } from the settings file. */
+	/** { dwellTime, wakeSensitivity, islandEdge, islandPosition?, wakePhrase?, migrated } from the settings file. */
 	getSettings: () => ipcRenderer.invoke('vision-settings-get'),
 	/** Hand the old localStorage settings to main once; returns the merged settings. */
 	migrateSettings: (old) => ipcRenderer.invoke('vision-settings-migrate', old),
@@ -65,13 +64,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	isOneApp: () => ipcRenderer.invoke('vision-one-app'),
 	hide: () => ipcRenderer.send('vision-hide'),
 	quit: () => ipcRenderer.send('vision-quit'),
-	/** Tell Face Control whether the mic is live (it pauses mouth gestures meanwhile). */
+	/** { connected, live, open }: live tells Face Control the mic is on (mouth gestures pause); open: a voice session is showing (a wake phrase is ignored). */
 	setVoiceState: (state) => ipcRenderer.send('vision-voice-state', state),
 	/** Wake word: 16 kHz mono mic audio for the local spotter (it never leaves the PC). */
 	sendWakeAudio: (samples, end) => ipcRenderer.send('vision-wake-audio', samples, end),
 	/** ms from the end of the chunk the wake word was heard in to the connect sound (main.log). */
 	reportWakeSound: (ms) => ipcRenderer.send('vision-wake-sound', ms),
 	setWakeSensitivity: (sensitivity) => ipcRenderer.send('vision-wake-sensitivity', sensitivity),
+	/** { keyword, ok, end, action: 'wake' | 'stop' | 'menu' }. */
 	onWake: (callback) => {
 		const listener = (_event, heard) => callback(heard);
 		ipcRenderer.on('vision-wake', listener);
