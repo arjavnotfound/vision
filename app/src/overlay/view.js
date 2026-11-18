@@ -3,11 +3,12 @@
 
 const PAUSE_LABEL_MS = 2000;
 const CLICK_LABEL_MS = 400;
+const FIND_MS = 1200;
 
 export function createOverlayView(root = document.body) {
 	const cursor = document.createElement("div");
 	cursor.className = "cursor is-hidden";
-	cursor.innerHTML = `<div class="dwell"></div><div class="halo"></div><div class="snap"></div><div class="tag"></div>`;
+	cursor.innerHTML = `<div class="dwell"></div><div class="halo"></div><div class="snap"></div><div class="find"><i></i><i></i><i></i></div><div class="tag"></div>`;
 	root.append(cursor);
 	const dwellEl = cursor.querySelector(".dwell");
 	const tag = cursor.querySelector(".tag");
@@ -18,6 +19,7 @@ export function createOverlayView(root = document.body) {
 	let raf = 0;
 	let tagTimer = 0;
 	let quietTimer = 0;
+	let findTimer = 0;
 	let lastProgress = -1;
 	let mode = "";
 
@@ -90,10 +92,18 @@ export function createOverlayView(root = document.body) {
 			} else if (next === "takeover") {
 				showTag("MOUSE", { ms: 0 });
 			} else if (next === "noface") {
-				showTag("NO FACE", { ms: 0 });
+				showTag("Finding your face…", { ms: 0 });
 			} else if (previous) {
 				hideTag();
 			}
+		},
+		/** "Where's my cursor": three expanding ember rings for 1.2 s. */
+		findCursor() {
+			cursor.classList.remove("is-finding", "is-hidden");
+			void cursor.offsetWidth; // restart the animation
+			cursor.classList.add("is-finding");
+			clearTimeout(findTimer);
+			findTimer = setTimeout(() => cursor.classList.remove("is-finding"), FIND_MS);
 		},
 		hideTag,
 		showTag,

@@ -7,18 +7,19 @@ const { createVisionBus } = require('../app/src/electron-main/vision-bus');
 
 describe('gesture policy: mouth conflict with the voice assistant', () => {
 	it('blocks mouth clicks while the assistant mic is live', () => {
-		for (const mode of ['open-mouth', 'open-mouth-simple', 'open-mouth-ignoring-eyes']) {
-			assert.equal(allowGestureButton({ button: 0, down: true, clickingMode: mode, voiceLive: true }).allowed, false, mode);
-			assert.equal(allowGestureButton({ button: 0, down: true, clickingMode: mode, voiceLive: false }).allowed, true, mode);
-		}
+		assert.equal(allowGestureButton({ button: 0, down: true, mouthClick: true, voiceLive: true }).allowed, false);
+		assert.equal(allowGestureButton({ button: 0, down: true, mouthClick: true, voiceLive: false }).allowed, true);
 	});
 	it('keeps winks working while the voice is on', () => {
-		assert.equal(allowGestureButton({ button: 0, down: true, clickingMode: 'blink', voiceLive: true }).allowed, true);
-		assert.equal(allowGestureButton({ button: 2, down: true, clickingMode: 'blink', voiceLive: true }).allowed, true);
+		assert.equal(allowGestureButton({ button: 0, down: true, voiceLive: true }).allowed, true);
+		assert.equal(allowGestureButton({ button: 2, down: true, voiceLive: true }).allowed, true);
+		// Mouth and Wink both on: a left press with the left eye shut is a wink.
+		assert.equal(allowGestureButton({ button: 0, down: true, mouthClick: true, leftEyeClosed: true, voiceLive: true }).allowed, true);
+		assert.equal(allowGestureButton({ button: 2, down: true, mouthClick: true, voiceLive: true }).allowed, true);
 	});
 	it('always allows releasing a button', () => {
-		assert.equal(allowGestureButton({ button: 0, down: false, clickingMode: 'open-mouth', voiceLive: true }).allowed, true);
-		assert.equal(allowGestureButton({ button: 2, down: false, clickingMode: 'blink', controlMap: { rightClick: 'brow' } }).allowed, true);
+		assert.equal(allowGestureButton({ button: 0, down: false, mouthClick: true, voiceLive: true }).allowed, true);
+		assert.equal(allowGestureButton({ button: 2, down: false, controlMap: { rightClick: 'brow' } }).allowed, true);
 	});
 	it('blocks mouth + tilt scrolling while the voice is on', () => {
 		assert.equal(allowGestureScroll({ voiceLive: true }).allowed, false);
@@ -28,10 +29,10 @@ describe('gesture policy: mouth conflict with the voice assistant', () => {
 
 describe('gesture policy: adaptive control map', () => {
 	it('switches off an unreliable right wink once right click moved elsewhere', () => {
-		assert.equal(allowGestureButton({ button: 2, down: true, clickingMode: 'blink', controlMap: { rightClick: 'brow' } }).allowed, false);
-		assert.equal(allowGestureButton({ button: 2, down: true, clickingMode: 'blink', controlMap: { rightClick: 'voice' } }).allowed, false);
-		assert.equal(allowGestureButton({ button: 2, down: true, clickingMode: 'blink', controlMap: { rightClick: 'rightWink' } }).allowed, true);
-		assert.equal(allowGestureButton({ button: 0, down: true, clickingMode: 'blink', controlMap: { rightClick: 'brow' } }).allowed, true);
+		assert.equal(allowGestureButton({ button: 2, down: true, controlMap: { rightClick: 'brow' } }).allowed, false);
+		assert.equal(allowGestureButton({ button: 2, down: true, controlMap: { rightClick: 'voice' } }).allowed, false);
+		assert.equal(allowGestureButton({ button: 2, down: true, controlMap: { rightClick: 'rightWink' } }).allowed, true);
+		assert.equal(allowGestureButton({ button: 0, down: true, controlMap: { rightClick: 'brow' } }).allowed, true);
 	});
 	it('switches off mouth scrolling when scroll moved to the voice', () => {
 		assert.equal(allowGestureScroll({ voiceLive: false, controlMap: { scroll: 'voice' } }).allowed, false);

@@ -116,6 +116,8 @@ function summarizeInputFeedback(inputFeedback = {}) {
 	const { blinkInfo, mouthInfo } = inputFeedback;
 	return {
 		headNotFound: Boolean(inputFeedback.headNotFound),
+		lowConfidence: Boolean(inputFeedback.lowConfidence),
+		lowLight: Boolean(inputFeedback.lowLight),
 		blinkInfo: blinkInfo ? {
 			used: Boolean(blinkInfo.used),
 			leftEye: pick(blinkInfo.leftEye),
@@ -126,7 +128,25 @@ function summarizeInputFeedback(inputFeedback = {}) {
 	};
 }
 
+/**
+ * "Where's my cursor": true once when the face comes back after being lost for
+ * `minLostMs` or more, so the overlay can pulse around the cursor.
+ */
+function createFaceReturnPulse({ minLostMs = 2000 } = {}) {
+	let lostSince = null;
+	return function step(headNotFound, now) {
+		if (headNotFound) {
+			lostSince ??= now;
+			return false;
+		}
+		const wasLostLong = lostSince !== null && now - lostSince >= minLostMs;
+		lostSince = null;
+		return wasLostLong;
+	};
+}
+
 module.exports = {
+	createFaceReturnPulse,
 	createScrollHandler,
 	createOverlaySync,
 	summarizeInputFeedback,

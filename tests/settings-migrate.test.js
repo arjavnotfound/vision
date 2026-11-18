@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { islandSettings, migrateIslandSettings, sanitizeGlobal } = require('../app/src/electron-main/settings-migrate');
+const { islandSettings, migrateIslandSettings, migrateLegacySettings, sanitizeGlobal } = require('../app/src/electron-main/settings-migrate');
 
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'settings-T10', name), 'utf8'));
 
@@ -18,21 +18,39 @@ describe('settings migration', () => {
 		assert.equal(patch.wakeSensitivity, 'normal', 'a saved "strict" becomes Normal');
 		assert.equal(patch.islandEdge, 'bottom');
 		const merged = { ...global, ...patch };
-		assert.deepEqual(islandSettings(merged), { dwellTime: 1500, wakeSensitivity: 'normal', islandEdge: 'bottom', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: true });
+		assert.deepEqual(islandSettings(merged), { dwellTime: 1500, wakeSensitivity: 'normal', islandEdge: 'bottom', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: true });
 		assert.equal(migrateIslandSettings(merged, old), null, 'runs only once');
 	});
 	it('takes a changed island dwell time when the face window has the default', () => {
 		assert.equal(migrateIslandSettings({ dwellTime: 800 }, { dwellMs: 1200 }).dwellTime, 1200);
-		assert.equal(migrateIslandSettings({}, { dwellMs: 5000 }).dwellTime, 1500);
+		assert.equal(migrateIslandSettings({}, { dwellMs: 5000 }).dwellTime, 2000);
 		assert.equal(migrateIslandSettings({}, { dwellMs: 900 }).dwellTime, undefined, 'the old 900 default is not a choice');
 	});
 	it('keeps relaxed, and gives one default dwell time when nothing is saved', () => {
 		assert.equal(migrateIslandSettings({}, { wakeSensitivity: 'relaxed' }).wakeSensitivity, 'relaxed');
-		assert.deepEqual(islandSettings({}), { dwellTime: 800, wakeSensitivity: 'normal', islandEdge: 'top', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: false });
+		assert.deepEqual(islandSettings({}), { dwellTime: 1000, wakeSensitivity: 'normal', islandEdge: 'top', islandPosition: 'top-center', wakePhrase: 'hey-vision', voiceVolume: 100, soundsOn: true, soundVolume: 60, migrated: false });
 	});
 	it('turns a saved strict into normal on any write', () => {
 		assert.equal(sanitizeGlobal({ wakeSensitivity: 'strict' }).wakeSensitivity, 'normal');
 		assert.equal(sanitizeGlobal({ wakeSensitivity: 'relaxed' }).wakeSensitivity, 'relaxed');
 		assert.equal('wakeSensitivity' in sanitizeGlobal({ dwellTime: 900 }), false);
+	});
+	it('moves the old click mode, pause, wake and island settings to the new keys', () => {
+		const global = fixture('vision-settings.json').globalSettings;
+		const patch = migrateLegacySettings(global);
+		const merged = { ...global, ...patch };
+		assert.equal(typeof merged.clickWink, global.clickingMode === undefined ? 'undefined' : 'boolean');
+		assert.deepEqual(migrateLegacySettings(merged), {}, 'running it again changes nothing');
+		assert.deepEqual(migrateLegacySettings({ clickingMode: 'blink', dwellTime: 800, closeEyesToToggle: true, wakeSensitivity: 'relaxed', islandEdge: 'bottom' }),
+			{ clickWink: true, clickBlink: false, clickMouth: false, clickDwell: false, dwellTime: 1000, pauseMethod: 'closeEyes', wakePhrase: 'vision', islandPosition: 'bottom-center' });
+		assert.deepEqual(migrateLegacySettings({ clickingMode: 'dwell', dwellTime: 1200, closeEyesToToggle: false, wakeSensitivity: 'strict', islandEdge: 'top' }),
+			{ clickWink: false, clickBlink: false, clickMouth: false, clickDwell: true, pauseMethod: 'blinks3', wakePhrase: 'hey-vision', islandPosition: 'top-center' });
+		for (const mode of ['open-mouth', 'open-mouth-simple', 'open-mouth-ignoring-eyes']) {
+			assert.equal(migrateLegacySettings({ clickingMode: mode }).clickMouth, true, mode);
+		}
+		const off = migrateLegacySettings({ clickingMode: 'off' });
+		assert.equal(off.clickWink || off.clickBlink || off.clickMouth || off.clickDwell, false, 'clicking off stays off');
+		assert.deepEqual(migrateLegacySettings({}), {}, 'a fresh install takes the new defaults');
+		assert.deepEqual(migrateLegacySettings({ clickingMode: 'dwell', clickWink: true }), {}, 'new keys already set win');
 	});
 });

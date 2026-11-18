@@ -2230,22 +2230,42 @@ Helps to stabilize the cursor. However, when using point tracking in combination
 			type: "group",
 			label: t("settings.sections.clicking.label", { defaultValue: "Clicking" }),
 			settings: [
+				// Click methods: several can be on at once (core/src/gestures/arbitration.js).
 				{
-					label: t("settings.clickingMode.label", { defaultValue: "Interaction Profile:" }),
-					className: "vision-clicking-mode",
-					key: "clickingMode",
-					type: "dropdown",
-					options: [
-						{ value: "blink", label: t("settings.clickingMode.wink.label", { defaultValue: "Profile: Wink Control (Left / Right Wink & Scroll)" }), description: t("settings.clickingMode.wink.description", { defaultValue: "Close Left Eye for Left Click. Close Right Eye for Right Click / Context Menu. Tilt head while winking to scroll." }) },
-						{ value: "open-mouth-simple", label: t("settings.clickingMode.openMouthSimple.label", { defaultValue: "Profile: Mouth Action (Natural Jaw Drop)" }), description: t("settings.clickingMode.openMouthSimple.description", { defaultValue: "Open mouth in a tall 'O' shape / drop jaw to Left Click & Drag. Close mouth to release. No eye winking required." }) },
-						{ value: "open-mouth", label: t("settings.clickingMode.openMouthWithEyeModifiers.label", { defaultValue: "Profile: Advanced Hybrid Mouth (3-Button)" }), description: t("settings.clickingMode.openMouthWithEyeModifiers.description", { defaultValue: "Three-button mouse control: Open mouth with both eyes open = Left Click; Open mouth with Left Eye winked = Right Click; Open mouth with Right Eye winked = Middle Click (Autoscroll)." }) },
-						{ value: "dwell", label: t("settings.clickingMode.dwell.label", { defaultValue: "Profile: Dwell Click (Hands-Free Timer)" }), description: t("settings.clickingMode.dwell.description", { defaultValue: "Hold the cursor stationary over a target for a moment to trigger a click automatically." }) },
-						{ value: "open-mouth-ignoring-eyes", label: t("settings.clickingMode.openMouthIgnoringEyes.label", { defaultValue: "Profile: Sustained Mouth Hold (Continuous Drag)" }), description: t("settings.clickingMode.openMouthIgnoringEyes.description", { defaultValue: "Open mouth to press and hold mouse down continuously. Eye state is completely ignored." }) },
-						{ value: "off", label: t("settings.clickingMode.off.label", { defaultValue: "Profile: Pure Motion Tracking (External Switch)" }), description: t("settings.clickingMode.off.description", { defaultValue: "Track mouse movement without automated gesture clicks. For use with physical accessibility switches or third-party software." }) },
-					],
-					default: "blink",
+					label: t("settings.clickWink.label", { defaultValue: "Wink" }),
+					className: "vision-click-wink",
+					key: "clickWink",
+					type: "checkbox",
+					default: true,
 					visible: () => isDesktopApp || clickingModeSupported,
-					description: t("settings.clickingMode.description", { defaultValue: "Choose an interaction profile tailored to your preferred facial gestures." }),
+					description: t("settings.clickWink.description", { defaultValue: "Wink your left eye to left-click, your right eye to right-click." }),
+				},
+				{
+					label: t("settings.clickBlink.label", { defaultValue: "Blink" }),
+					className: "vision-click-blink",
+					key: "clickBlink",
+					type: "checkbox",
+					default: false,
+					visible: () => isDesktopApp || clickingModeSupported,
+					description: t("settings.clickBlink.description", { defaultValue: "Blink both eyes on purpose to left-click." }),
+				},
+				{
+					label: t("settings.clickMouth.label", { defaultValue: "Mouth" }),
+					className: "vision-click-mouth",
+					key: "clickMouth",
+					type: "checkbox",
+					default: false,
+					visible: () => isDesktopApp || clickingModeSupported,
+					description: t("settings.clickMouth.description", { defaultValue: "Open your mouth to click." }),
+				},
+				{
+					label: t("settings.clickDwell.label", { defaultValue: "Dwell" }),
+					className: "vision-click-dwell",
+					key: "clickDwell",
+					type: "checkbox",
+					default: false,
+					visible: () => isDesktopApp || clickingModeSupported,
+					description: t("settings.clickDwell.description", { defaultValue: "Hold the cursor still to click." }),
 				},
 				{
 					// on Windows, currently, when buttons are swapped at the system level, it affects serenade-driver's click()
@@ -2281,7 +2301,7 @@ Could also be used to right click with the dwell clicker in a pinch.` }),
 					},
 					default: 800,
 					visible: () => isDesktopApp || clickingModeSupported,
-					disabled: () => s.clickingMode === "off" || s.clickingMode === "dwell",
+					disabled: () => !VM.clickMethods(s).wink && !VM.clickMethods(s).blink && !VM.clickMethods(s).mouth,
 					// Throwing a // in here so it's not detected by i18next-cli, whereas the others are allowed
 					// simply because it wasn't previously detected and translated
 					// due to being both commented out and multiline (though multiline and commented out t() calls are separately supported)
@@ -2297,8 +2317,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					key: "dwellTime",
 					type: "slider",
 					min: 600,
-					max: 1500,
-					default: 800,
+					max: 2000,
+					default: 1000,
 					labels: {
 						min: t("settings.dwellTime.sliderMin", { defaultValue: "Quick" }),
 						max: t("settings.dwellTime.sliderMax", { defaultValue: "Relaxed" }),
@@ -2431,12 +2451,16 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 					// - I considered adding "⚠️" but it feels a little too alarming
 					// label: "Close eyes to start/stop (<span style=\"border-bottom: 1px dotted;\" title=\"Planned refinements include: visual and auditory feedback, improved detection accuracy, and separate settings for durations to toggle on and off.\">experimental</span>)",
 					// label: "Close eyes to start/stop (<span style=\"border-bottom: 1px dotted;\" title=\"• Missing visual and auditory feedback.\n• Missing settings for duration(s) to toggle on and off.\n• Affected by false positive blink detections, especially when looking downward.\">Experimental</span>)",
-					label: t("settings.closeEyesToToggle.label", { defaultValue: "Close eyes to start/stop" }),
-					className: "vision-close-eyes-to-toggle",
-					key: "closeEyesToToggle",
-					type: "checkbox",
-					default: false,
-					description: t("settings.closeEyesToToggle.description", { defaultValue: "If enabled, you can start or stop mouse control by holding both your eyes shut for a few seconds." }),
+					label: t("settings.pauseMethod.label", { defaultValue: "Pause method" }),
+					className: "vision-pause-method",
+					key: "pauseMethod",
+					type: "dropdown",
+					options: [
+						{ value: "blinks3", label: t("settings.pauseMethod.blinks3", { defaultValue: "Three quick blinks" }) },
+						{ value: "closeEyes", label: t("settings.pauseMethod.closeEyes", { defaultValue: "Close your eyes for 2 seconds" }) },
+					],
+					default: "blinks3",
+					description: t("settings.pauseMethod.description", { defaultValue: "How to pause and resume face control without your hands." }),
 				},
 				{
 					label: t("settings.eyebrowRaiseOpensKeyboard.label", { defaultValue: "Raise eyebrows to open keyboard" }),
@@ -2871,7 +2895,11 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 		right: false,
 		middle: false,
 	};
-	let mouseButtonUntilMouthCloses = -1;
+	const eyeArbiter = VM.createEyeArbiter();
+	const lowLightWatch = VM.createLowLightWatch();
+	let frameBrightness = NaN;
+	let lastBrightnessTime = -Infinity;
+	let currentConfidence = 0;
 	let lastMouseDownTime = -Infinity;
 	let mouseNeedsInitPos = true;
 
@@ -2905,7 +2933,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				}
 			}
 		}
-		mouseButtonUntilMouthCloses = -1;
+		eyeArbiter.reset();
 		lastMouseDownTime = -Infinity;
 		blinkInfo = null;
 		mouthInfo = null;
@@ -3700,9 +3728,13 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 		ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
 		const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 		currentCameraImageData = imageData;
-		// Lighting check for the framing guide (cheap: sampled, every 15th frame).
-		if (++brightnessFrameCounter % 15 === 0 && cameraVideo.readyState >= 2) {
-			frameBrightness = VM.measureBrightness(imageData, 16);
+		// Light on the face, once a second (sampled; the face box when there is a face).
+		if (cameraVideo.readyState >= 2 && performance.now() - lastBrightnessTime >= 1000) {
+			lastBrightnessTime = performance.now();
+			frameBrightness = VM.measureBrightness(imageData, 16, facemeshPrediction ? VM.faceBox(facemeshPrediction) : null);
+			if (lowLightWatch.step(frameBrightness, lastBrightnessTime)) {
+				emitEngine("notice", { code: "low-light", text: "More light on your face would help." });
+			}
 		}
 
 		if (s.mirror) {
@@ -3716,7 +3748,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 		const deltaTime = Math.min(timestamp - lastTimestamp, 100);
 		lastTimestamp = timestamp;
 
-		sleepSweep?.setEnabled(s.closeEyesToToggle);
+		sleepSweep?.setEnabled(s.pauseMethod === "closeEyes");
 		sleepSweep?.update(sleepGestureProgress);
 
 		if (!pointTracker) {
@@ -3942,7 +3974,6 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 
 						// Gesture detectors live in core/src/gestures (EAR / MAR / brow with hysteresis).
 
-						const prevMouthOpen = mouthInfo?.thresholdMet;
 
 						// Gesture detection (core/src/gestures — same math as before, pinned by tests).
 						const thresholds = gestureThresholds();
@@ -3973,18 +4004,18 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 						}
 
 						// Close both eyes ~2 s: toggle pause (if enabled).
+						const pauseByClosedEyes = s.pauseMethod === "closeEyes";
 						const sleepStep = VM.stepSleepHold({
 							progress: sleepGestureProgress,
-							bothClosed: !blinkInfo.rightEye.open && !blinkInfo.leftEye.open,
+							bothClosed: pauseByClosedEyes && !blinkInfo.rightEye.open && !blinkInfo.leftEye.open,
 							dt: deltaTime,
 							duration: sleepGestureEyesClosedDuration,
 						});
 						sleepGestureProgress = sleepStep.progress;
-						if (sleepStep.completed && s.closeEyesToToggle) {
-							paused = !paused;
-							updatePaused();
-							sleepSweep?.sleepModeWasToggled(paused);
-							emitEngine("gesture", { gesture: "sleep", action: paused ? "PAUSE" : "RESUME" });
+						// One closure is one thing: a wink, a blink click, or a quick (pause) blink.
+						const eyeStep = eyeArbiter.step(blinkInfo, now);
+						if ((sleepStep.completed && pauseByClosedEyes) || (eyeStep.tripleBlink && !pauseByClosedEyes)) {
+							togglePauseByGesture(pauseByClosedEyes ? "sleep" : "tripleBlink");
 						}
 
 						// Mouth open + head tilted up/down scrolls (setting mouthTiltScroll, default on).
@@ -3994,16 +4025,16 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 							window.electronAPI?.scrollMouse?.(mouthScrollDirection);
 						}
 
-						const arbitration = VM.resolveClickButton({
-							clickingMode: s.clickingMode,
-							blinkInfo,
-							mouthInfo,
-							prevMouthOpen,
+						const methods = VM.clickMethods(s);
+						blinkInfo.used = methods.wink || methods.blink;
+						mouthInfo.used = methods.mouth;
+						const clickButton = VM.chooseClickButton({
+							methods,
+							wink: eyeStep.wink,
+							blinkClick: eyeStep.blinkClick,
+							mouthOpen: mouthInfo.thresholdMet,
 							isMouthScrolling,
-							mouseButtonUntilMouthCloses,
 						});
-						const clickButton = arbitration.clickButton;
-						mouseButtonUntilMouthCloses = arbitration.mouseButtonUntilMouthCloses;
 
 						const buttonNames = ["left", "middle", "right"];
 						for (let buttonIndex = 0; buttonIndex < 3; buttonIndex++) {
@@ -4065,6 +4096,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 
 		updateInputFeedback?.({
 			headNotFound: !face && !facemeshPrediction,
+			lowConfidence: Boolean(facemeshPrediction) && currentConfidence < VM.CONFIDENCE_FLOOR,
+			lowLight: lowLightWatch.low,
 			blinkInfo,
 			mouthInfo,
 			foreheadInfo,
@@ -4370,11 +4403,16 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				movementY = 0;
 				handleTrackingLoss("no-valid-face");
 			}
+			currentConfidence = VM.trackingConfidence({ faceFound: hasValidFace, points: pointTracker.pointCount });
 
 			// Acceleration curve, optional head-tilt influence, motion threshold and drag delay.
 			// (core/src/tracking/cursor-motion.js — same math as before, pinned by tests.)
 			const timeSinceMouseDown = performance.now() - lastMouseDownTime;
 			let { deltaX, deltaY } = VM.computeCursorDelta({ movementX, movementY, s, headTilt, mouseX, mouseY, screenWidth, screenHeight, timeSinceMouseDown });
+			if (hasValidFace && currentConfidence < VM.CONFIDENCE_FLOOR) {
+				deltaX = 0; // hold the last good position (tilt influence included)
+				deltaY = 0;
+			}
 			const accelerate = (delta) => VM.accelerate(delta, s.headTrackingAcceleration);
 
 			if (debugAcceleration) {
@@ -4474,15 +4512,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			telemetryPoseEl.textContent = `Y: ${yawDeg > 0 ? '+' : ''}${yawDeg}° P: ${pitchDeg > 0 ? '+' : ''}${pitchDeg}°`;
 		}
 		if (telemetryModeEl) {
-			const modeNames = {
-				"blink": "Wink to Click",
-				"open-mouth": "Mouth + Modifiers",
-				"open-mouth-simple": "Open Mouth (Simple)",
-				"open-mouth-ignoring-eyes": "Open Mouth",
-				"dwell": "Dwell to Click",
-				"off": "Disabled"
-			};
-			telemetryModeEl.textContent = modeNames[s.clickingMode] || s.clickingMode || "Active";
+			telemetryModeEl.textContent = VM.clickingModeLabel(s);
 		}
 		if (telemetryStatusEl) {
 			telemetryStatusEl.textContent = paused ? "STANDBY" : "ACTIVE";
@@ -4526,15 +4556,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				activeActionDescEl.textContent = mouthScrollDirection === -1 ? "MOUTH OPEN + HEAD TILT UP" : "MOUTH OPEN + HEAD TILT DOWN";
 				actionWordContainerEl?.classList.add("action-triggered");
 			} else if (mouthInfo?.thresholdMet) {
-				if (s.clickingMode === "open-mouth") {
-					const btn = mouseButtonUntilMouthCloses;
-					const btnLabel = btn === 1 ? "MIDDLE CLICK (SCROLL)" : btn === 2 ? "RIGHT CLICK (CONTEXT)" : "PRIMARY LEFT CLICK";
-					activeActionWordEl.textContent = "MOUTH OPEN";
-					activeActionDescEl.textContent = `TRIGGER: ${btnLabel} (TILT HEAD UP/DOWN TO SCROLL)`;
-				} else {
-					activeActionWordEl.textContent = "MOUTH OPEN";
-					activeActionDescEl.textContent = "TRIGGER: PRIMARY LEFT CLICK / DRAG (TILT HEAD UP/DOWN TO SCROLL)";
-				}
+				activeActionWordEl.textContent = "MOUTH OPEN";
+				activeActionDescEl.textContent = "TRIGGER: PRIMARY LEFT CLICK / DRAG (TILT HEAD UP/DOWN TO SCROLL)";
 				actionWordContainerEl?.classList.add("action-triggered");
 			} else if (headTilt && Math.abs(headTilt.yaw * 180 / Math.PI) > 16) {
 				const yawDeg = Math.round(headTilt.yaw * 180 / Math.PI);
@@ -4548,15 +4571,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				actionWordContainerEl?.classList.add("action-triggered");
 			} else {
 				activeActionWordEl.textContent = "NEUTRAL / TRACKING";
-				const modeTips = {
-					"blink": "PROFILE: WINK L = LEFT CLICK • WINK R = RIGHT CLICK • TILT = SCROLL",
-					"open-mouth-simple": "PROFILE: DROP JAW ('O' SHAPE) TO LEFT CLICK & DRAG",
-					"open-mouth": "PROFILE: MOUTH = LEFT CLICK • MOUTH + WINK L/R = RIGHT/MID CLICK",
-					"dwell": "PROFILE: HOLD CURSOR STEADY TO AUTO-CLICK",
-					"open-mouth-ignoring-eyes": "PROFILE: OPEN MOUTH TO CLICK & HOLD",
-					"off": "PROFILE: HEAD MOTION ONLY (CLICKING DISABLED)",
-				};
-				activeActionDescEl.textContent = modeTips[s.clickingMode] || "CONTINUOUS OPTICAL FLOW ACTIVE";
+				activeActionDescEl.textContent = `CLICK METHOD: ${VM.clickingModeLabel(s).toUpperCase()}`;
 				actionWordContainerEl?.classList.remove("action-triggered");
 			}
 		}
@@ -4568,9 +4583,8 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 	let facemeshHz = 0;
 	let lastFacemeshEstimateTime = performance.now();
 	const lastMovement = [0, 0];
-	let brightnessFrameCounter = 0;
-	let frameBrightness = NaN;
 	let lastStatePublish = 0;
+	let lastDiagPublish = 0;
 	const previousGestureActive = {};
 	const MESH_CONTOURS = ["silhouette", "leftEyeUpper0", "leftEyeLower0", "rightEyeUpper0", "rightEyeLower0", "lipsUpperInner", "lipsLowerInner", "leftEyebrowUpper", "rightEyebrowUpper"];
 
@@ -4624,7 +4638,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				rightEye: eye(blinkInfo?.rightEye),
 				mouth: mouthInfo ? { ratio: mouthInfo.heightRatio, open: Boolean(mouthInfo.thresholdMet), active: Boolean(mouthInfo.active) } : null,
 				brow: foreheadInfo ? { ratio: foreheadInfo.avgRatio, raised: Boolean(foreheadInfo.thresholdMet), progress: eyebrowGestureProgress } : null,
-				sleep: { progress: sleepGestureProgress, enabled: Boolean(s.closeEyesToToggle) },
+				sleep: { progress: sleepGestureProgress, enabled: s.pauseMethod === "closeEyes" },
 				scroll: mouthScrollDirection,
 				thresholds: gestureThresholds(),
 				bindings: VM.gestureBindings(s),
@@ -4632,7 +4646,12 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			},
 			buttons: { ...buttonStates },
 			cursor: { x: mouseX, y: mouseY },
-			clickingMode: s.clickingMode,
+			clickingMode: VM.clickingModeLabel(s),
+			clickMethods: VM.clickMethods(s),
+			pauseMethod: s.pauseMethod === "closeEyes" ? "closeEyes" : "blinks3",
+			light: Number.isFinite(frameBrightness) ? Math.round(frameBrightness) : null,
+			lowLight: lowLightWatch.low,
+			confidence: Math.round(currentConfidence * 100) / 100,
 			camera: {
 				status: cameraStatus,
 				error: lastCameraError ? { name: lastCameraError.name, message: lastCameraError.message } : null,
@@ -4664,6 +4683,37 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			lastStatePublish = now;
 			emitEngine("state", getEngineState());
 		}
+		if (now - lastDiagPublish >= 100) {
+			lastDiagPublish = now;
+			emitEngine("diag", getDiag());
+		}
+	}
+
+	/** The vision:diag sample (10 Hz): each gesture's live value against its threshold. */
+	function getDiag() {
+		const th = gestureThresholds();
+		const eyes = blinkInfo ? [blinkInfo.leftEye.heightRatio, blinkInfo.rightEye.heightRatio] : [NaN, NaN];
+		// Eye values fall as the eye closes: `below` marks gestures that fire under the threshold.
+		const eye = (value) => ({ value, threshold: th.eye.low, below: true });
+		return {
+			gestures: {
+				leftWink: eye(eyes[0]),
+				rightWink: eye(eyes[1]),
+				blink: eye(Math.max(eyes[0], eyes[1])),
+				mouthOpen: { value: mouthInfo?.heightRatio ?? NaN, threshold: th.mouth.high },
+				browRaise: { value: foreheadInfo?.avgRatio ?? NaN, threshold: th.brow.high },
+				eyesClosed: { value: sleepGestureProgress, threshold: 1 },
+			},
+			fps: Math.round(smoothedFPS * 10) / 10,
+			light: Number.isFinite(frameBrightness) ? Math.round(frameBrightness) : null,
+			lowLight: lowLightWatch.low,
+			confidence: Math.round(currentConfidence * 100) / 100,
+			pose: {
+				yaw: VM.radToDeg(headTilt.yaw || 0),
+				pitch: VM.radToDeg(headTilt.pitch || 0),
+				roll: VM.radToDeg(headTilt.roll || 0),
+			},
+		};
 	}
 
 	/** Data for drawing a viewfinder: tracked points, face contours, nose anchor, motion (camera pixels, unmirrored). */
@@ -4782,6 +4832,13 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			dot.style.backgroundColor = paused ? "#d29922" : "#3fb950";
 		}
 	};
+	/** Pause/resume from a face gesture (three quick blinks or closed eyes). */
+	function togglePauseByGesture(gesture) {
+		paused = !paused;
+		updatePaused();
+		sleepSweep?.sleepModeWasToggled(paused);
+		emitEngine("gesture", { gesture, action: paused ? "PAUSE" : "RESUME" });
+	}
 	const updatePaused = () => {
 		mouseNeedsInitPos = true;
 		if (paused) {

@@ -21,7 +21,7 @@ document.body.appendChild(bigButton);
 let dwellDragEnabled = false;
 let heldByDwell = false;
 let heldSince = 0;
-let dwellTimeMs = 800;
+let dwellTimeMs = 1000;
 
 window.addEventListener("pointerdown", (event) => {
 	if (!dwellDragEnabled || heldByDwell || event.target !== bigButton) {
@@ -86,11 +86,13 @@ electronAPI.onMouseMove((_event, x, y) => {
 	view.moveTo(x, y);
 });
 
-electronAPI.onPulse?.((_event, label) => view.pulse(label));
+electronAPI.onPulse?.((_event, label) => (label === "find" ? view.findCursor() : view.pulse(label)));
+
+let toldLowLight = false;
 
 let wasDwellClickerEnabled = false;
 electronAPI.onOverlayUpdate((_event, data) => {
-	const { isEnabled, isManualTakeback, clickingMode, soundEffectsEnabled, heldButtons, systemMousePosition, inputFeedback } = data;
+	const { isEnabled, isManualTakeback, clickDwell, soundEffectsEnabled, heldButtons, systemMousePosition, inputFeedback } = data;
 	dwellDragEnabled = Boolean(data.dwellDrag);
 	if (Number.isFinite(data.dwellTime) && data.dwellTime > 0) {
 		dwellTimeMs = data.dwellTime;
@@ -99,8 +101,14 @@ electronAPI.onOverlayUpdate((_event, data) => {
 	if (systemMousePosition) {
 		view.moveTo(systemMousePosition.x, systemMousePosition.y);
 	}
-	view.setMode(isManualTakeback ? "takeover" : !isEnabled ? "paused" : inputFeedback?.headNotFound ? "noface" : "tracking",
-		data.closeEyesToToggle ? "PAUSED · CLOSE EYES 2S" : "PAUSED · F9");
+	const lost = inputFeedback?.headNotFound || inputFeedback?.lowConfidence;
+	view.setMode(isManualTakeback ? "takeover" : !isEnabled ? "paused" : lost ? "noface" : "tracking",
+		data.pauseMethod === "closeEyes" ? "Paused · Close your eyes 2 s to resume" : "Paused · Blink 3 times to resume");
+	// Said once per session, while face control is running.
+	if (inputFeedback?.lowLight && isEnabled && !toldLowLight) {
+		toldLowLight = true;
+		view.showTag("More light on your face would help.", { ms: 5000 });
+	}
 
 	// If the main process released the button (pause, F9, manual takeover, ...),
 	// drop our local drag state too. Small grace period for the press round-trip.
@@ -108,7 +116,8 @@ electronAPI.onOverlayUpdate((_event, data) => {
 		releaseDwellDragLocally();
 	}
 
-	const dwellClickerEnabled = isEnabled && clickingMode === "dwell";
+	// Dwell off: nothing clicks by holding still.
+	const dwellClickerEnabled = isEnabled && clickDwell === true;
 	if (wasDwellClickerEnabled !== dwellClickerEnabled) {
 		document.dispatchEvent(new Event(dwellClickerEnabled ? "mouseenter" : "mouseleave"));
 		window.dispatchEvent(new Event(dwellClickerEnabled ? "focus" : "blur"));

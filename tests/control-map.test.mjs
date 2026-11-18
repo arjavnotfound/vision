@@ -24,7 +24,7 @@ describe("adaptive control map", () => {
 			mouth: assessGesture("mouth", goodMouth), brow: assessGesture("brow", goodBrow),
 		});
 		assert.deepEqual(plan, { clickingMode: "blink", leftClick: "leftWink", rightClick: "rightWink", scroll: "mouth", keyboard: "brow" });
-		assert.deepEqual(controlSettings(plan), { clickingMode: "blink", mouthTiltScroll: true, eyebrowRaiseOpensKeyboard: true });
+		assert.deepEqual(controlSettings(plan), { clickWink: true, clickDwell: false, mouthTiltScroll: true, eyebrowRaiseOpensKeyboard: true });
 	});
 
 	it("moves right click to raised brows when the right wink closes both eyes", () => {

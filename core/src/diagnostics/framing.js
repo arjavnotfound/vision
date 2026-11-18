@@ -12,22 +12,78 @@ export const FRAMING_LIMITS = Object.freeze({
 
 /**
  * Mean luma of an RGBA ImageData-like object, sampling every `stride`-th pixel.
+ * With `box` (frame pixels), only pixels inside it count: the light on the face.
  * @param {{data: Uint8ClampedArray|number[], width: number, height: number}} imageData
+ * @param {number} [stride]
+ * @param {{x:number,y:number,width:number,height:number}|null} [box]
  */
-export function measureBrightness(imageData, stride = 16) {
-	const { data } = imageData;
+export function measureBrightness(imageData, stride = 16, box = null) {
+	const { data, width, height } = imageData;
 	if (!data || !data.length) {
 		return 0;
 	}
 	let sum = 0;
 	let count = 0;
+	// Rec. 601 luma, integer approximation
+	const luma = (i) => (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+	if (box && width > 0 && height > 0) {
+		const x0 = Math.max(0, Math.floor(box.x)), x1 = Math.min(width, Math.ceil(box.x + box.width));
+		const y0 = Math.max(0, Math.floor(box.y)), y1 = Math.min(height, Math.ceil(box.y + box.height));
+		const step = Math.max(1, Math.round(Math.sqrt(stride)));
+		for (let y = y0; y < y1; y += step) {
+			for (let x = x0; x < x1; x += step) {
+				sum += luma((y * width + x) * 4);
+				count++;
+			}
+		}
+		if (count) return sum / count;
+	}
 	const step = Math.max(1, stride) * 4;
 	for (let i = 0; i + 2 < data.length; i += step) {
-		// Rec. 601 luma, integer approximation
-		sum += (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+		sum += luma(i);
 		count++;
 	}
 	return count ? sum / count : 0;
+}
+
+/**
+ * Low light: the face has been darker than `threshold` for `holdMs`.
+ * `step` returns true exactly once per session (the one "More light" notice);
+ * `low` is the current debounced state (for the overlay and Diagnostics).
+ */
+export function createLowLightWatch({ threshold = FRAMING_LIMITS.minBrightness, holdMs = 3000 } = {}) {
+	let darkSince = null;
+	let told = false;
+	const watch = {
+		low: false,
+		step(brightness, now) {
+			if (!Number.isFinite(brightness) || brightness >= threshold) {
+				darkSince = null;
+				watch.low = false;
+				return false;
+			}
+			darkSince ??= now;
+			watch.low = now - darkSince >= holdMs;
+			if (watch.low && !told) {
+				told = true;
+				return true;
+			}
+			return false;
+		},
+	};
+	return watch;
+}
+
+/** Below this tracking confidence the cursor holds its last good position. */
+export const CONFIDENCE_FLOOR = 0.2;
+// shortcut: confidence is the optical-flow point count (face mesh reports a fixed 0.9999);
+// upgrade if the landmark model ever gives a real score.
+const CONFIDENT_POINTS = 60;
+
+/** 0..1: how much the cursor can trust this frame's movement. */
+export function trackingConfidence({ faceFound, points }) {
+	if (!faceFound) return 0;
+	return Math.min(1, Math.max(0, points || 0) / CONFIDENT_POINTS);
 }
 
 /**

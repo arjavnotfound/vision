@@ -2,9 +2,11 @@
 // its own copy in localStorage (dwell 900 ms vs the face window's 800 ms, wake sensitivity,
 // island edge); those values move here once, the first time the island window starts.
 
-const DWELL_DEFAULT_MS = 800;
+const DWELL_DEFAULT_MS = 1000;
 const DWELL_MIN_MS = 600;
-const DWELL_MAX_MS = 1500;
+const DWELL_MAX_MS = 2000;
+// The face window's dwell default before the UX overhaul.
+const OLD_FACE_DWELL_MS = 800;
 const OLD_CONSOLE_DWELL_MS = 900;
 const WAKE_SENSITIVITIES = ['relaxed', 'normal'];
 // VISION's own voice. Never below 10: a silent VISION can't tell anyone what went wrong.
@@ -28,6 +30,8 @@ function islandSettings(global = {}) {
 		dwellTime: Number.isFinite(global.dwellTime) ? clampDwell(global.dwellTime) : DWELL_DEFAULT_MS,
 		wakeSensitivity: normalizeWake(global.wakeSensitivity),
 		islandEdge: global.islandEdge === 'bottom' ? 'bottom' : 'top',
+		islandPosition: ISLAND_POSITIONS.includes(global.islandPosition) ? global.islandPosition : 'top-center',
+		wakePhrase: global.wakePhrase === 'vision' ? 'vision' : 'hey-vision',
 		voiceVolume: parseVolume(global.voiceVolume, VOLUME_DEFAULT) ?? VOLUME_DEFAULT,
 		soundsOn: global.soundsOn !== false,
 		soundVolume: parseVolume(global.soundVolume, SOUND_VOLUME_DEFAULT) ?? SOUND_VOLUME_DEFAULT,
@@ -44,7 +48,7 @@ function migrateIslandSettings(global = {}, old = {}) {
 	if (global.islandSettingsMigrated === true) return null;
 	const patch = { islandSettingsMigrated: true };
 	const oldDwell = Number(old?.dwellMs);
-	const faceDwellDefault = global.dwellTime === undefined || global.dwellTime === DWELL_DEFAULT_MS;
+	const faceDwellDefault = global.dwellTime === undefined || global.dwellTime === OLD_FACE_DWELL_MS || global.dwellTime === DWELL_DEFAULT_MS;
 	if (Number.isFinite(oldDwell) && oldDwell !== OLD_CONSOLE_DWELL_MS && faceDwellDefault) {
 		patch.dwellTime = clampDwell(oldDwell);
 	}
@@ -53,6 +57,42 @@ function migrateIslandSettings(global = {}, old = {}) {
 	}
 	if (global.islandEdge === undefined && (old?.islandEdge === 'top' || old?.islandEdge === 'bottom')) {
 		patch.islandEdge = old.islandEdge;
+	}
+	return patch;
+}
+
+const ISLAND_POSITIONS = ['top-center', 'top-right', 'bottom-center'];
+const MOUTH_MODES = ['open-mouth', 'open-mouth-simple', 'open-mouth-ignoring-eyes'];
+
+/**
+ * Patch that moves the settings from before the UX overhaul to the new keys
+ * (clickingMode -> clickWink/clickBlink/clickMouth/clickDwell, closeEyesToToggle ->
+ * pauseMethod, wakeSensitivity -> wakePhrase, islandEdge -> islandPosition) and the
+ * old 800 ms dwell default to 1 s. Each new key is filled only while it is missing, so
+ * running it again changes nothing. The old keys stay in the file, unused.
+ */
+function migrateLegacySettings(global = {}) {
+	const patch = {};
+	const missing = (key) => global[key] === undefined;
+	if (['clickWink', 'clickBlink', 'clickMouth', 'clickDwell'].every(missing)) {
+		const mode = global.clickingMode;
+		if (mode !== undefined) {
+			patch.clickWink = mode === 'blink';
+			patch.clickBlink = false;
+			patch.clickMouth = MOUTH_MODES.includes(mode);
+			patch.clickDwell = mode === 'dwell';
+		}
+		if (global.dwellTime === OLD_FACE_DWELL_MS) patch.dwellTime = DWELL_DEFAULT_MS;
+	}
+	if (missing('pauseMethod') && global.closeEyesToToggle !== undefined) {
+		patch.pauseMethod = global.closeEyesToToggle ? 'closeEyes' : 'blinks3';
+	}
+	if (missing('wakePhrase') && global.wakeSensitivity !== undefined) {
+		// Relaxed let a plain "Vision" wake it; normal (and the old strict) wanted "Hey Vision".
+		patch.wakePhrase = global.wakeSensitivity === 'relaxed' ? 'vision' : 'hey-vision';
+	}
+	if (missing('islandPosition') && global.islandEdge !== undefined) {
+		patch.islandPosition = global.islandEdge === 'bottom' ? 'bottom-center' : 'top-center';
 	}
 	return patch;
 }
@@ -84,6 +124,6 @@ function sanitizeGlobal(global = {}) {
 }
 
 module.exports = {
-	islandSettings, migrateIslandSettings, sanitizeGlobal, normalizeWake, parseVolume,
+	islandSettings, migrateIslandSettings, migrateLegacySettings, sanitizeGlobal, normalizeWake, parseVolume,
 	DWELL_DEFAULT_MS, DWELL_MIN_MS, DWELL_MAX_MS,
 };

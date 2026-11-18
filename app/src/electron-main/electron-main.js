@@ -225,11 +225,11 @@ const inputDriver = require('./input-driver.js');
 const { setMouseLocation: setMouseLocationWithoutTracking, getMouseLocation, click, mouseDown, mouseUp, mouseUpSync, pressKey } = inputDriver;
 console.log(`[VISION] Native input driver: ${inputDriver.describe()}`);
 const { createMouseSafetyCoordinator } = require('./mouse-safety.js');
-const { createScrollHandler, createOverlaySync, summarizeInputFeedback } = require('./input-gates.js');
+const { createScrollHandler, createOverlaySync, summarizeInputFeedback, createFaceReturnPulse } = require('./input-gates.js');
 const { ensureInitialRelativeMouseMove } = require('./win-relative-mouse.js');
 const { allowGestureButton, allowGestureScroll, isMouthClickMode } = require('./gesture-policy.js');
 const { createVisionBus } = require('./vision-bus.js');
-const { islandSettings, migrateIslandSettings, sanitizeGlobal, parseVolume } = require('./settings-migrate.js');
+const { islandSettings, migrateIslandSettings, migrateLegacySettings, sanitizeGlobal, parseVolume } = require('./settings-migrate.js');
 const screen = require('electron').screen; // Note: can't be used until ready event
 
 // Link to the voice assistant (see vision-bus.js). `live`: the assistant's mic is open.
@@ -247,7 +247,7 @@ let enabled = true;
 let regainControlTimeout = null;
 
 function isClickingAllowed() {
-	if (regainControlTimeout || !enabled || activeSettings.clickingMode === 'off') {
+	if (regainControlTimeout || !enabled) {
 		return false;
 	}
 
@@ -436,6 +436,11 @@ async function loadSettings() {
 		throw new Error(`Unsupported settings file format version (${settings.formatVersion}). This version of the app only supports up to format version ${formatVersion}.`);
 	}
 	deserializeSettings(settings);
+	const upgrade = migrateLegacySettings(activeSettings);
+	if (Object.keys(upgrade).length) {
+		Object.assign(activeSettings, upgrade);
+		await saveSettings();
+	}
 }
 
 // TODO: DRY with loadSettings
@@ -661,8 +666,8 @@ const createWindow = () => {
 		return {
 			isEnabled: enabled && !isManualTakeback,
 			isManualTakeback,
-			clickingMode: activeSettings.clickingMode,
-			closeEyesToToggle: Boolean(activeSettings.closeEyesToToggle),
+			clickDwell: activeSettings.clickDwell === true,
+			pauseMethod: activeSettings.pauseMethod === 'closeEyes' ? 'closeEyes' : 'blinks3',
 			dwellDrag: Boolean(activeSettings.dwellDrag),
 			dwellTime: activeSettings.dwellTime,
 			inputFeedback: summarizeInputFeedback(inputFeedback),
@@ -689,7 +694,8 @@ const createWindow = () => {
 		const status = {
 			tracking: Boolean(enabled),
 			seen: !inputFeedback?.headNotFound,
-			eyesResume: Boolean(activeSettings.closeEyesToToggle),
+			eyesResume: true,
+			pauseMethod: activeSettings.pauseMethod === 'closeEyes' ? 'closeEyes' : 'blinks3',
 		};
 		const key = JSON.stringify(status);
 		if (key === faceStatusSent || !orb) return;
@@ -779,8 +785,10 @@ const createWindow = () => {
 
 		updateDwellClickingAndHUD();
 	});
+	const faceReturned = createFaceReturnPulse();
 	ipcMain.on('updateInputFeedback', (_event, data) => {
 		inputFeedback = data;
+		if (faceReturned(Boolean(data?.headNotFound), performance.now())) firePulse();
 		updateDwellClickingAndHUD();
 	});
 
@@ -789,7 +797,7 @@ const createWindow = () => {
 		deserializeSettings(newOptions);
 		saveSettings();
 		sendIslandSettings();
-		if (activeSettings.clickingMode === 'off') {
+		if (!activeSettings.clickWink && !activeSettings.clickBlink && !activeSettings.clickMouth) {
 			mouseSafety.releaseAllMouseButtons('clicking-mode-off');
 		}
 	});
@@ -840,7 +848,8 @@ const createWindow = () => {
 		const policy = allowGestureButton({
 			button,
 			down,
-			clickingMode: activeSettings.clickingMode,
+			mouthClick: activeSettings.clickMouth === true,
+			leftEyeClosed: Boolean(inputFeedback?.blinkInfo?.leftEye?.thresholdMet),
 			voiceLive: assistantState.live,
 			controlMap: activeSettings.controlMap,
 		});
@@ -1262,7 +1271,7 @@ function setAssistantState({ connected, live }) {
 	assistantState.connected = connected;
 	assistantState.live = live;
 	assistantState.at = Date.now();
-	if (live && !wasLive && isMouthClickMode(activeSettings.clickingMode)) {
+	if (live && !wasLive && isMouthClickMode(activeSettings)) {
 		// Talking starts: let go of anything the mouth was holding.
 		mouseSafety.releaseAllMouseButtons('voice-on');
 	}
@@ -1273,6 +1282,14 @@ function setAssistantState({ connected, live }) {
 	audioDuck?.set(Boolean(live));
 	sendBusState();
 }
+
+/** "Where's my cursor": three ember rings around the cursor on the overlay. */
+function firePulse() {
+	if (screenOverlayWindow && !screenOverlayWindow.isDestroyed()) {
+		screenOverlayWindow.webContents.send('overlayPulse', 'find');
+	}
+}
+ipcMain.on('vision:pulse', () => firePulse());
 
 function showAppWindow() {
 	showWindowInactive(appWindow);
@@ -1294,6 +1311,11 @@ async function handleBusCommand(cmd, value) {
 	if (cmd === 'status') {
 		return { state: busStatus() };
 	}
+	if (cmd === 'pulse') {
+		// "Vision, where's my cursor"
+		firePulse();
+		return { done: 'pulse' };
+	}
 	if (cmd === 'set-setting' && value?.name === 'volume') {
 		// VISION's own voice; the island applies it. Other settings go to the face window.
 		const volume = parseVolume(value.value, activeSettings.voiceVolume);
@@ -1314,7 +1336,7 @@ async function handleBusCommand(cmd, value) {
 		if (!process.env.VISION_FAKE_INPUT) {
 			throw new Error('self-test needs the fake input driver');
 		}
-		const policy = allowGestureButton({ button: 0, down: true, clickingMode: 'blink', voiceLive: assistantState.live, controlMap: activeSettings.controlMap });
+		const policy = allowGestureButton({ button: 0, down: true, voiceLive: assistantState.live, controlMap: activeSettings.controlMap });
 		if (!policy.allowed) {
 			return { done: 'blocked', reason: policy.reason };
 		}
@@ -1351,7 +1373,7 @@ async function handleBusCommand(cmd, value) {
 function busStatus() {
 	return {
 		tracking: enabled,
-		clickingMode: activeSettings.clickingMode,
+		clickMethods: { wink: activeSettings.clickWink !== false, blink: activeSettings.clickBlink === true, mouth: activeSettings.clickMouth === true, dwell: activeSettings.clickDwell === true },
 		voiceLive: assistantState.live,
 		controlMap: activeSettings.controlMap ?? null,
 	};

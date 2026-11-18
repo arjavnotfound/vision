@@ -109,8 +109,11 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		await setFace(NEUTRAL);
 		await waitFor(() => ev("window.visionEngine.getState().faceFound"), 30000);
 		await ev(`window.__qa = []; for (const type of ["gesture", "click"]) window.visionEngine.on(type, (e) => window.__qa.push({ type, ...e })); true`);
-		await set("clickingMode", "blink");
-		await set("closeEyesToToggle", false);
+		await set("clickWink", true);
+		await set("clickBlink", false);
+		await set("clickMouth", false);
+		await set("clickDwell", false);
+		await set("pauseMethod", "blinks3");
 		await set("delayBeforeDragging", 0);
 		await ev("window.visionEngine.setPaused(false); true");
 		await sleep(1500);
@@ -146,7 +149,7 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		const browEvents = await ev(`window.__qa.filter((e) => e.type === "gesture" && e.gesture === "brow").length`);
 		record("brow raise detected", browEvents >= 1, `${browEvents} brow gesture event(s)`);
 
-		// 4. Mouth open + head tilted up -> scroll up (blink mode)
+		// 4. Mouth open + head tilted up -> scroll up (Wink method)
 		t = Date.now();
 		await setFace({ ...NEUTRAL, mouth: 0.5, pitch: 12 });
 		await sleep(900);
@@ -155,8 +158,8 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		const scrolls = readDriver().filter((e) => e.t >= t && e.op === "key");
 		record("mouth open + tilt up scrolls up", scrolls.length > 0 && scrolls.every((e) => e.key === "up"), `${scrolls.length} scroll steps (${[...new Set(scrolls.map((e) => e.key))].join(",")})`);
 
-		// 5. Mouth click (open-mouth-simple)
-		await set("clickingMode", "open-mouth-simple");
+		// 5. Mouth click (Mouth method on, alongside Wink)
+		await set("clickMouth", true);
 		t = Date.now();
 		await setFace({ ...NEUTRAL, mouth: 0.5 });
 		await sleep(900);
@@ -165,8 +168,8 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		record("open mouth fires LEFT CLICK / hold", ops(t, "down", "left").length >= 1 && ops(t, "up", "left").length >= 1,
 			`driver: ${ops(t, "down", "left").length} down / ${ops(t, "up", "left").length} up`);
 
-		// 6. Sleep gesture toggles pause (when enabled)
-		await set("closeEyesToToggle", true);
+		// 6. Pause method "close eyes": closed eyes toggle pause
+		await set("pauseMethod", "closeEyes");
 		await setFace({ ...NEUTRAL, leftEye: 0.05, rightEye: 0.05 });
 		const pausedBySleep = await waitFor(() => ev("window.visionEngine.isPaused()"), 4000);
 		await setFace(NEUTRAL);
@@ -174,9 +177,29 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		await setFace({ ...NEUTRAL, leftEye: 0.05, rightEye: 0.05 });
 		const resumedBySleep = await waitFor(async () => !(await ev("window.visionEngine.isPaused()")), 4000);
 		await setFace(NEUTRAL);
-		await set("closeEyesToToggle", false);
+		await set("pauseMethod", "blinks3");
 		await sleep(500);
 		record("close eyes 2 s pauses and resumes", Boolean(pausedBySleep && resumedBySleep), `paused ${Boolean(pausedBySleep)}, resumed ${Boolean(resumedBySleep)}`);
+
+		// 6b. Pause method "three quick blinks" (the default)
+		const threeBlinks = async () => {
+			for (let i = 0; i < 3; i++) {
+				await setFace({ ...NEUTRAL, leftEye: 0.05, rightEye: 0.05 });
+				await sleep(170);
+				await setFace(NEUTRAL);
+				await sleep(230);
+			}
+		};
+		await ev("window.__qa.length = 0; true");
+		await threeBlinks();
+		const pausedByBlinks = await waitFor(() => ev("window.visionEngine.isPaused()"), 1500);
+		await sleep(1600);
+		await threeBlinks();
+		const resumedByBlinks = await waitFor(async () => !(await ev("window.visionEngine.isPaused()")), 1500);
+		const pauseEvents = await ev(`window.__qa.filter((e) => e.type === "gesture" && e.gesture === "tripleBlink").map((e) => e.action).join(",")`);
+		record("three quick blinks pause and resume", Boolean(pausedByBlinks && resumedByBlinks) && pauseEvents === "PAUSE,RESUME",
+			`paused ${Boolean(pausedByBlinks)}, resumed ${Boolean(resumedByBlinks)}, events ${pauseEvents || "-"}`);
+		await sleep(500);
 
 		// 7. F9 (real global hotkey) while a gesture holds the button -> released
 		t = Date.now();
@@ -207,8 +230,14 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		await setFace(NEUTRAL);
 		await sleep(2800); // takeover lasts 2 s after the mouse stops
 
+		// 8b. Wink on, Dwell off: holding still clicks nothing
+		await set("clickMouth", false);
+		t = Date.now();
+		await sleep(3000);
+		record("wink on, dwell off: holding still never clicks", ops(t, "down").length === 0, `${ops(t, "down").length} presses in 3 s`);
+
 		// 9. Dwell click on the desktop overlay
-		await set("clickingMode", "dwell");
+		await set("clickDwell", true);
 		t = Date.now();
 		const dwellClick = await waitFor(() => readDriver().some((e) => e.t >= t && e.op === "down" && e.via === "click"), 8000);
 		record("dwell click on the desktop", Boolean(dwellClick), dwellClick ? `clicked after ${readDriver().find((e) => e.t >= t && e.via === "click").t - t} ms` : "no click");
@@ -221,7 +250,8 @@ async function waitFor(fn, timeoutMs, stepMs = 100) {
 		const dragUp = dragDown ? await waitFor(() => ops(dragDown.t + 1, "up", "left").find((e) => !e.via), 8000) : null;
 		record("dwell drag: grab then drop", Boolean(dragDown && dragUp), dragDown ? `down, then up after ${dragUp ? dragUp.t - dragDown.t : "?"} ms` : "no press");
 		await set("dwellDrag", false);
-		await set("clickingMode", "open-mouth-simple");
+		await set("clickDwell", false);
+		await set("clickMouth", true);
 		await sleep(1500);
 
 		// 11. Quit while a gesture holds the button -> released on the way out

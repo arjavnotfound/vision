@@ -7,7 +7,8 @@ import { createRequire } from "node:module";
 import {
 	OneEuroFilter, getAspectMetrics, signedDistancePointLine,
 	detectBlinks, detectMouthOpen, detectForeheadRaised, DEFAULT_THRESHOLDS,
-	stepEyebrowHold, stepSleepHold, resolveClickButton, mouthScrollDirection,
+	stepEyebrowHold, stepSleepHold, mouthScrollDirection,
+	clickMethods, createEyeArbiter, chooseClickButton, clickingModeLabel,
 	computeHeadTilt, createHeadTiltSmoother, computeCursorDelta, gestureBindings,
 } from "../core/src/index.js";
 
@@ -197,38 +198,118 @@ describe("Hold gestures, scroll and click arbitration (pinned)", () => {
 		}
 	});
 
-	it("click arbitration matches for every clicking mode, including its mutations", () => {
-		const random = rng(11);
-		const modes = ["blink", "open-mouth-simple", "open-mouth", "dwell", "open-mouth-ignoring-eyes", "off"];
-		for (const mode of modes) {
-			let latchNew = -1, latchOld = -1;
-			let prevMouth = false;
-			for (let i = 0; i < 500; i++) {
-				const eye = () => ({ open: random() < 0.6, active: random() < 0.3 });
-				const blink = { leftEye: eye(), rightEye: eye() };
-				const mouth = { thresholdMet: random() < 0.5, active: random() < 0.5 };
-				const scrolling = random() < 0.2;
-				const blinkA = structuredClone(blink), mouthA = structuredClone(mouth);
-				const blinkB = structuredClone(blink), mouthB = structuredClone(mouth);
-				const r = resolveClickButton({ clickingMode: mode, blinkInfo: blinkA, mouthInfo: mouthA, prevMouthOpen: prevMouth, isMouthScrolling: scrolling, mouseButtonUntilMouthCloses: latchNew });
-				const l = legacy.arbitrate({ s: { clickingMode: mode }, blinkInfo: blinkB, mouthInfo: mouthB, prevMouthOpen: prevMouth, isMouthScrolling: scrolling, mouseButtonUntilMouthCloses: latchOld });
-				assert.deepEqual(r, l);
-				assert.deepEqual(blinkA, blinkB);
-				assert.deepEqual(mouthA, mouthB);
-				latchNew = r.mouseButtonUntilMouthCloses;
-				latchOld = l.mouseButtonUntilMouthCloses;
-				prevMouth = mouth.thresholdMet;
+	it("gesture bindings describe what arbitration actually does", () => {
+		assert.equal(gestureBindings({}).leftWink, "LEFT CLICK", "wink is on by default");
+		assert.equal(gestureBindings({}).rightWink, "RIGHT CLICK");
+		assert.equal(gestureBindings({ clickWink: false, clickDwell: true }).leftWink, "OFF");
+		assert.equal(gestureBindings({ clickMouth: true, mouthTiltScroll: false }).mouth, "LEFT CLICK");
+		assert.equal(gestureBindings({ clickBlink: true }).blink, "LEFT CLICK");
+		assert.equal(gestureBindings({ pauseMethod: "closeEyes" }).sleep, "PAUSE");
+		assert.equal(gestureBindings({}).tripleBlink, "PAUSE", "three quick blinks is the default pause");
+		assert.equal(gestureBindings({ eyebrowRaiseOpensKeyboard: false }).brow, "OFF");
+		assert.equal(clickingModeLabel({ clickWink: true, clickDwell: true }), "Wink, Dwell");
+		assert.equal(clickingModeLabel({ clickWink: false }), "No click method");
+	});
+});
+
+// Eye sequences through the real detector: [ms, leftOpen, rightOpen] segments at 30 Hz.
+function playEyes(segments, settings = {}, seed = 21) {
+	const random = rng(seed);
+	const arbiter = createEyeArbiter();
+	const methods = clickMethods(settings);
+	let info = null;
+	let now = 0;
+	const out = { buttons: [], triples: 0, winks: 0, blinkClicks: 0 };
+	let lastButton = -1;
+	for (const [ms, l, r] of segments) {
+		for (let t = 0; t < ms; t += 33) {
+			now += 33;
+			info = detectBlinks(randomFace(random, { eyeOpenL: l ? 0.3 : 0.02, eyeOpenR: r ? 0.3 : 0.02, mouthOpen: 0.05, browLift: 0 }), info, now);
+			const step = arbiter.step(info, now);
+			if (step.tripleBlink) out.triples++;
+			const button = chooseClickButton({ methods, wink: step.wink, blinkClick: step.blinkClick });
+			if (button !== lastButton && button !== -1) out.buttons.push(button);
+			lastButton = button;
+		}
+	}
+	return out;
+}
+const OPEN = (ms) => [ms, 1, 1];
+const SHUT = (ms) => [ms, 0, 0];
+
+describe("Click methods and the eye arbiter", () => {
+	it("a wink clicks its own side: left eye = left click, right eye = right click", () => {
+		assert.deepEqual(playEyes([OPEN(500), [500, 0, 1], OPEN(500)]).buttons, [0]);
+		assert.deepEqual(playEyes([OPEN(500), [500, 1, 0], OPEN(500)]).buttons, [2]);
+	});
+
+	it("a wink never also counts as a blink, and a blink never as a wink", () => {
+		const all = { clickWink: true, clickBlink: true };
+		// Left wink whose right eye also dips shut at the end: one left click, no blink click.
+		assert.deepEqual(playEyes([OPEN(500), [500, 0, 1], SHUT(600), OPEN(500)], all).buttons, [0]);
+		// A deliberate blink that reopens unevenly (left eye first): one left click from the blink,
+		// not a right-wink right click.
+		assert.deepEqual(playEyes([OPEN(500), SHUT(700), [300, 1, 0], OPEN(500)], all).buttons, [0]);
+		assert.deepEqual(playEyes([OPEN(500), SHUT(700), [300, 1, 0], OPEN(500)], { clickWink: true }).buttons, [], "blink off: nothing");
+	});
+
+	it("blink click needs a held blink; quick blinks and closed eyes do not click", () => {
+		const blink = { clickWink: false, clickBlink: true };
+		assert.deepEqual(playEyes([OPEN(500), SHUT(200), OPEN(500)], blink).buttons, []);
+		assert.deepEqual(playEyes([OPEN(500), SHUT(700), OPEN(500)], blink).buttons, [0]);
+		assert.deepEqual(playEyes([OPEN(500), SHUT(2200), OPEN(500)], blink).buttons, [], "2 s closed is the pause, not a click");
+	});
+
+	it("three quick blinks inside 1.5 s pause; two do not", () => {
+		const blinks = (n, gap) => Array.from({ length: n }, () => [SHUT(150), OPEN(gap)]).flat();
+		assert.equal(playEyes([OPEN(500), ...blinks(3, 250)]).triples, 1);
+		assert.equal(playEyes([OPEN(500), ...blinks(2, 250), OPEN(2000)]).triples, 0);
+		assert.equal(playEyes([OPEN(500), ...blinks(3, 900)]).triples, 0, "spread over 2 s+ is natural blinking");
+	});
+
+	it("natural blinking for 10 minutes never pauses and never clicks", () => {
+		// Natural blinking: every 1.5-8 s, 100-300 ms long, eyes a frame apart, with
+		// double blinks (300-700 ms apart) one time in six.
+		const random = rng(4242);
+		const segments = [OPEN(1000)];
+		let total = 0;
+		while (total < 600000) {
+			const gap = 1500 + random() * 6500;
+			segments.push(OPEN(gap));
+			const blinkOnce = () => {
+				const ms = 100 + random() * 200;
+				segments.push(random() < 0.5 ? [33, 0, 1] : [33, 1, 0], SHUT(ms), random() < 0.5 ? [33, 1, 0] : [33, 0, 1]);
+				return ms + 66;
+			};
+			total += gap + blinkOnce();
+			if (random() < 1 / 6) {
+				const between = 300 + random() * 400;
+				segments.push(OPEN(between));
+				total += between + blinkOnce();
 			}
+		}
+		const result = playEyes(segments, { clickWink: true, clickBlink: true }, 77);
+		assert.equal(result.triples, 0);
+		assert.deepEqual(result.buttons, []);
+	});
+
+	it("wink on and dwell off: holding still never clicks", () => {
+		const methods = clickMethods({ clickWink: true, clickDwell: false });
+		assert.equal(methods.dwell, false);
+		// 10 s of a still face, eyes open, mouth closed.
+		const still = playEyes([OPEN(10000)], { clickWink: true, clickDwell: false });
+		assert.deepEqual(still.buttons, []);
+		for (let i = 0; i < 300; i++) {
+			assert.equal(chooseClickButton({ methods, wink: -1, blinkClick: false, mouthOpen: false }), -1);
 		}
 	});
 
-	it("gesture bindings describe what arbitration actually does", () => {
-		assert.equal(gestureBindings({ clickingMode: "blink" }).leftWink, "LEFT CLICK");
-		assert.equal(gestureBindings({ clickingMode: "blink" }).rightWink, "RIGHT CLICK");
-		assert.equal(gestureBindings({ clickingMode: "dwell" }).leftWink, "OFF");
-		assert.equal(gestureBindings({ clickingMode: "open-mouth-simple", mouthTiltScroll: false }).mouth, "LEFT CLICK");
-		assert.equal(gestureBindings({ clickingMode: "blink", closeEyesToToggle: true }).sleep, "PAUSE");
-		assert.equal(gestureBindings({ clickingMode: "blink", eyebrowRaiseOpensKeyboard: false }).brow, "OFF");
+	it("several methods at once: a wink wins over the mouth, the mouth over a blink click", () => {
+		const methods = clickMethods({ clickWink: true, clickMouth: true, clickBlink: true });
+		assert.equal(chooseClickButton({ methods, wink: 2, mouthOpen: true, blinkClick: true }), 2);
+		assert.equal(chooseClickButton({ methods, mouthOpen: true, blinkClick: true }), 0);
+		assert.equal(chooseClickButton({ methods, mouthOpen: true, isMouthScrolling: true }), -1, "mouth + tilt scrolls");
+		assert.equal(chooseClickButton({ methods: clickMethods({}), mouthOpen: true }), -1, "mouth off by default");
 	});
 });
 

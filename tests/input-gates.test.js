@@ -140,6 +140,8 @@ describe('Overlay update coalescing (AUDIT 2.2)', () => {
 		});
 		assert.deepEqual(summary, {
 			headNotFound: false,
+			lowConfidence: false,
+			lowLight: false,
 			blinkInfo: { used: true, leftEye: { heightRatio: 0.123, active: true, thresholdMet: true }, rightEye: { heightRatio: 0.3, active: false, thresholdMet: false } },
 			mouthInfo: { used: false, heightRatio: 0.1, active: false, thresholdMet: false },
 			eyebrowGestureProgress: 0.33,

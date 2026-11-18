@@ -174,3 +174,35 @@ body {
 		animation: none;
 	}
 }
+
+/* "Where's my cursor": three ember rings expanding from the cursor, staggered, 1.2 s. */
+.find {
+	position: absolute;
+	left: 0;
+	top: 0;
+	display: none;
+}
+.is-finding .find {
+	display: block;
+}
+.find i {
+	position: absolute;
+	left: -20px;
+	top: -20px;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: 3px solid var(--ember);
+	opacity: 0;
+	animation: find-ring 800ms ease-out forwards;
+}
+.find i:nth-child(2) {
+	animation-delay: 200ms;
+}
+.find i:nth-child(3) {
+	animation-delay: 400ms;
+}
+@keyframes find-ring {
+	0% { transform: scale(.4); opacity: .95; }
+	100% { transform: scale(4); opacity: 0; }
+}

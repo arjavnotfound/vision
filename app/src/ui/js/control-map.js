@@ -7,7 +7,7 @@
 //   - right click: right wink -> raised brows -> the spoken words "right click";
 //   - left click: left wink, or Dwell click mode when the left wink is unreliable;
 //   - scroll: mouth + head tilt, or the voice.
-// The result is stored only through existing settings (clickingMode, mouthTiltScroll,
+// The result is stored through the engine settings (clickWink, clickDwell, mouthTiltScroll,
 // eyebrowRaiseOpensKeyboard) plus the `controlMap` entry in the settings file.
 
 import { suggestThresholds } from "./calibration-math.js";
@@ -65,10 +65,11 @@ export function planControls(a) {
 	};
 }
 
-/** Settings patch for EXISTING engine settings. */
+/** Settings patch for the engine (click method switches, scroll, keyboard). */
 export function controlSettings(plan) {
 	return {
-		clickingMode: plan.clickingMode,
+		clickWink: plan.leftClick === "leftWink",
+		clickDwell: plan.leftClick === "dwell",
 		mouthTiltScroll: plan.scroll === "mouth",
 		eyebrowRaiseOpensKeyboard: plan.keyboard === "brow",
 	};
