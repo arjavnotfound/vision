@@ -4456,8 +4456,9 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 				mouseX -= deltaX * screenWidth;
 				mouseY += deltaY * screenHeight;
 
-				mouseX = Math.min(Math.max(screenOffsetX, mouseX), screenOffsetX + screenWidth);
-				mouseY = Math.min(Math.max(screenOffsetY, mouseY), screenOffsetY + screenHeight);
+				// The last pixel is width - 1: at width the overlay finds no element there and dwell never starts.
+				mouseX = Math.min(Math.max(screenOffsetX, mouseX), screenOffsetX + screenWidth - 1);
+				mouseY = Math.min(Math.max(screenOffsetY, mouseY), screenOffsetY + screenHeight - 1);
 
 				if (mouseNeedsInitPos) {
 					// TODO: option to get preexisting mouse position instead of set it to center of screen
