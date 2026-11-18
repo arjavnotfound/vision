@@ -158,7 +158,7 @@ function createMenu() {
 						{ role: 'selectAll' },
 						{ type: 'separator' },
 						{
-							label: t("desktop.menu.openOnScreenKeyboard", { defaultValue: 'On-Screen Keyboard' }),
+							label: t("desktop.menu.openOnScreenKeyboard", { defaultValue: 'Keyboard' }),
 							click: () => {
 								if (process.platform === 'win32') {
 									const { spawn } = require('child_process');
