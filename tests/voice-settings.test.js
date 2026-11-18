@@ -46,3 +46,10 @@ describe('voice settings', () => {
 		assert.equal(new Set(VOICES.map((v) => v.name)).size, 30);
 	});
 });
+
+describe('voice names in Settings', () => {
+	it('offers Calm, Bright and Deep, mapped to Aoede, Puck and Charon', () => {
+		const { VOICES: all } = require('../app/src/electron-main/voice-settings');
+		assert.deepEqual(all.filter((v) => v.label).map((v) => [v.label, v.name]), [['Calm', 'Aoede'], ['Bright', 'Puck'], ['Deep', 'Charon']]);
+	});
+});

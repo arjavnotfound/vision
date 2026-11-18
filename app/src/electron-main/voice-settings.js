@@ -17,6 +17,9 @@ const VOICES = [
 	['Achird', 'Friendly'], ['Zubenelgenubi', 'Casual'], ['Vindemiatrix', 'Gentle'], ['Sadachbia', 'Lively'],
 	['Sadaltager', 'Knowledgeable'], ['Sulafat', 'Warm'],
 ].map(([name, style]) => ({ name, style }));
+// The three voices Settings offers, by plain names (the Gemini names stay in the code).
+const VOICE_LABELS = { Aoede: 'Calm', Puck: 'Bright', Charon: 'Deep' };
+for (const voice of VOICES) if (VOICE_LABELS[voice.name]) voice.label = VOICE_LABELS[voice.name];
 const LANGUAGES = ['auto', 'en', 'hi'];
 // What the Settings form asks for on first voice use.
 const VOICE_KEY_FIELDS = [
@@ -85,4 +88,4 @@ function createVoiceSettings({ dir, safeStorage }) {
 	return { settingsFile, read, update, readKeys, saveKeys };
 }
 
-module.exports = { createVoiceSettings, normalize, VOICES, LANGUAGES, VOICE_KEY_FIELDS };
+module.exports = { createVoiceSettings, normalize, VOICES, VOICE_LABELS, LANGUAGES, VOICE_KEY_FIELDS };
