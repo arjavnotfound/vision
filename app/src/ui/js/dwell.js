@@ -6,19 +6,21 @@
 //     cursor leaves it (so resting on "Pause" cannot toggle back and forth).
 //   - Disabled while `isEnabled()` is false: tracking paused (the cursor is then a
 //     physical mouse) or desktop dwell clicking is on (the overlay already clicks).
-//   - Disabled while any click method is on (see inAppDwellAllowed): with Dwell off,
-//     nothing clicks by holding still. It stays as the way back when every method is off.
+//   - VISION's own buttons always take a deliberate dwell, whatever the click methods, so
+//     a person who can't wink is never stranded in setup or Settings. It never clicks
+//     anything outside this window: desktop clicking by holding still is the Dwell click
+//     method, run by the overlay, and only when Dwell is on.
 //   - After any activation the cursor must move a little before the next dwell can start,
 //     so a control that appears under a resting cursor (a sheet, a dialog) never fires by itself.
 //   - Controls marked data-dwell-delay add extra time (e.g. destructive actions).
 
 /**
- * In-app dwell is only the fallback for when no click method is on; otherwise a wink,
- * blink or mouth clicks, and desktop Dwell (the overlay) covers holding still.
+ * In-app dwell is on unless desktop Dwell is: then the overlay already dwell-clicks
+ * everything, this window included, and a second ring would click twice.
  * @param {(key: string) => unknown} get engine setting getter
  */
 export function inAppDwellAllowed(get) {
-	return get("clickWink") === false && get("clickBlink") !== true && get("clickMouth") !== true && get("clickDwell") !== true;
+	return get("clickDwell") !== true;
 }
 
 export function createDwell({ ring, getDwellTime, isEnabled: isEnabledBase, onActivate = () => { } }) {

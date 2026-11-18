@@ -70,13 +70,12 @@ describe("Where's my cursor", () => {
 
 describe("In-app dwell", () => {
 	const get = (settings) => (key) => settings[key];
-	it("is off whenever a click method is on, so holding still clicks nothing", () => {
-		assert.equal(inAppDwellAllowed(get({ clickWink: true, clickDwell: false })), false);
-		assert.equal(inAppDwellAllowed(get({})), false, "defaults: wink on");
-		assert.equal(inAppDwellAllowed(get({ clickWink: false, clickMouth: true })), false);
-		assert.equal(inAppDwellAllowed(get({ clickWink: false, clickDwell: true })), false, "the overlay dwells instead");
-	});
-	it("stays as the way back when every click method is off", () => {
+	it("VISION's own buttons take a dwell with any click method, so nobody is stranded", () => {
+		assert.equal(inAppDwellAllowed(get({ clickWink: true, clickDwell: false })), true, "wink only");
+		assert.equal(inAppDwellAllowed(get({})), true, "defaults");
 		assert.equal(inAppDwellAllowed(get({ clickWink: false, clickBlink: false, clickMouth: false, clickDwell: false })), true);
+	});
+	it("is off when desktop Dwell is on: the overlay already dwells on this window", () => {
+		assert.equal(inAppDwellAllowed(get({ clickWink: false, clickDwell: true })), false);
 	});
 });
