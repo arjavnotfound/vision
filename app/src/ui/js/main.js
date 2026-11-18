@@ -1,32 +1,32 @@
-// VISION Face Control — new UI entry point.
-// Talks to the tracking engine ONLY through its public API (Vision.initEngine), or to the
-// mock engine in --preview mode.
+// VISION window entry point: one window with a left rail (Home, Face control, Voice,
+// Settings, Help). Talks to the tracking engine ONLY through its public API
+// (Vision.initEngine), or to the mock engine in --preview mode.
 
 import { h, setText } from "./dom.js";
 import { createDwell } from "./dwell.js";
-import { createViewfinder } from "./viewfinder.js";
-import { createMeters } from "./meters.js";
-import { createControls } from "./controls.js";
-import { createProfiles } from "./profiles.js";
-import { openSettings, openProfiles, openConfirm } from "./sheets.js";
+import { openConfirm } from "./dialogs.js";
 import { openCalibration } from "./calibration.js";
 import { openOnboarding } from "./onboarding.js";
 import { createHost } from "./host.js";
-import { clickingModeLabel } from "./labels.js";
-import { Mark, markStateFor } from "./mark.js";
-import { openStartScreen, openTryIt } from "./kiosk.js";
 import { detectMisfire, controlSettings, createBrowClick, choosePlan, DEFAULT_PLAN, INPUT_LABELS, ACTION_LABELS } from "./control-map.js";
 import { speak, setSpeechMuted } from "./speech.js";
 import { createRecoveryMonitor } from "./recovery.js";
 import { applySetting } from "./set-setting.js";
+import { createShell } from "./shell.js";
+import { settingsView, voiceStatus, STATUS_WORDS } from "./pages/model.js";
+import { createHomePage } from "./pages/home.js";
+import { createFacePage } from "./pages/face.js";
+import { createVoicePage } from "./pages/voice.js";
+import { createSettingsPage } from "./pages/settings.js";
+import { createHelpPage, createDiagnosticsPage } from "./pages/help.js";
 
 const params = new URLSearchParams(location.search);
 const isPreview = params.has("preview");
 const sceneName = params.get("scene") || "tracking";
 // One-app (hands-free) mode: adaptive calibration, spoken help, voice link.
 const isKiosk = params.has("kiosk") && !isPreview;
-// First run only: the Start screen, calibration and try-it.
-const showStartScreen = isKiosk && params.has("start");
+// First run only.
+const showFirstRun = isKiosk && params.has("start");
 // Preview screenshots and QA runs stay silent; spoken lines still go to the log.
 if (params.has("quiet") || params.has("preview")) setSpeechMuted(true);
 
@@ -74,6 +74,18 @@ async function bootRealEngine(host) {
 	return engine;
 }
 
+// Preview only: voice settings and the bus without a main process.
+const PREVIEW_VOICE = {
+	getConfig: async () => ({
+		voice: "Aoede", language: "auto", hasKeys: !params.get("nokeys"),
+		keyFields: [{ name: "LIVEKIT_URL", label: "LiveKit URL", hint: "starts with wss://" }, { name: "LIVEKIT_API_KEY", label: "LiveKit API key", hint: "starts with API" }, { name: "LIVEKIT_API_SECRET", label: "LiveKit API secret", secret: true }, { name: "GOOGLE_API_KEY", label: "Gemini API key", hint: "from aistudio.google.com", secret: true }],
+		savedKeys: [{ label: "LiveKit URL", value: "wss://example.livekit.cloud" }, { label: "LiveKit API key", value: "••••••3kQa" }, { label: "LiveKit API secret", value: "••••••x9Lp" }, { label: "Gemini API key", value: "••••••Tz4w" }],
+		agent: params.get("voice") === "badkey" ? { state: "error", message: "401 Unauthorized" } : { state: "ready", message: null },
+	}),
+	setConfig: async () => ({}),
+	saveKeys: async () => ({}),
+};
+
 async function boot() {
 	const host = createHost({ preview: isPreview });
 	let engine;
@@ -86,7 +98,9 @@ async function boot() {
 	// Seam for later integrations (and the FPS benchmark): the public engine API only.
 	window.visionEngine = engine;
 
+	const api = window.electronAPI;
 	const st = engine.settings;
+	const settings = settingsView(st);
 	const layer = document.getElementById("layer");
 	const toasts = document.getElementById("toasts");
 
@@ -98,7 +112,7 @@ async function boot() {
 	};
 	setTheme(params.get("theme") || st.get("uiTheme") || "ember", false);
 
-	// ---- toasts
+	// ---- toasts (bottom right, never over the Pause row)
 	function toast(message) {
 		const el = h("div", { class: "toast" }, message);
 		toasts.append(el);
@@ -116,129 +130,146 @@ async function boot() {
 
 	// ---- dwell
 	let latestState = engine.getState();
-	const dwell = createDwell({
+	createDwell({
 		ring: document.getElementById("dwell-ring"),
-		getDwellTime: () => st.get("dwellTime") ?? 800,
-		// Off while paused (the cursor then belongs to a physical mouse) and in Dwell Click
-		// mode (the desktop overlay already dwell-clicks everything, including this window).
-		isEnabled: () => isPreview || (!latestState.paused && latestState.clickingMode !== "dwell" && latestState.status === "tracking"),
+		getDwellTime: () => settings.get("dwellTime") ?? 1000,
+		// Off while paused (the cursor then belongs to a physical mouse) and when dwell clicks
+		// are on (the desktop overlay already dwell-clicks everything, including this window).
+		isEnabled: () => isPreview || (!latestState.paused && !settings.get("clickDwell") && latestState.clickingMode !== "dwell" && latestState.status === "tracking"),
 	});
 
-	// ---- instruments
-	const viewfinder = createViewfinder(document.getElementById("main-viewfinder"), { engine, readouts: false });
-	const meters = createMeters(document.getElementById("meters"));
-	engine.on("gesture", ({ gesture, action, phase }) => {
-		if (phase === "start" || phase === undefined) meters.fire(gesture, action);
-	});
-	// Click toast at the top of the viewfinder whenever a click gesture fires.
-	const CLICK_TOAST = { left: "Left click", right: "Right click", middle: "Middle click" };
-	engine.on("click", ({ button, down }) => {
-		// (~1.2 s; held longer in --preview so screenshots can catch it)
-		if (down && CLICK_TOAST[button]) viewfinder.toast(CLICK_TOAST[button], isPreview ? 5000 : 1200);
-	});
-
-	const profiles = createProfiles(st);
-	let saveTimer = 0;
-	const autosaveProfile = () => {
-		clearTimeout(saveTimer);
-		saveTimer = setTimeout(() => profiles.saveActive(), 800);
+	// ---- settings kept by the main process (wake phrase, island position, start with Windows)
+	let globalSettings = {};
+	try {
+		globalSettings = (await host.getOptions())?.globalSettings ?? {};
+	} catch (_error) {
+		globalSettings = {};
+	}
+	const globals = {
+		get: (key, fallback) => globalSettings[key] ?? fallback,
+		set: (patch) => {
+			Object.assign(globalSettings, patch);
+			api?.setOptions?.({ globalSettings: patch });
+		},
 	};
-	const controls = createControls({
-		steppersEl: document.getElementById("steppers"),
-		togglesEl: document.getElementById("toggles"),
-		settings: st,
-		onChange: autosaveProfile,
+
+	// ---- voice status: keys, internet and the voice agent, from main
+	const voice = isPreview ? PREVIEW_VOICE : api?.getVoiceConfig ? {
+		getConfig: () => api.getVoiceConfig(),
+		setConfig: (change) => api.setVoiceConfig(change),
+		saveKeys: (keys) => api.saveVoiceKeys(keys),
+	} : null;
+	let voiceConfig = null;
+	// Main answers "No handler registered" when this build runs without voice.
+	let voiceMissing = !voice;
+	let busState = isPreview ? { internet: params.get("voice") !== "offline", assistant: { live: false } } : null;
+	const refreshVoice = () => voiceMissing ? Promise.resolve() : voice.getConfig().then((config) => { voiceConfig = config; }, (error) => {
+		voiceConfig = null;
+		if (/No handler registered/.test(String(error?.message ?? error))) voiceMissing = true;
 	});
-	const refreshLabels = () => {
-		const name = profiles.active();
-		setText(document.getElementById("profile-name"), name);
-		setText(document.getElementById("profile-label"), `PROFILE · ${name.toUpperCase()}`);
-		setText(document.getElementById("mode-label"), clickingModeLabel(st.get("clickingMode")).toUpperCase());
+	refreshVoice();
+	const currentVoiceStatus = () => voiceStatus({ available: !voiceMissing, config: voiceConfig, bus: busState, wakePhrase: globals.get("wakePhrase", "hey-vision") });
+
+	// Recent activity on the Voice page: what voice asked VISION to do.
+	const activity = [];
+	const logActivity = (text) => {
+		const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+		activity.unshift({ time, text });
+		activity.length = Math.min(activity.length, 20);
 	};
-	engine.on("settings", ({ key }) => {
-		if (key === "profiles") return;
-		controls.refresh();
-		refreshLabels();
-		if (key === "uiTheme" && st.get("uiTheme") !== theme()) setTheme(st.get("uiTheme"), false);
-	});
-	refreshLabels();
-
-	// ---- title bar
-	const pill = document.querySelector(".status-pill");
-	const statusWord = document.getElementById("status-word");
-	const pauseBtn = document.getElementById("pause-toggle");
-	const pauseLabel = document.getElementById("pause-label");
-	const hint = document.getElementById("session-hint");
-	pauseBtn.addEventListener("click", () => engine.togglePaused());
-
-	// Every way to quit (title bar, tray, voice) lands here. Cancel is the big default on the
-	// right; Quit sits alone on the left and needs a longer dwell, so a drifting cursor can't quit.
-	let quitDialog = null;
-	function confirmQuit() {
-		if (quitDialog?.isOpen()) return;
-		const dialog = openConfirm(layer, {
-			title: "Quit VISION?",
-			text: "Head control and voice will stop. To keep using VISION without this window, choose Hide. Say “Vision, show face control” to bring it back.",
-			confirmLabel: "Cancel",
-			onConfirm: () => { },
-			cancel: false,
-			alt: { label: "Hide", onClick: () => host.windowControl("hide") },
-			secondary: { label: "Quit", danger: true, delay: 1500, onClick: () => host.windowControl("quit") },
-		});
-		quitDialog = { isOpen: () => dialog.box.isConnected };
-		speak("Quit VISION? Rest on Cancel to keep it running. To quit, rest longer on Quit, on the left.");
+	if (isPreview && params.get("activity")) {
+		logActivity("Paused face control");
+		logActivity("Opened Chrome");
+		logActivity("Scrolled down");
 	}
 
-	for (const btn of document.querySelectorAll("[data-window]")) {
-		btn.addEventListener("click", () => {
-			const action = btn.dataset.window;
-			if (action === "close") {
-				confirmQuit();
-			} else {
-				host.windowControl(action);
-			}
-		});
-	}
-
-	// ---- session strip
+	// ---- calibration
 	let calibration = null;
-	let afterCalibration = null;
+	let shell = null;
 	const startCalibration = (preview = null, { adaptive = isKiosk } = {}) => {
 		if (calibration) return;
 		calibration = openCalibration({
-			layer, engine, profiles, toast, preview, adaptive,
-			onPlan: (plan) => saveControlMap(plan),
-			onClose: (applied) => {
+			layer, engine, toast, preview, adaptive,
+			onDetails: () => shell.navigate("diagnostics"),
+			onClose: () => {
 				calibration = null;
-				controls.refresh();
-				refreshLabels();
-				const then = afterCalibration;
-				afterCalibration = null;
-				then?.(applied);
 			},
 		});
 	};
 
-	// ---- adaptive control map (stored in the settings file next to the engine settings)
-	let controlMap = null;
-	try {
-		controlMap = (await host.getOptions())?.globalSettings?.controlMap ?? null;
-	} catch (_error) {
-		controlMap = null;
+	// ---- the shell and its pages
+	let windowShown = true;
+	const ctx = {
+		engine, settings, host, layer, toast, voice, globals, activity,
+		navigate: (page) => shell.navigate(page),
+		startCalibration: () => startCalibration(),
+		pulse: () => api?.pulse?.(),
+		windowShown: () => windowShown,
+		theme, setTheme,
+		version: () => appVersion,
+		wakePhrase: () => globals.get("wakePhrase", "hey-vision"),
+		voiceStatus: currentVoiceStatus,
+		refreshVoice,
+		voiceAction: (action) => (action.go === "retry" ? refreshVoice() : shell.navigate(action.go)),
+		onDiag: api?.onDiag ? (cb) => api.onDiag(cb) : null,
+	};
+	let appVersion = "";
+	host.getVersion().then((v) => { appVersion = v || ""; }, () => { });
+	shell = createShell({
+		railEl: document.getElementById("rail"),
+		pagesEl: document.getElementById("pages"),
+		factories: {
+			home: () => createHomePage(ctx),
+			face: () => createFacePage(ctx),
+			voice: () => createVoicePage(ctx),
+			settings: () => createSettingsPage(ctx),
+			help: () => createHelpPage(ctx),
+			diagnostics: () => createDiagnosticsPage(ctx),
+		},
+	});
+	// Opened from outside (island menu, voice, tray): show the window on that page.
+	const openPage = (page) => {
+		shell.navigate(page);
+		host.windowControl("show");
+	};
+	engine.on("settings", ({ key }) => {
+		if (key === "uiTheme" && st.get("uiTheme") !== theme()) setTheme(st.get("uiTheme"), false);
+	});
+
+	// A click toast on the camera view whenever a click gesture fires.
+	const CLICK_TOAST = { left: "Left click", right: "Right click", middle: "Middle click" };
+	engine.on("click", ({ button, down }) => {
+		if (down && CLICK_TOAST[button]) shell.page("face")?.viewfinder.toast(CLICK_TOAST[button], isPreview ? 5000 : 1200);
+	});
+
+	// Every way to quit (title bar, tray, voice) lands here. Keep open is the big default;
+	// Quit sits alone on the left and needs a longer dwell, so a drifting cursor can't quit.
+	let quitDialog = null;
+	function confirmQuit() {
+		if (quitDialog?.box.isConnected) return;
+		quitDialog = openConfirm(layer, {
+			title: "Quit VISION?",
+			text: "Face control and voice will stop until VISION is started again.",
+			confirmLabel: "Keep VISION open",
+			onConfirm: () => { },
+			cancel: false,
+			secondary: { label: "Quit VISION", danger: true, delay: 1500, onClick: () => host.windowControl("quit") },
+		});
+		speak("Quit VISION? Rest on Keep VISION open to keep it running. To quit, rest longer on Quit VISION, on the left.");
 	}
+
+	for (const btn of document.querySelectorAll("[data-window]")) {
+		btn.addEventListener("click", () => {
+			if (btn.dataset.window === "close") confirmQuit();
+			else host.windowControl(btn.dataset.window);
+		});
+	}
+
+	// ---- adaptive control map (stored in the settings file next to the engine settings)
+	let controlMap = globalSettings.controlMap ?? null;
 	function saveControlMap(plan) {
 		controlMap = plan;
-		window.electronAPI?.setOptions?.({ globalSettings: { controlMap: plan } });
-		autosaveProfile();
-	}
-	// The person's own choice from Settings: engine settings + the stored map together.
-	function applyPlan(plan) {
-		for (const [key, value] of Object.entries(controlSettings(plan))) {
-			if (st.has(key)) st.set(key, value);
-		}
-		saveControlMap(plan);
-		controls.refresh();
-		refreshLabels();
+		api?.setOptions?.({ globalSettings: { controlMap: plan } });
 	}
 	// Raised brows as right click (when calibration moved right click there): the brows
 	// must be HELD for 0.4 s, so a surprised face or talking does not click.
@@ -250,8 +281,8 @@ async function boot() {
 			return;
 		}
 		if (browClick.step(raised, performance.now())) {
-			window.electronAPI?.mappedClick?.("right");
-			viewfinder.toast("Right click", 1200);
+			api?.mappedClick?.("right");
+			shell.page("face")?.viewfinder.toast("Right click", 1200);
 		}
 	});
 	// A gesture that keeps firing by accident, or never fires: offer to switch it.
@@ -300,10 +331,9 @@ async function boot() {
 			if (st.has(key)) st.set(key, value);
 		}
 		saveControlMap(next);
-		controls.refresh();
-		refreshLabels();
 		speak(`Done. ${ACTION_LABELS[offer.action]} is now: ${INPUT_LABELS[offer.to].toLowerCase()}.`);
 	}
+	let onboarding = null;
 	if (isKiosk) {
 		setInterval(() => {
 			const now = performance.now();
@@ -312,7 +342,7 @@ async function boot() {
 				return;
 			}
 			trackingSince ||= now;
-			if (calibration || startScreen?.isOpen() || tryIt || now - lastOffer < 120000) return;
+			if (calibration || onboarding || now - lastOffer < 120000) return;
 			const offer = detectMisfire({ events: gestureClicks, now, trackingSince, plan: controlMap });
 			if (offer) {
 				gestureClicks.length = 0;
@@ -321,63 +351,15 @@ async function boot() {
 			}
 		}, 2000);
 	}
-	document.getElementById("calibrate-btn").addEventListener("click", () => startCalibration());
-
-	// ---- one-app flow: Start -> calibration + your controls -> try it -> free use
-	let startScreen = null;
-	let tryIt = null;
-	let busState = null;
-	function closeLayers() {
-		afterCalibration = null;
-		calibration?.close?.(false);
-		calibration = null;
-		tryIt?.close();
-		tryIt = null;
-		startScreen?.close();
-		startScreen = null;
-		layer.replaceChildren();
-	}
-	function showStart() {
-		afterCalibration = null;
-		closeLayers();
-		// Hands-free resume: while paused the cursor cannot reach the orb, so closing both
-		// eyes for 2 s (an existing setting) must be able to resume tracking.
-		if (st.has("closeEyesToToggle") && !st.get("closeEyesToToggle")) st.set("closeEyesToToggle", true);
-		host.windowControl("show");
-		startScreen = openStartScreen({
-			layer, engine,
-			onStart: () => {
-				startScreen = null;
-				afterCalibration = (applied) => {
-					if (!applied) {
-						showStart();
-						return;
-					}
-					tryIt = openTryIt({
-						layer, plan: controlMap,
-						onDone: () => {
-							tryIt = null;
-							// Free use: get out of the way; tracking keeps running.
-							host.windowControl("minimize");
-						},
-					});
-				};
-				startCalibration(null, { adaptive: true });
-			},
-		});
-		if (busState) startScreen.setBus(busState);
-	}
 
 	// ---- link to the voice assistant
-	const voicePill = h("div", { class: "voice-pill", hidden: true, role: "status" }, "VOICE ON · MOUTH OFF");
-	document.querySelector(".status-pill")?.after(voicePill);
-	window.electronAPI?.onBusState?.((state) => {
+	api?.onBusState?.((state) => {
+		const was = busState?.assistant?.connected;
 		busState = state;
-		const live = Boolean(state?.assistant?.live);
-		voicePill.hidden = !live;
-		startScreen?.setBus(state);
+		const now = Boolean(state?.assistant?.connected);
+		if (was !== undefined && was !== now) logActivity(now ? "Voice connected" : "Voice disconnected");
 	});
-	window.electronAPI?.requestBusState?.();
+	api?.requestBusState?.();
 
 	const SPEED_KEYS = ["headTrackingSensitivityX", "headTrackingSensitivityY"];
 	const CLICK_MODES = { wink: "blink", dwell: "dwell", mouth: "open-mouth-simple" };
@@ -395,9 +377,14 @@ async function boot() {
 			return { done: engine.isPaused() ? "paused" : "resumed" };
 		}
 		if (cmd === "recalibrate") {
-			closeLayers();
+			calibration?.close?.(false);
+			calibration = null;
 			startCalibration(null, { adaptive: true });
 			return { done: "calibrating" };
+		}
+		if (cmd === "navigate") {
+			openPage(String(value));
+			return { done: `showing ${shell.current()}` };
 		}
 		if (cmd === "speed") {
 			const factor = value === "faster" ? 1.25 : value === "slower" ? 0.8 : NaN;
@@ -406,7 +393,6 @@ async function boot() {
 				const next = Math.round(Math.min(0.1, Math.max(0.001, st.get(key) * factor)) * 10000) / 10000;
 				st.set(key, next);
 			}
-			autosaveProfile();
 			return { done: `cursor ${value}`, sensitivity: st.get(SPEED_KEYS[0]) };
 		}
 		if (cmd === "click-mode") {
@@ -418,8 +404,6 @@ async function boot() {
 			const rightClick = mode === "blink" ? "rightWink" : base.rightClick === "rightWink" ? "voice" : base.rightClick;
 			saveControlMap({ ...base, clickingMode: mode, leftClick: mode === "blink" ? "leftWink" : mode === "dwell" ? "dwell" : "mouth", rightClick, keyboard: rightClick === "brow" ? "button" : "brow" });
 			if (st.has("eyebrowRaiseOpensKeyboard")) st.set("eyebrowRaiseOpensKeyboard", rightClick !== "brow");
-			controls.refresh();
-			refreshLabels();
 			return { done: `click mode ${value}` };
 		}
 		if (cmd === "remap" && value && typeof value === "object") {
@@ -435,48 +419,13 @@ async function boot() {
 			return { done: "retrying camera", camera: engine.getState().camera?.status };
 		}
 		if (cmd === "set-setting" && value && typeof value === "object") {
-			const result = applySetting(String(value.name), value.value, { st, engine });
-			if (result.done !== "none") {
-				controls.refresh();
-				refreshLabels();
-				autosaveProfile();
-			}
-			return result;
+			return applySetting(String(value.name), value.value, { st, engine });
 		}
 		if (cmd === "controls") {
 			return { done: "controls", controlMap, clickingMode: st.get("clickingMode") };
 		}
 		return { done: cmd };
 	}
-	document.getElementById("profile-btn").addEventListener("click", () => openProfiles(layer, { profiles, onChanged: () => { controls.refresh(); refreshLabels(); } }));
-	document.getElementById("keyboard-btn").addEventListener("click", () => engine.openOnScreenKeyboard());
-	// Settings > Voice talks to the main process; wake sensitivity lives in the settings file.
-	const api = window.electronAPI;
-	const voice = api?.getVoiceConfig ? {
-		getConfig: () => api.getVoiceConfig(),
-		setConfig: (change) => api.setVoiceConfig(change),
-		saveKeys: (keys) => api.saveVoiceKeys(keys),
-		getWake: async () => (await host.getOptions())?.globalSettings?.wakeSensitivity ?? "normal",
-		setWake: (value) => api.setOptions({ globalSettings: { wakeSensitivity: value } }),
-		getSounds: async () => {
-			const g = (await host.getOptions())?.globalSettings;
-			return { on: g?.soundsOn !== false, volume: Number.isFinite(g?.soundVolume) ? g.soundVolume : 60 };
-		},
-		setSounds: (patch) => api.setOptions({ globalSettings: patch }),
-	} : null;
-	let settingsSheet = null;
-	const showSettings = async (initialTab) => {
-		settingsSheet?.close();
-		settingsSheet = openSettings(layer, {
-			engine, host, voice, initialTab, version: await host.getVersion(),
-			onChanged: () => { controls.refresh(); refreshLabels(); autosaveProfile(); },
-			controlMap: { get: () => controlMap, set: applyPlan },
-			onRecalibrate: () => startCalibration(),
-			onKeyboard: () => engine.openOnScreenKeyboard(),
-		});
-	};
-	document.getElementById("settings-btn").addEventListener("click", () => showSettings("Pointer"));
-	document.getElementById("about-btn").addEventListener("click", () => showSettings("About"));
 	host.onCommand?.((command) => {
 		if (command && typeof command === "object" && command.type === "bus") {
 			let result;
@@ -485,123 +434,65 @@ async function boot() {
 			} catch (error) {
 				result = { done: "none", error: String(error?.message ?? error) };
 			}
-			window.electronAPI?.replyBusCommand?.(command.id, result);
+			if (result?.done && result.done !== "none" && command.cmd !== "controls") logActivity(result.done[0].toUpperCase() + result.done.slice(1));
+			api?.replyBusCommand?.(command.id, result);
 			return;
 		}
-		if (command === "calibrate") startCalibration();
+		if (command && typeof command === "object" && command.type === "navigate") return openPage(command.page);
+		if (command === "calibrate") {
+			openPage("face");
+			startCalibration();
+		}
 		if (command === "quit") confirmQuit();
-		if (command === "settings") showSettings("Pointer");
-		if (command === "settings-voice") showSettings("Voice");
-		if (command === "about") showSettings("About");
+		if (command === "settings" || command === "settings-voice" || command === "about" || command === "help" || command === "diagnostics") openPage(command);
 	});
-
-	// ---- live status mark (driven only by existing engine state and click events)
-	const markCanvas = document.getElementById("live-mark");
-	const mark = new Mark("thinking");
-	let markBase = "thinking";
-	let actingUntil = 0;
-	engine.on("click", ({ down }) => {
-		if (down) {
-			mark.set("acting"); // retrigger on every click
-			actingUntil = performance.now() + 650;
-		}
-	});
-	let markColors = null;
-	let markTheme = null;
-	let lastMarkTime = performance.now();
-	function drawMark(state, now) {
-		const theme = document.documentElement.dataset.theme;
-		if (!markColors || theme !== markTheme) {
-			const style = getComputedStyle(document.documentElement);
-			markTheme = theme;
-			markColors = {
-				bone: style.getPropertyValue("--mark-ring").trim(),
-				ember: style.getPropertyValue("--ember").trim(),
-				dim: style.getPropertyValue("--bone-2").trim(),
-			};
-		}
-		const { state: wanted, level } = markStateFor(state, { calibrating: Boolean(calibration) });
-		if (now >= actingUntil && wanted !== markBase) {
-			markBase = wanted;
-			mark.set(wanted);
-		} else if (now >= actingUntil && mark.s === "acting") {
-			mark.set(markBase);
-		}
-		const dt = Math.min(0.1, (now - lastMarkTime) / 1000);
-		lastMarkTime = now;
-		mark.update(dt, now / 1000, level);
-		mark.draw(markCanvas, 40, markColors);
-	}
+	// vision:navigate (UX spec 11) from the island menu.
+	api?.onNavigate?.((page) => openPage(page));
 
 	// ---- render loop
-	const STATUS_WORDS = { tracking: "ON", paused: "PAUSED", "no-face": "CAN’T SEE YOU", starting: "STARTING", "camera-error": "NO CAMERA" };
+	const pill = document.querySelector(".status-pill");
+	const statusWord = document.getElementById("status-word");
 	let lastStatus = "";
-	// Instruments update at ~30 Hz: smooth to the eye, and it leaves the renderer's main thread
+	// Pages update at ~30 Hz: smooth to the eye, and it leaves the renderer's main thread
 	// (which also runs tracking) mostly free. The camera video itself plays at full rate.
 	const UI_FRAME_MS = 1000 / 30;
 	let lastUiFrame = 0;
-	let windowShown = true;
-	window.electronAPI?.onWindowShown?.((shown) => {
+	api?.onWindowShown?.((shown) => {
 		windowShown = shown;
-		viewfinder.setShown(shown);
+		shell.page("face")?.viewfinder.setShown(shown && shell.current() === "face");
 	});
-	// Paused or live, always on screen (above onboarding and calibration) and said aloud
-	// when it changes, so the close-eyes toggle never leaves the user guessing.
-	const cursorState = h("div", { class: "cursor-state", role: "status", "aria-live": "polite" });
-	document.body.append(cursorState);
+	// Said aloud when face control pauses or resumes, so the user is never left guessing.
 	let lastPaused = null;
-	function showCursorState(state) {
-		const noCamera = state.status === "camera-error";
+	function speakPause(state) {
 		const paused = Boolean(state.paused);
-		const key = `${paused}${noCamera}`;
-		if (key === lastPaused) return;
-		const first = lastPaused === null;
-		const pauseChanged = !first && lastPaused.startsWith(String(!paused));
-		lastPaused = key;
-		cursorState.dataset.paused = String(paused || noCamera);
-		if (noCamera) {
-			cursorState.replaceChildren(h("span", { class: "cursor-state__dot" }), h("b", {}, "CURSOR STOPPED"), h("span", { class: "cursor-state__how" }, "Waiting for the camera"));
-			return;
+		if (lastPaused !== null && paused !== lastPaused && !calibration) {
+			const how = settings.get("pauseMethod") === "closeEyes" ? "Close your eyes for 2 seconds" : "Blink three times quickly";
+			speak(paused ? `Face control paused. ${how} to start it again.` : "Face control on. The cursor follows your head now.");
 		}
-		cursorState.replaceChildren(
-			h("span", { class: "cursor-state__dot" }),
-			h("b", {}, paused ? "CURSOR PAUSED" : "CURSOR ON"),
-			h("span", { class: "cursor-state__how" }, st.get("closeEyesToToggle")
-				? (paused ? "Close both eyes for 2 seconds to start it" : "Close both eyes for 2 seconds to pause")
-				: (paused ? "Say “Vision, resume”" : "Say “Vision, pause”")),
-		);
-		// Calibration pauses the cursor by itself; that is not news to the user.
-		if (pauseChanged && !calibration) speak(paused ? "Cursor paused. Close both eyes for 2 seconds to start it again." : "Cursor on. It follows your head now.");
+		lastPaused = paused;
 	}
 
 	function frameLoop(now) {
 		requestAnimationFrame(frameLoop);
-		if (now - lastUiFrame < UI_FRAME_MS - 2) {
-			return;
-		}
+		if (now - lastUiFrame < UI_FRAME_MS - 2) return;
 		lastUiFrame = now;
 		const state = engine.getState();
 		latestState = state;
-		showCursorState(state);
-		// The main view has its own status pill; the badge is for screens drawn over it.
-		cursorState.hidden = !layer.childElementCount;
+		speakPause(state);
 		if (!windowShown) return; // nothing to draw for; tracking runs in the engine's own loop
-		if (state.status !== lastStatus) {
-			lastStatus = state.status;
-			pill.dataset.status = state.status;
-			setText(statusWord, STATUS_WORDS[state.status] ?? state.status.toUpperCase());
+		const status = state.paused ? "paused" : state.status;
+		if (status !== lastStatus) {
+			lastStatus = status;
+			pill.dataset.status = status;
+			setText(statusWord, STATUS_WORDS[status] ?? status);
 		}
-		pauseBtn.setAttribute("aria-pressed", String(state.paused));
-		setText(pauseLabel, state.paused ? "RESUME" : "PAUSE");
-		const resume = isKiosk
-			? "CLOSE YOUR EYES 2 S OR SAY “RESUME” TO RESUME"
-			: st.get("closeEyesToToggle") ? "CLOSE EYES 2S TO RESUME · OR F9" : "PRESS F9 TO RESUME";
-		setText(hint, state.paused ? resume : state.clickingMode === "dwell" ? "DWELL CLICK IS ON EVERYWHERE" : "REST ON ANY CONTROL TO PRESS IT");
-		drawMark(state, now);
-		viewfinder.update(state, engine.getFrame());
-		meters.update(state);
+		shell.update(state);
 	}
 	requestAnimationFrame(frameLoop);
+	// Voice status can change without an event (keys saved, agent restarted).
+	setInterval(() => {
+		if (windowShown && ["home", "voice"].includes(shell.current())) refreshVoice();
+	}, 5000);
 
 	// ---- recovery: face lost / camera lost, without a restart
 	{
@@ -614,10 +505,9 @@ async function boot() {
 			for (const action of recovery.step(state, performance.now(), { trackEnded: track?.readyState === "ended" })) {
 				// Preview screenshots show the banner only: no buttons, no camera.
 				if (isPreview && (action.type === "release" || action.type === "retryCamera")) continue;
-				if (action.type === "release") window.electronAPI?.releaseButtons?.("face-lost");
+				if (action.type === "release") api?.releaseButtons?.("face-lost");
 				// Camera problems are always spoken: the user may not be able to read the banner.
-				// The Start screen speaks its own camera line.
-				if (action.type === "speak" && (action.camera ? !startScreen?.isOpen() : isKiosk && !calibration)) speak(action.text);
+				if (action.type === "speak" && (action.camera ? !onboarding : isKiosk && !calibration)) speak(action.text);
 				if (action.type === "retryCamera") {
 					try {
 						engine.useCamera();
@@ -633,25 +523,25 @@ async function boot() {
 		}, 250);
 	}
 
-	// ---- first run
-	if (isKiosk) {
-		if (!st.get("onboardingComplete")) st.set("onboardingComplete", true);
-		if (showStartScreen) showStart();
-	} else if (!isPreview && !st.get("onboardingComplete")) {
-		// Same hands-free resume as the Start screen: onboarding tells a new user to close their eyes to start.
-		if (st.has("closeEyesToToggle") && !st.get("closeEyesToToggle")) st.set("closeEyesToToggle", true);
-		openOnboarding({
-			layer, engine,
-			onFinish: () => st.set("onboardingComplete", true),
+	shell.navigate(isPreview ? previewPage() : "home");
+
+	// ---- first run (4 steps, chunk D's onboarding)
+	const firstRun = isKiosk ? showFirstRun : !isPreview && !st.get("onboardingComplete");
+	if (isKiosk && !st.get("onboardingComplete")) st.set("onboardingComplete", true);
+	if (firstRun) {
+		host.windowControl("show");
+		onboarding = openOnboarding({
+			layer, engine, toast,
+			onFinish: () => {
+				onboarding = null;
+				st.set("onboardingComplete", true);
+				shell.navigate("home");
+			},
 			hasVoiceKeys: () => voice ? voice.getConfig().then((config) => Boolean(config?.hasKeys)) : Promise.resolve(false),
-			// Adaptive calibration reads each step aloud, like the rest of the first run.
-			onCalibrate: () => startCalibration(null, { adaptive: true }),
 		});
 	}
 
-	if (isPreview) {
-		await applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host, toast });
-	}
+	if (isPreview) applyPreviewScene({ layer, engine, startCalibration, confirmQuit });
 
 	await document.fonts.ready;
 	// Let layout, ResizeObservers and a couple of frames settle before screenshots.
@@ -659,48 +549,31 @@ async function boot() {
 	window.__visionReady = true;
 }
 
-async function applyPreviewScene({ layer, engine, profiles, controls, dwell, startCalibration, host }) {
-	const view = params.get("view") || "main";
+/** Preview: ?view=<page>[&section=<settings section>] picks the page. */
+function previewPage() {
+	const view = params.get("view") || "home";
+	if (view === "settings") return `settings-${params.get("section") || "clicking"}`;
+	return ["home", "face", "voice", "help", "diagnostics", "about"].includes(view) ? view : view === "main" ? "face" : "home";
+}
+
+function applyPreviewScene({ layer, engine, startCalibration, confirmQuit }) {
+	const view = params.get("view") || "home";
 	const calibData = {
 		center: { yaw: 2, pitch: 3, leftEye: 0.29, rightEye: 0.3, mouth: 0.05, brow: 0.22 },
 		range: { yawMin: -24, yawMax: 27, pitchMin: -12, pitchMax: 15 },
-		peaks: { leftWink: 0.09, rightWink: 0.1, mouth: 0.52, brow: 0.31 },
 	};
 	if (view === "calib-center") startCalibration({ step: "center", data: { progress: 0.64 } });
-	if (view === "calib-range") startCalibration({ step: "range", data: { ...calibData, pose: { yaw: -22, pitch: 8, roll: 3 }, dirs: ["LEFT", "RIGHT", "UP"] } });
-	if (view === "calib-gestures") startCalibration({ step: "gestures", data: { ...calibData, taskIndex: 2 } });
+	if (view === "calib-range") startCalibration({ step: "range", data: { ...calibData, pose: { yaw: -22, pitch: 8, roll: 3 } } });
 	if (view === "calib-done") startCalibration({ step: "done", data: calibData });
-	// ?view=calib-done&scene=no-face&accept=1: Accept with no face in view is refused.
-	if (params.get("accept")) [...layer.querySelectorAll("button")].find((b) => /^(Accept|Apply)/.test(b.textContent))?.click();
-	if (view.startsWith("onboarding")) {
-		openOnboarding({ layer, engine, auto: false, startAt: Number(view.split("-")[1] || 1) - 1 });
-	}
-	// ?view=settings&tab=Voice: one screenshot per section.
-	const voice = {
-		getConfig: async () => ({ voice: "Aoede", language: "auto", hasKeys: !params.get("nokeys"), voices: [{ name: "Aoede", style: "Breezy" }, { name: "Puck", style: "Upbeat" }, { name: "Charon", style: "Informative" }, { name: "Kore", style: "Firm" }, { name: "Fenrir", style: "Excitable" }, { name: "Leda", style: "Youthful" }, { name: "Orus", style: "Firm" }], keyFields: [{ name: "LIVEKIT_URL", label: "LiveKit URL", hint: "starts with wss://, from cloud.livekit.io" }, { name: "LIVEKIT_API_KEY", label: "LiveKit API key", hint: "starts with API, same page" }, { name: "LIVEKIT_API_SECRET", label: "LiveKit API secret", hint: "same page", secret: true }, { name: "GOOGLE_API_KEY", label: "Gemini API key", hint: "from aistudio.google.com", secret: true }], savedKeys: [{ label: "LiveKit URL", value: "wss://example.livekit.cloud" }, { label: "LiveKit API key", value: "••••••3kQa" }, { label: "LiveKit API secret", value: "••••••x9Lp" }, { label: "Gemini API key", value: "••••••Tz4w" }], agent: { state: "ready", message: null } }),
-		setConfig: async () => ({}), saveKeys: async () => ({}), getWake: async () => "normal", setWake: () => { },
-	};
-	if (view === "settings") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: params.get("tab") || "Pointer" });
-	if (params.get("confirm") === "eyes") {
-		engine.settings.set("closeEyesToToggle", true);
-		[...layer.querySelectorAll(".toggle")].find((el) => el.textContent.includes("Close eyes"))?.click();
-	}
-	if (view === "about") openSettings(layer, { engine, host, voice, version: "1.0.0", initialTab: "About" });
-	if (view === "about" && params.get("diag")) [...layer.querySelectorAll("button")].find((b) => b.textContent === "Diagnostics")?.click();
-	if (view === "profiles") openProfiles(layer, { profiles, onChanged: () => controls.refresh() });
-	if (view === "confirm") document.querySelector('[data-window="close"]').click();
-	if (view === "main" && engine.fireSceneGesture) {
-		setTimeout(() => engine.fireSceneGesture(), 150);
-	}
-	if (params.get("scene") === "dwell") {
-		const target = document.querySelector(".toggles .toggle:nth-child(3)");
-		const rect = target.getBoundingClientRect();
-		dwell.showStatic(rect.left + rect.width * 0.62, rect.top + rect.height * 0.55, 0.68, target);
-	}
+	if (view.startsWith("onboarding")) openOnboarding({ layer, engine, auto: false, startAt: Number(view.split("-")[1] || 1) - 1 });
+	if (view === "quit") confirmQuit();
+	if (params.get("reset")) [...document.querySelectorAll(".settings-foot button")][0]?.click();
+	if (params.get("keys")) setTimeout(() => [...document.querySelectorAll(".srow--keys button")].find((b) => /voice keys$/.test(b.textContent))?.click(), 200);
+	if (view === "face" && engine.fireSceneGesture) setTimeout(() => engine.fireSceneGesture(), 150);
 }
 
 boot().catch((error) => {
 	console.error("VISION UI failed to start:", error);
-	document.body.append(h("div", { class: "toast", style: { position: "fixed", left: "24px", bottom: "24px" } }, `VISION could not start: ${error.message}`));
+	document.body.append(h("div", { class: "toast", style: { position: "fixed", right: "24px", bottom: "24px" } }, `VISION could not start: ${error.message}`));
 	window.__visionReady = true;
 });

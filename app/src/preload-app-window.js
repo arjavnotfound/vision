@@ -101,6 +101,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// Recovery: face lost -> let go of any held button (releasing is always allowed).
 	releaseButtons: (reason) => ipcRenderer.invoke('releaseButtons', reason),
 
+	// UX spec 11. vision:navigate opens a page (island menu); vision:pulse shows where the
+	// cursor is; vision:diag streams gesture values for Diagnostics at 10 Hz.
+	onNavigate: (callback) => {
+		const listener = (_event, page) => { callback(page); };
+		ipcRenderer.on('vision:navigate', listener);
+		return () => { ipcRenderer.removeListener('vision:navigate', listener); };
+	},
+	pulse: () => ipcRenderer.send('vision:pulse'),
+	onDiag: (callback) => {
+		const listener = (_event, sample) => { callback(sample); };
+		ipcRenderer.on('vision:diag', listener);
+		return () => { ipcRenderer.removeListener('vision:diag', listener); };
+	},
+
 	// VISION bus (link to the voice assistant): status, and commands with a reply.
 	onBusState: (callback) => {
 		const listener = (_event, state) => { callback(state); };

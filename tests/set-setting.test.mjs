@@ -27,7 +27,7 @@ describe("Voice set_setting bridge", () => {
 	});
 
 	it("says so at the end of the range instead of claiming a change", () => {
-		const app = fakeApp({ dwellTime: 1500 });
+		const app = fakeApp({ dwellTime: 2000 });
 		const reply = applySetting("dwell_time", "longer", app);
 		assert.equal(reply.done, "none");
 		assert.match(reply.error, /longest/);

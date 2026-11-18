@@ -33,7 +33,7 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 		backgroundThrottling: false,
 	};
 
-	// "The Instrument": frameless, about 1200x780, never larger than the work area
+	// The VISION window: frameless, about 1200x780, never larger than the work area
 	// (school laptops are often 1366x768).
 	const work = screen.getPrimaryDisplay().workAreaSize;
 	const state = windowStateKeeper({
@@ -89,42 +89,34 @@ function createAppWindow({ preloadPath, windowStateKeeper, screen, syntheticFace
 
 /** Every screen and state, for `--preview --screenshot-all <dir>`. */
 const PREVIEW_JOBS = [
-	{ name: 'main-tracking-ember', query: { scene: 'tracking', theme: 'ember' } },
-	{ name: 'main-tracking-paper', query: { scene: 'tracking', theme: 'paper' } },
-	{ name: 'main-paused', query: { scene: 'paused' } },
-	{ name: 'main-no-face', query: { scene: 'no-face' } },
-	{ name: 'main-low-light', query: { scene: 'low-light' } },
-	{ name: 'main-framing-hint', query: { scene: 'framing' } },
-	{ name: 'main-gesture-wink', query: { scene: 'gesture' } },
-	{ name: 'main-gesture-mouth-paper', query: { scene: 'gesture-mouth', theme: 'paper' } },
-	{ name: 'main-dwell-ring', query: { scene: 'dwell' } },
-	{ name: 'main-camera-error', query: { scene: 'camera-error' } },
-	{ name: 'main-compact-1280x720', query: { scene: 'tracking' }, size: [1280, 720] },
+	{ name: 'home', query: { scene: 'tracking', view: 'home' } },
+	{ name: 'home-paused', query: { scene: 'paused', view: 'home' } },
+	{ name: 'home-no-keys', query: { scene: 'tracking', view: 'home', nokeys: '1' } },
+	{ name: 'home-paper', query: { scene: 'tracking', view: 'home', theme: 'paper' } },
+	{ name: 'face', query: { scene: 'gesture', view: 'face' } },
+	{ name: 'face-no-face', query: { scene: 'no-face', view: 'face' } },
+	{ name: 'face-camera-error', query: { scene: 'camera-error', view: 'face' } },
+	{ name: 'voice', query: { scene: 'tracking', view: 'voice', activity: '1' } },
+	{ name: 'voice-no-keys', query: { scene: 'tracking', view: 'voice', nokeys: '1' } },
+	{ name: 'voice-offline', query: { scene: 'tracking', view: 'voice', voice: 'offline' } },
+	{ name: 'voice-bad-key', query: { scene: 'tracking', view: 'voice', voice: 'badkey' } },
+	{ name: 'settings-1-clicking-1280x720', query: { scene: 'tracking', view: 'settings', section: 'clicking' }, size: [1280, 720] },
+	{ name: 'settings-2-cursor-1280x720', query: { scene: 'tracking', view: 'settings', section: 'cursor' }, size: [1280, 720] },
+	{ name: 'settings-3-voice-1280x720', query: { scene: 'tracking', view: 'settings', section: 'voice' }, size: [1280, 720] },
+	{ name: 'settings-3b-voice-no-keys-1280x720', query: { scene: 'tracking', view: 'settings', section: 'voice', nokeys: '1' }, size: [1280, 720] },
+	{ name: 'settings-3c-voice-keys-open-1280x720', query: { scene: 'tracking', view: 'settings', section: 'voice', keys: 'open' }, size: [1280, 720] },
+	{ name: 'settings-4-display-1280x720', query: { scene: 'tracking', view: 'settings', section: 'display' }, size: [1280, 720] },
+	{ name: 'settings-5-about-1280x720', query: { scene: 'tracking', view: 'about' }, size: [1280, 720] },
+	{ name: 'settings-reset-confirm', query: { scene: 'tracking', view: 'settings', section: 'clicking', reset: '1' } },
+	{ name: 'settings-clicking-paper', query: { scene: 'tracking', view: 'settings', section: 'clicking', theme: 'paper' } },
+	{ name: 'help', query: { scene: 'tracking', view: 'help' } },
+	{ name: 'diagnostics', query: { scene: 'gesture', view: 'diagnostics' } },
+	{ name: 'dialog-quit', query: { scene: 'tracking', view: 'quit' } },
 	{ name: 'calib-1-center', query: { scene: 'tracking', view: 'calib-center' } },
-	{ name: 'calib-2-range', query: { scene: 'range', view: 'calib-range' } },
-	{ name: 'calib-2-range-paper', query: { scene: 'range', view: 'calib-range', theme: 'paper' } },
-	{ name: 'calib-3-gestures', query: { scene: 'gesture-mouth', view: 'calib-gestures' } },
-	{ name: 'calib-4-done', query: { scene: 'tracking', view: 'calib-done' } },
+	{ name: 'calib-3-done', query: { scene: 'tracking', view: 'calib-done' } },
 	{ name: 'onboarding-1-welcome', query: { scene: 'tracking', view: 'onboarding-1' } },
-	{ name: 'onboarding-2-camera', query: { scene: 'framing', view: 'onboarding-2' } },
-	{ name: 'onboarding-3-calibrate', query: { scene: 'tracking', view: 'onboarding-3' } },
-	{ name: 'onboarding-1-welcome-paper', query: { scene: 'tracking', view: 'onboarding-1', theme: 'paper' } },
-	{ name: 'settings-1-pointer', query: { scene: 'tracking', view: 'settings', tab: 'Pointer' } },
-	{ name: 'settings-2-clicking', query: { scene: 'tracking', view: 'settings', tab: 'Clicking' } },
-	{ name: 'settings-2b-close-eyes-confirm', query: { scene: 'tracking', view: 'settings', tab: 'Clicking', confirm: 'eyes' } },
-	{ name: 'settings-3-voice', query: { scene: 'tracking', view: 'settings', tab: 'Voice' } },
-	{ name: 'sheet-profiles', query: { scene: 'tracking', view: 'profiles' } },
-	{ name: 'settings-4-about', query: { scene: 'tracking', view: 'about' } },
-	{ name: 'settings-4b-diagnostics', query: { scene: 'tracking', view: 'about', diag: '1' } },
-	{ name: 'dialog-quit', query: { scene: 'tracking', view: 'confirm' } },
-	{ name: 't11-1-onboarding-welcome-paused', query: { scene: 'paused', view: 'onboarding-1' } },
-	{ name: 't11-2-onboarding-camera-live', query: { scene: 'tracking', view: 'onboarding-2' } },
-	{ name: 't11-3-camera-busy', query: { scene: 'camera-error', view: 'onboarding-2' } },
-	{ name: 't11-4-onboarding-calibrate', query: { scene: 'paused', view: 'onboarding-3' } },
-	{ name: 't11-5-calibration-refused-no-face', query: { scene: 'no-face', view: 'calib-done', accept: '1' } },
-	{ name: 't11-6-quit-confirm', query: { scene: 'tracking', view: 'confirm' } },
-	{ name: 't11-7-settings-voice-no-keys', query: { scene: 'tracking', view: 'settings', tab: 'Voice', nokeys: '1' } },
-	{ name: 'settings-voice-keys-saved', query: { scene: 'tracking', view: 'settings', tab: 'Voice' } },
+	{ name: 'home-1280x720', query: { scene: 'tracking', view: 'home' }, size: [1280, 720] },
+	{ name: 'home-980x620', query: { scene: 'tracking', view: 'home' }, size: [980, 620] },
 	{ name: 'overlay-tracking', page: OVERLAY_PREVIEW_PAGE, query: { state: 'tracking' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-dwell', page: OVERLAY_PREVIEW_PAGE, query: { state: 'dwell' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
 	{ name: 'overlay-click', page: OVERLAY_PREVIEW_PAGE, query: { state: 'click' }, rect: { x: 400, y: 160, width: 440, height: 260 } },
@@ -152,9 +144,32 @@ function createPreviewRunner({ args, preloadPath }) {
 		console.warn('[preview] page did not report ready; capturing anyway');
 	}
 
-	async function capture(win, job, outPath) {
-		const [width, height] = job.size ?? [1200, 780];
-		win.setContentSize(width, height);
+	// Offscreen windows do not lay out again after a resize, so each size gets its own window.
+	function makeWindow([width, height]) {
+		return new BrowserWindow({
+			width,
+			height,
+			useContentSize: true,
+			frame: false,
+			resizable: true,
+			backgroundColor: '#0B0A09',
+			title: 'VISION · Preview',
+			icon: NEW_UI_ICON,
+			// QA screenshots come from capturePage: render offscreen, never on the desktop.
+			webPreferences: { preload: preloadPath, backgroundThrottling: false, offscreen: true },
+			show: false,
+			skipTaskbar: true,
+		});
+	}
+	const windows = new Map();
+	const windowFor = (size = [1200, 780]) => {
+		const key = size.join('x');
+		if (!windows.has(key)) windows.set(key, makeWindow(size));
+		return windows.get(key);
+	};
+
+	async function capture(job, outPath) {
+		const win = windowFor(job.size);
 		const query = { preview: '1', freeze: '1', ...job.query };
 		await win.loadFile(job.page ?? NEW_UI_PAGE, { query });
 		await waitForReady(win);
@@ -167,20 +182,6 @@ function createPreviewRunner({ args, preloadPath }) {
 
 	return {
 		async start() {
-			const win = new BrowserWindow({
-				width: 1200,
-				height: 780,
-				useContentSize: true,
-				frame: false,
-				resizable: true,
-				backgroundColor: '#0B0A09',
-				title: 'VISION · Preview',
-				icon: NEW_UI_ICON,
-				// QA screenshots come from capturePage: render offscreen, never on the desktop.
-				webPreferences: { preload: preloadPath, backgroundThrottling: false, offscreen: true },
-				show: false,
-				skipTaskbar: true,
-			});
 			const all = first(args.screenshot_all);
 			const single = first(args.screenshot);
 			try {
@@ -188,18 +189,18 @@ function createPreviewRunner({ args, preloadPath }) {
 					const only = first(args.only);
 					for (const job of PREVIEW_JOBS) {
 						if (only && !job.name.includes(only)) continue;
-						await capture(win, job, path.join(path.resolve(all), `${job.name}.png`));
+						await capture(job, path.join(path.resolve(all), `${job.name}.png`));
 					}
 				} else {
 					const query = {};
-					for (const key of ['scene', 'view', 'theme', 'state']) {
+					for (const key of ['scene', 'view', 'section', 'theme', 'state']) {
 						if (args[key]) query[key] = first(args[key]);
 					}
 					const job = { query, page: query.state ? OVERLAY_PREVIEW_PAGE : undefined };
 					if (single) {
-						await capture(win, job, path.resolve(single));
+						await capture(job, path.resolve(single));
 					} else {
-						await win.loadFile(job.page ?? NEW_UI_PAGE, { query: { preview: '1', ...query } });
+						await windowFor().loadFile(job.page ?? NEW_UI_PAGE, { query: { preview: '1', ...query } });
 					}
 				}
 			} catch (error) {
