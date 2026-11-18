@@ -27,8 +27,8 @@ const WAKE = {
 	relaxed: [`${VISION} :1.5 #0.08 @vision`, `${HEY} ${VISION} :1.5 #0.08 @hey_vision`],
 	normal: [`${VISION} #0.12 @vision`, `${HEY} ${VISION} #0.12 @hey_vision`],
 };
-// Acted on only right after a wake word ("Vision, stop").
-const COMMANDS = ['▁ST O P @stop', '▁CAN CE L @cancel'];
+// Acted on only right after a wake word ("Vision, stop", "Vision, menu").
+const COMMANDS = ['▁ST O P @stop', '▁CAN CE L @cancel', '▁ME N U @menu'];
 // Words and phrases that end in "vision". Tokens: sentencepiece BPE from the model's bpe.model.
 // "the" and "a" get a lower boost: at full boost, quiet before a plain "Vision" was heard
 // as "the"/"a" often enough to lose 1 wake in 10 (T06a lead-phase.js).
@@ -147,4 +147,42 @@ function createWakeSpotter({ modelDir, sensitivity = 'normal', wake = WAKE[sensi
 	};
 }
 
-module.exports = { createWakeSpotter, RATE, WAKE, DECOYS, NAMES };
+// "Stop", "cancel" and "menu" count only this soon after a heard "Vision".
+const COMMAND_WINDOW_MS = 2500;
+const PHRASES = new Set(['hey-vision', 'vision']);
+
+/**
+ * What a heard keyword does: 'wake' | 'stop' | 'menu' | 'ignore'.
+ * phrase: 'hey-vision' wakes only on "Hey Vision"; 'vision' on either.
+ * While a voice session is open, a wake word is ignored (no chime, no restart): only
+ * "Vision, stop" (or "cancel", "menu") acts. A plain "Vision" still arms the command
+ * window under either phrase, so "Vision, stop" always works.
+ */
+function createWakeGate({ phrase = 'hey-vision', windowMs = COMMAND_WINDOW_MS } = {}) {
+	let current = PHRASES.has(phrase) ? phrase : 'hey-vision';
+	let lastWakeAt = -Infinity;
+	return {
+		setPhrase(next) {
+			if (PHRASES.has(next)) current = next;
+		},
+		get phrase() {
+			return current;
+		},
+		/** heard: { keyword, ok }; open: a voice session is showing; now: ms. */
+		decide(heard, { open = false, now = Date.now() } = {}) {
+			const keyword = heard?.keyword;
+			if (keyword === 'stop' || keyword === 'cancel' || keyword === 'menu') {
+				if (now - lastWakeAt >= windowMs) return 'ignore';
+				lastWakeAt = -Infinity;
+				return keyword === 'menu' ? 'menu' : 'stop';
+			}
+			if ((keyword !== 'vision' && keyword !== 'hey_vision') || !heard.ok) return 'ignore';
+			lastWakeAt = now;
+			if (open) return 'ignore';
+			if (current === 'hey-vision' && keyword !== 'hey_vision') return 'ignore';
+			return 'wake';
+		},
+	};
+}
+
+module.exports = { createWakeSpotter, createWakeGate, RATE, WAKE, DECOYS, NAMES, COMMAND_WINDOW_MS };
