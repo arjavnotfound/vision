@@ -133,9 +133,11 @@ async function boot() {
 	createDwell({
 		ring: document.getElementById("dwell-ring"),
 		getDwellTime: () => settings.get("dwellTime") ?? 1000,
-		// Off while paused (the cursor then belongs to a physical mouse) and when dwell clicks
-		// are on (the desktop overlay already dwell-clicks everything, including this window).
-		isEnabled: () => isPreview || (!latestState.paused && !settings.get("clickDwell") && latestState.clickingMode !== "dwell" && latestState.status === "tracking"),
+		// VISION's own buttons always take a deliberate dwell, whatever the click methods, so a
+		// first-run user who can't wink is never stranded. Off while paused (the cursor then
+		// belongs to a physical mouse) and when Dwell is on (the desktop overlay already
+		// dwell-clicks everything, including this window).
+		isEnabled: () => isPreview || (!latestState.paused && !settings.get("clickDwell") && latestState.status === "tracking"),
 	});
 
 	// ---- settings kept by the main process (wake phrase, island position, start with Windows)
@@ -190,6 +192,7 @@ async function boot() {
 		if (calibration) return;
 		calibration = openCalibration({
 			layer, engine, toast, preview, adaptive,
+			onPlan: (plan) => saveControlMap(plan),
 			onDetails: () => shell.navigate("diagnostics"),
 			onClose: () => {
 				calibration = null;
@@ -211,7 +214,8 @@ async function boot() {
 		voiceStatus: currentVoiceStatus,
 		refreshVoice,
 		voiceAction: (action) => (action.go === "retry" ? refreshVoice() : shell.navigate(action.go)),
-		onDiag: api?.onDiag ? (cb) => api.onDiag(cb) : null,
+		// The engine runs in this renderer and emits the 10 Hz diag sample itself.
+		onDiag: (cb) => engine.on("diag", cb),
 	};
 	let appVersion = "";
 	host.getVersion().then((v) => { appVersion = v || ""; }, () => { });
@@ -326,7 +330,7 @@ async function boot() {
 	}
 	function applySwitch(offer) {
 		// Any allowed choice (also back to a wink), kept consistent by choosePlan.
-		const next = choosePlan(controlMap ?? { ...DEFAULT_PLAN, clickingMode: st.get("clickingMode") }, offer.action, offer.to);
+		const next = choosePlan(controlMap ?? DEFAULT_PLAN, offer.action, offer.to);
 		for (const [key, value] of Object.entries(controlSettings(next))) {
 			if (st.has(key)) st.set(key, value);
 		}
@@ -362,7 +366,7 @@ async function boot() {
 	api?.requestBusState?.();
 
 	const SPEED_KEYS = ["headTrackingSensitivityX", "headTrackingSensitivityY"];
-	const CLICK_MODES = { wink: "blink", dwell: "dwell", mouth: "open-mouth-simple" };
+	const CLICK_METHODS = { wink: "clickWink", blink: "clickBlink", dwell: "clickDwell", mouth: "clickMouth" };
 	function handleBusCommand(cmd, value) {
 		if (cmd === "pause") {
 			engine.setPaused(true);
@@ -396,14 +400,11 @@ async function boot() {
 			return { done: `cursor ${value}`, sensitivity: st.get(SPEED_KEYS[0]) };
 		}
 		if (cmd === "click-mode") {
-			const mode = CLICK_MODES[String(value).toLowerCase()];
-			if (!mode) return { done: "none", error: "use wink, dwell or mouth" };
-			st.set("clickingMode", mode);
-			const base = controlMap ?? { rightClick: "rightWink", scroll: "mouth", keyboard: "brow" };
-			// Asking for a mode by name means its default inputs: wink mode = both winks.
-			const rightClick = mode === "blink" ? "rightWink" : base.rightClick === "rightWink" ? "voice" : base.rightClick;
-			saveControlMap({ ...base, clickingMode: mode, leftClick: mode === "blink" ? "leftWink" : mode === "dwell" ? "dwell" : "mouth", rightClick, keyboard: rightClick === "brow" ? "button" : "brow" });
-			if (st.has("eyebrowRaiseOpensKeyboard")) st.set("eyebrowRaiseOpensKeyboard", rightClick !== "brow");
+			// "Click with winks": that method alone, the way the Settings presets work.
+			const name = String(value).toLowerCase();
+			if (!CLICK_METHODS[name]) return { done: "none", error: "use wink, blink, dwell or mouth" };
+			for (const [method, key] of Object.entries(CLICK_METHODS)) if (st.has(key)) st.set(key, method === name);
+			if (name === "wink" || name === "dwell") saveControlMap(choosePlan(controlMap ?? DEFAULT_PLAN, "leftClick", name === "wink" ? "leftWink" : "dwell"));
 			return { done: `click mode ${value}` };
 		}
 		if (cmd === "remap" && value && typeof value === "object") {
@@ -422,7 +423,7 @@ async function boot() {
 			return applySetting(String(value.name), value.value, { st, engine });
 		}
 		if (cmd === "controls") {
-			return { done: "controls", controlMap, clickingMode: st.get("clickingMode") };
+			return { done: "controls", controlMap, clickMethods: Object.keys(CLICK_METHODS).filter((m) => st.get(CLICK_METHODS[m])) };
 		}
 		return { done: cmd };
 	}
@@ -532,8 +533,15 @@ async function boot() {
 		host.windowControl("show");
 		onboarding = openOnboarding({
 			layer, engine, toast,
-			onFinish: () => {
+			adaptive: isKiosk,
+			onPlan: (plan) => saveControlMap(plan),
+			onFinish: (choice) => {
 				onboarding = null;
+				// The methods picked in setup win over what calibration suggested for left click.
+				if (choice && controlMap) {
+					const left = choice.clickWink ? "leftWink" : choice.clickDwell ? "dwell" : null;
+					if (left && controlMap.leftClick !== left) saveControlMap(choosePlan(controlMap, "leftClick", left));
+				}
 				st.set("onboardingComplete", true);
 				shell.navigate("home");
 			},
@@ -564,7 +572,11 @@ function applyPreviewScene({ layer, engine, startCalibration, confirmQuit }) {
 	};
 	if (view === "calib-center") startCalibration({ step: "center", data: { progress: 0.64 } });
 	if (view === "calib-range") startCalibration({ step: "range", data: { ...calibData, pose: { yaw: -22, pitch: 8, roll: 3 } } });
+	if (view === "calib-gestures") startCalibration({ step: "gestures", data: { ...calibData, taskIndex: 2 } });
 	if (view === "calib-done") startCalibration({ step: "done", data: calibData });
+	if (view === "calib-refused") startCalibration({ step: "refused", data: calibData });
+	// ?view=calib-done&scene=no-face&accept=1: "Use this" with no face in view is refused.
+	if (params.get("accept")) setTimeout(() => [...layer.querySelectorAll("button")].find((b) => /^Use this/.test(b.textContent))?.click(), 100);
 	if (view.startsWith("onboarding")) openOnboarding({ layer, engine, auto: false, startAt: Number(view.split("-")[1] || 1) - 1 });
 	if (view === "quit") confirmQuit();
 	if (params.get("reset")) [...document.querySelectorAll(".settings-foot button")][0]?.click();

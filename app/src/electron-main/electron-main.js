@@ -1468,6 +1468,14 @@ function startAssistant(busReady) {
 		showAppWindow();
 		appWindow.webContents.send('uiCommand', section === 'voice' ? 'settings-voice' : 'settings');
 	});
+	// vision:navigate (UX spec 11): island menu > Settings, Diagnostics or Help.
+	const NAV_PAGES = new Set(['home', 'face', 'voice', 'settings', 'help', 'diagnostics']);
+	ipcMain.on('vision:navigate', (event, page) => {
+		if (!fromOrb(event) || !appWindow || !NAV_PAGES.has(page)) return;
+		console.log(`[VISION] Island menu: ${page}`);
+		showAppWindow();
+		appWindow.webContents.send('vision:navigate', page);
+	});
 	const voiceConfig = () => ({
 		...voiceSettings.read(),
 		hasKeys: hasVoiceKeys(voiceKeys),
