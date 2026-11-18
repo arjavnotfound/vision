@@ -127,23 +127,15 @@ export function proj(p, pose, cx, cy, sc) {
 /** Key points (eyes, nose, mouth) draw in ember; the rest in bone. */
 export const isKeyKind = (k) => k[0] === "e" || k === "n" || k === "m" || k === "mi";
 
-// ---- Display mesh (UX spec 6): about 70 points on the eyes, brows, lips and jaw outline only.
+// ---- Display mesh: every face mesh landmark (468), drawn small and faded.
 // Drawing only: the tracker's own points are untouched.
 
 const every = (points, step) => (points ?? []).filter((_, i) => i % step === 0);
-const DISPLAY_KINDS = { o: 2, eL: 1, eR: 1, b: 1, m: 1 };
 
-/** [[x, y], ...] in camera pixels, from the engine's contours or the preview mesh. */
+/** [[x, y], ...] in camera pixels: the engine's landmarks, else its contours, else the preview mesh. */
 export function meshPoints(frame) {
-	if (frame?.mesh?.pts) {
-		const seen = {};
-		return frame.mesh.pts.filter(([, , , , kind]) => {
-			const step = DISPLAY_KINDS[kind];
-			if (!step) return false;
-			seen[kind] = (seen[kind] ?? 0) + 1;
-			return (seen[kind] - 1) % step === 0;
-		}).map(([x, y]) => [x, y]);
-	}
+	if (frame?.landmarks?.length) return frame.landmarks.map(([x, y]) => [x, y]);
+	if (frame?.mesh?.pts) return frame.mesh.pts.map(([x, y]) => [x, y]);
 	const c = frame?.contours ?? {};
 	return [
 		...every(c.silhouette, 2),

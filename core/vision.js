@@ -4720,9 +4720,12 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 	function getEngineFrame() {
 		const count = pointTracker?.pointCount ?? 0;
 		const contours = {};
+		let landmarks = [];
 		let nose = null;
 		if (facemeshPrediction?.keypoints) {
 			const keypoints = facemeshPrediction.keypoints;
+			// The 468 face mesh landmarks (iris points, if the model adds them, left out).
+			landmarks = keypoints.slice(0, 468).map((k) => [k.x, k.y]);
 			for (const name of MESH_CONTOURS) {
 				contours[name] = MESH_ANNOTATIONS[name].map((index) => keypoints[index] ? [keypoints[index].x, keypoints[index].y] : null).filter(Boolean);
 			}
@@ -4736,6 +4739,7 @@ You may want to turn this off if you're drawing on a canvas, or increase it if y
 			pointCount: count,
 			points: pointTracker ? pointTracker.curXY.slice(0, count * 2) : new Float32Array(0),
 			contours,
+			landmarks,
 			nose,
 			motion: [lastMovement[0], lastMovement[1]],
 			faceBox: facemeshPrediction ? VM.faceBox(facemeshPrediction) : null,

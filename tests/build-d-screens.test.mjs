@@ -11,10 +11,16 @@ const thresholds = { eye: { low: 0.15, high: 0.2 }, mouth: { high: 0.3, low: 0.2
 const g = (over = {}) => ({ leftEye: { ratio: 0.28 }, rightEye: { ratio: 0.28 }, mouth: { ratio: 0.05 }, brow: { ratio: 0.22 }, sleep: { progress: 0 }, thresholds, ...over });
 
 describe("Display mesh", () => {
-	it("keeps about 70 eye, brow, lip and jaw points from the preview face", () => {
+	it("keeps every point of the preview face", () => {
 		const face = buildFace();
 		const pts = meshPoints({ mesh: { pts: face.pts.map((p) => [p.x, p.y, 0, false, p.k]) } });
-		assert.ok(pts.length >= 50 && pts.length <= 80, `got ${pts.length}`);
+		assert.equal(pts.length, face.pts.length);
+	});
+	it("draws all 468 face mesh landmarks", () => {
+		const landmarks = Array.from({ length: 468 }, (_, i) => [i, i * 2]);
+		const pts = meshPoints({ landmarks, contours: { silhouette: [[0, 0]] }, points: new Float32Array(88), pointCount: 44 });
+		assert.equal(pts.length, 468);
+		assert.deepEqual(pts[467], [467, 934]);
 	});
 	it("takes contour points, never flow points", () => {
 		const loop = (n) => Array.from({ length: n }, (_, i) => [i, i]);

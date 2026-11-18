@@ -14,7 +14,7 @@ import { meshPoints, pointAlpha } from "./face-mesh.js";
 const GUIDE = { cx: 0.5, cy: 0.47, rx: 0.165, ry: 0.3 };
 
 const TRAIL_MS = 200;
-const POINT_R = 1.5;
+const POINT_R = 1.1; // 468 landmarks: smaller points keep the mesh soft
 
 // `pausedMessage: false`: calibration freezes the cursor on purpose, so no "paused" banner.
 // `mesh`: true / false, or undefined to follow the showMesh setting (default on).
